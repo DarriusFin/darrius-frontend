@@ -1,0 +1,15 @@
+body {
+  margin:0;
+  font-family: Arial, sans-serif;
+  background:#0b0f17;
+  color:#fff;
+}
+.topbar {
+  background:#141a24;
+  padding:16px;
+}
+#chart {
+  height:400px;
+  background:#1e2533;
+  margin:20px;
+}
