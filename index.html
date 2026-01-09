@@ -2,61 +2,104 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>Inflection Hunter Pro | Darrius AI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inflection Hunter Pro | Darrius AI</title>
 
-  <!-- ✅ 关键：GitHub Pages 子目录要用 ./ -->
-  <link rel="stylesheet" href="./styles.css" />
-
-  <!-- ✅ 关键：必须先加载 lightweight-charts -->
+  <!-- ✅ 关键：图表库必须先加载 -->
   <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+
+  <!-- ✅ 关键：GitHub Pages 子路径下，用相对路径 -->
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 
 <body>
   <div id="app">
     <header class="topbar">
-      <div>
-        <h1>Inflection Hunter Pro</h1>
-        <span>Darrius FinTech Inc</span>
+      <div class="brand">
+        <div class="logo">拐点猎手</div>
+        <div class="meta">
+          <div class="title">Inflection Hunter Pro</div>
+          <div class="sub">Darrius FinTech Inc</div>
+        </div>
       </div>
 
       <nav class="topnav">
-        <a href="./terms.html" target="_blank">Terms</a>
-        <a href="./privacy.html" target="_blank">Privacy</a>
-        <a href="./risk.html" target="_blank">Risk</a>
+        <a href="./pages/terms.html" target="_blank" rel="noopener">Terms</a>
+        <a href="./pages/privacy.html" target="_blank" rel="noopener">Privacy</a>
+        <a href="./pages/risk.html" target="_blank" rel="noopener">Risk</a>
       </nav>
     </header>
 
     <main class="main">
-      <section class="card">
-        <div class="cardHead">
-          <div class="title">Chart</div>
-          <div class="badge" id="statusBadge">Ready</div>
+      <!-- 左侧：状态/信号/提示 -->
+      <section class="card left">
+        <div class="cardTitle">Status · 状态</div>
+        <div class="badgeRow">
+          <span id="statusBadge" class="badge ok">Loading…</span>
+          <span class="badge ghost">api.darrius.ai</span>
+        </div>
+
+        <div class="kv">
+          <div class="k">Symbol</div>
+          <div class="v" id="symText">BTCUSDT</div>
+        </div>
+        <div class="kv">
+          <div class="k">Timeframe</div>
+          <div class="v" id="tfText">1D</div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="cardTitle">Signals · 信号</div>
+        <div id="signalBox" class="signalBox">
+          <div class="signal neutral">Waiting for data…</div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="small">
+          <b>Disclaimer</b>：Educational only, not financial advice.  
+          <br/>仅供学习交流，不构成投资建议。
+        </div>
+      </section>
+
+      <!-- 中间：图表 -->
+      <section class="card center">
+        <div class="chartTop">
+          <div id="priceText" class="price">--</div>
+          <div id="hintText" class="hint">Chart initializing…</div>
         </div>
         <div id="chart" class="chart"></div>
       </section>
 
-      <section class="card side">
-        <div class="title">Subscription</div>
-        <p class="muted">Test environment. Payment will redirect to Stripe checkout (placeholder).</p>
+      <!-- 右侧：订阅 -->
+      <section class="card right">
+        <div class="cardTitle">Subscription · 订阅</div>
+        <div class="small">Test environment. Payment will redirect to Stripe checkout (placeholder).</div>
 
-        <label class="label">Plan</label>
-        <select id="planSelect" class="select">
-          <option value="monthly">Monthly</option>
-          <option value="annual">Annual</option>
-          <option value="lifetime">Lifetime</option>
+        <label class="label">Plan · 套餐</label>
+        <select id="planSelect" class="input">
+          <option value="monthly" selected>Monthly · 月付</option>
+          <option value="annual">Annual · 年付</option>
+          <option value="lifetime">Lifetime · 终身</option>
         </select>
 
-        <button id="subscribeBtn" class="btn primary">Subscribe</button>
-        <button id="healthBtn" class="btn">Test API Health</button>
+        <button id="subscribeBtn" class="btn primary">Subscribe · 订阅</button>
+        <button id="healthBtn" class="btn ghost">Test API Health</button>
 
         <div class="hr"></div>
-        <div class="small muted" id="logBox">Log: waiting…</div>
+
+        <div class="cardTitle">Log</div>
+        <pre id="logBox" class="log">Log: ready</pre>
       </section>
     </main>
+
+    <footer class="footer">
+      © 2026 Darrius FinTech Inc. All Rights Reserved.
+    </footer>
   </div>
 
-  <!-- ✅ JS 最后加载，defer 确保 DOM 已存在 -->
-  <script src="./app.js" defer></script>
+  <!-- ✅ 关键：你的 app.js 放在最后，确保 DOM 与图表库都已就绪 -->
+  <script src="./app.js"></script>
 </body>
 </html>
