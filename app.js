@@ -155,9 +155,23 @@ function subscribe(){
   // POST https://api.darrius.ai/billing/checkout  { plan, referralCode? }
   // 目前先做占位跳转提示
   const placeholder = {
+   function subscribe(){
+  const plan = $("planSelect").value;
+
+  const placeholder = {
+    biweekly: "https://buy.stripe.com/test_placeholder_biweekly",
     monthly:  "https://buy.stripe.com/test_placeholder_monthly",
     annual:   "https://buy.stripe.com/test_placeholder_annual",
-    lifetime: "https://buy.stripe.com/test_placeholder_lifetime",
+    biennial: "https://buy.stripe.com/test_placeholder_biennial",
+  }[plan];
+
+  log(`Subscribe clicked: plan=${plan}`);
+  alert(`Test env: would redirect to Stripe for plan=${plan}\n\nLater we will replace with real checkout session from ${API_BASE}`);
+
+  // 如果你已经有真实链接，把 placeholder 换成真实 buy.stripe.com 链接，然后取消注释：
+  // window.location.href = placeholder;
+}
+
   }[plan];
 
   log(`Subscribe clicked: plan=${plan}`);
