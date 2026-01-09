@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <title>Inflection Hunter Pro | Darrius AI</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- 样式：必须用相对路径，适配 GitHub Pages 子目录 -->
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div id="app">
@@ -11,11 +14,17 @@
       <h1>Inflection Hunter Pro</h1>
       <span>Darrius FinTech Inc</span>
     </header>
+
     <main>
+      <!-- 图表容器 -->
       <div id="chart"></div>
+
+      <!-- 订阅按钮 -->
       <button id="subscribeBtn">Subscribe</button>
     </main>
   </div>
-  <script src="app.js"></script>
+
+  <!-- JS：同样用相对路径，defer 防止 DOM 未加载 -->
+  <script src="./app.js" defer></script>
 </body>
 </html>
