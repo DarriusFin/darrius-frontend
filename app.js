@@ -1,142 +1,179 @@
-// api base (统一到 api.darrius.ai)
+// ✅ API base（统一到 api.darrius.ai）
 const API_BASE = "https://api.darrius.ai";
 
 function $(id){ return document.getElementById(id); }
-function log(msg){
-  console.log("[Darrius Frontend]", msg);
-  const box = $("logBox");
-  if(box) box.textContent = "Log: " + msg;
-}
 
 function setBadge(text, ok=true){
   const b = $("statusBadge");
   if(!b) return;
   b.textContent = text;
-  b.style.background = ok ? "rgba(0,255,136,.14)" : "rgba(255,71,87,.14)";
-  b.style.borderColor = ok ? "rgba(0,255,136,.35)" : "rgba(255,71,87,.35)";
-  b.style.color = ok ? "#6dffb6" : "#ff9aa3";
+  b.classList.remove("ok","bad");
+  b.classList.add(ok ? "ok" : "bad");
 }
 
-// ✅ 生成一份示例K线数据（保证你不依赖后端也能看到图）
-function genDemoCandles(n=120){
+function log(msg){
+  const box = $("logBox");
+  const t = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
+  if(box){
+    box.textContent = (box.textContent || "").split("\n").slice(-30).join("\n");
+    box.textContent += (box.textContent ? "\n" : "") + t;
+    box.scrollTop = box.scrollHeight;
+  }
+  console.log("[Darrius Frontend]", msg);
+}
+
+// ✅ 生成演示K线（保证后端没好也能看到图）
+function genDemoCandles(n=180){
   const now = Math.floor(Date.now()/1000);
   const step = 60 * 60; // 1h
   let t = now - n * step;
+
   let price = 67000;
   const arr = [];
+
   for(let i=0;i<n;i++){
-    const drift = Math.sin(i/12) * 120;
+    const drift = Math.sin(i/18) * 120;
     const noise = (Math.random()-0.5) * 220;
     const open = price;
     const close = open + drift + noise;
-    const high = Math.max(open, close) + Math.random()*180;
-    const low  = Math.min(open, close) - Math.random()*180;
+
+    const high = Math.max(open, close) + Math.random() * 180;
+    const low  = Math.min(open, close)  - Math.random() * 180;
+
     price = close;
+
     arr.push({
       time: t,
       open: +open.toFixed(2),
       high: +high.toFixed(2),
-      low: +low.toFixed(2),
-      close: +close.toFixed(2),
+      low:  +low.toFixed(2),
+      close:+close.toFixed(2),
     });
+
     t += step;
   }
   return arr;
 }
 
+function setSignal(side="NEUTRAL", price=null){
+  const box = $("signalBox");
+  if(!box) return;
+
+  box.innerHTML = "";
+  const div = document.createElement("div");
+
+  if(side === "BUY"){
+    div.className = "signal buy";
+    div.innerHTML = `<b>BUY · 买入</b>${price?` @ ${price}`:""}<br/><span style="font-size:12px;color:#9aa4b2;">Demo signal · 演示信号</span>`;
+  }else if(side === "SELL"){
+    div.className = "signal sell";
+    div.innerHTML = `<b>SELL · 卖出</b>${price?` @ ${price}`:""}<br/><span style="font-size:12px;color:#9aa4b2;">Demo signal · 演示信号</span>`;
+  }else{
+    div.className = "signal neutral";
+    div.textContent = "Waiting for data… / 等待数据…";
+  }
+  box.appendChild(div);
+}
+
 function initChart(){
-  // ✅ 关键：确保 LightweightCharts 已加载
   if(typeof LightweightCharts === "undefined"){
     setBadge("Chart lib missing", false);
-    log("❌ lightweight-charts 未加载（请确认 index.html 已加入 CDN）");
-    return;
+    log("❌ lightweight-charts 未加载：请确认 index.html 已加入 CDN 脚本");
+    return null;
   }
 
   const el = $("chart");
   if(!el){
-    setBadge("Chart DOM missing", false);
+    setBadge("Chart container missing", false);
     log("❌ 找不到 #chart 容器");
-    return;
+    return null;
   }
 
-  // 计算尺寸
-  const rect = el.getBoundingClientRect();
   const chart = LightweightCharts.createChart(el, {
-    width: Math.max(300, Math.floor(rect.width)),
-    height: Math.max(260, Math.floor(rect.height)),
     layout: { background: { color: "transparent" }, textColor: "#d1d4dc" },
     grid: { vertLines: { color: "transparent" }, horzLines: { color: "transparent" } },
-    timeScale: { timeVisible: true, secondsVisible: false },
-    rightPriceScale: { borderVisible: false },
+    timeScale: { timeVisible:true, secondsVisible:false },
+    rightPriceScale: { borderVisible:false },
     crosshair: { mode: 1 },
   });
 
   const candle = chart.addCandlestickSeries({
     upColor: "#00ff88",
-    downColor: "#ff4757",
-    wickUpColor: "#00ff88",
-    wickDownColor: "#ff4757",
-    borderVisible: false,
+    downColor:"#ff4757",
+    wickUpColor:"#00ff88",
+    wickDownColor:"#ff4757",
+    borderVisible:false,
   });
 
-  candle.setData(genDemoCandles(150));
-  setBadge("Chart OK", true);
-  log("✅ 图表已渲染（Demo candles）。");
-
-  // 自适应
-  const ro = new ResizeObserver(() => {
+  // ✅ resize：不然会出现你那种“空大框”或不自适应
+  function fit(){
     const r = el.getBoundingClientRect();
-    chart.applyOptions({ width: Math.floor(r.width), height: Math.floor(r.height) });
-  });
+    chart.applyOptions({ width: Math.max(1, Math.floor(r.width)), height: Math.max(1, Math.floor(r.height)) });
+    chart.timeScale().fitContent();
+  }
+
+  const ro = new ResizeObserver(() => fit());
   ro.observe(el);
+  window.addEventListener("resize", fit);
+
+  // demo data
+  const bars = genDemoCandles(220);
+  candle.setData(bars);
+  const last = bars[bars.length-1];
+  $("priceText").textContent = `BTCUSDT · ${last.close.toFixed(2)}`;
+  $("hintText").textContent = "Demo chart loaded · 演示图表已加载";
+  setBadge("Ready · 前端已就绪", true);
+
+  // demo signal (just for display)
+  setSignal(Math.random() > 0.5 ? "BUY" : "SELL", last.close.toFixed(2));
+
+  return { chart, candle };
 }
 
-function bindUI(){
-  const btn = $("subscribeBtn");
-  const plan = $("planSelect");
-  const healthBtn = $("healthBtn");
-
-  if(btn){
-    btn.addEventListener("click", () => {
-      const v = plan ? plan.value : "monthly";
-
-      // 这里先用占位链接，等你把 Stripe checkout session 接到后端，再改为调用 API
-      // 未来推荐改为：fetch(`${API_BASE}/billing/checkout`, {method:"POST", ...})
-      const placeholder = {
-        monthly: "https://buy.stripe.com/test_placeholder_monthly",
-        annual: "https://buy.stripe.com/test_placeholder_annual",
-        lifetime: "https://buy.stripe.com/test_placeholder_lifetime",
-      }[v];
-
-      log(`准备订阅：${v}（当前为占位链接，后续接后端生成真实Checkout）`);
-      if(placeholder.includes("test_placeholder")){
-        alert("当前 Subscribe 仍为占位链接（未接后端Stripe Session）。下一步需要部署后端 billing API。");
-      }else{
-        window.location.href = placeholder;
-      }
-    });
-  }
-
-  if(healthBtn){
-    healthBtn.addEventListener("click", async () => {
-      try{
-        setBadge("Checking API…", true);
-        log("调用 API health…");
-        const r = await fetch(`${API_BASE}/health`, { method:"GET" });
-        if(!r.ok) throw new Error("HTTP " + r.status);
-        const text = await r.text();
-        setBadge("API OK", true);
-        log("✅ API health 返回：" + text.slice(0,120));
-      }catch(e){
-        setBadge("API FAIL", false);
-        log("❌ API health 失败（正常，因为你后端可能还没部署）：" + e.message);
-      }
-    });
+async function testApiHealth(){
+  setBadge("Checking API…", true);
+  $("hintText").textContent = "Testing API health…";
+  try{
+    // 你后端将来可提供：GET https://api.darrius.ai/health
+    const resp = await fetch(`${API_BASE}/health`, { method:"GET" });
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const txt = await resp.text();
+    setBadge("API OK", true);
+    $("hintText").textContent = "API connected · 已连接 API";
+    log(`✅ API OK: ${txt.slice(0,120)}`);
+  }catch(e){
+    setBadge("API Not Ready", false);
+    $("hintText").textContent = "API not ready (normal in early stage) · API未就绪（早期正常）";
+    log(`⚠️ API health failed: ${e.message}`);
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  log("页面加载完成，开始初始化…");
+function subscribe(){
+  const plan = $("planSelect").value;
+
+  // 你将来可以把这里改成：先请求后端创建 Stripe Checkout Session，再跳转 session.url
+  // POST https://api.darrius.ai/billing/checkout  { plan, referralCode? }
+  // 目前先做占位跳转提示
+  const placeholder = {
+    monthly:  "https://buy.stripe.com/test_placeholder_monthly",
+    annual:   "https://buy.stripe.com/test_placeholder_annual",
+    lifetime: "https://buy.stripe.com/test_placeholder_lifetime",
+  }[plan];
+
+  log(`Subscribe clicked: plan=${plan}`);
+  alert(`Test env: would redirect to Stripe for plan=${plan}\n\nLater we will replace with real checkout session from ${API_BASE}`);
+
+  // 如果你已经有真实链接，就把上面的 placeholder 换成真实 buy.stripe.com 链接，然后取消注释：
+  // window.location.href = placeholder;
+}
+
+(function boot(){
+  log("Booting frontend…");
+  $("symText").textContent = "BTCUSDT";
+  $("tfText").textContent  = "1D";
+
   initChart();
-  bindUI();
-});
+
+  $("healthBtn").addEventListener("click", testApiHealth);
+  $("subscribeBtn").addEventListener("click", subscribe);
+})();
