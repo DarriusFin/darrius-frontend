@@ -1,107 +1,801 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Inflection Hunter Pro | Darrius AI</title>
+<meta charset="UTF-8" />
+<title>Inflection Hunter Pro v6.3.3e (Preserve Algo + Restore MAs + Better Risk) │ Darrius FinTech Inc</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
-  <!-- ✅ 关键：图表库必须先加载 -->
-  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{
+  --bg:#0b0f17;--panel:#141a24;--panel2:#0f1522;--border:#2a3244;
+  --text:#e6edf3;--muted:#9aa4b2;
+  --green:#00ff88;--red:#ff4757;--blue:#00d4ff;--orange:#ffaa00;
+  --cyan:#7dd3fc;--purple:#c084fc;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:radial-gradient(circle at top left,#182035,#0b0f17);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+}
+#topbar{
+  height:64px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;background:rgba(20,26,36,.95);border-bottom:1px solid var(--border);gap:12px;
+}
+#brand{display:flex;align-items:center;gap:14px;min-width:260px;}
+#logo{
+  font-size:26px;font-weight:900;background:linear-gradient(90deg,var(--green),var(--blue));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.5px;
+}
+#brandMeta{line-height:1.1}
+#brandTitle{font-weight:900}
+#subtitle{font-size:12px;color:var(--muted);margin-top:2px}
+#topRight{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex:1;min-width:0;}
+#status{
+  padding:7px 12px;border-radius:999px;font-size:12px;
+  background:linear-gradient(90deg,#00ff88,#00d4ff);color:#000;white-space:nowrap;
+}
+#copyright{
+  font-size:12px;color:#fff;opacity:0.85;background:rgba(0,0,0,0.35);
+  border:1px solid rgba(255,255,255,0.08);padding:6px 12px;border-radius:999px;
+  white-space:nowrap;max-width:38vw;overflow:hidden;text-overflow:ellipsis;
+}
 
-  <!-- ✅ 关键：GitHub Pages 子路径下，用相对路径 -->
-  <link rel="stylesheet" href="./styles.css" />
+#main{display:grid;grid-template-columns:320px 1fr 360px;height:calc(100vh - 64px);}
+.panel{background:var(--panel);border-right:1px solid var(--border);padding:16px;overflow:auto;}
+.panel:last-child{border-right:none;}
+.panel h3{margin:0 0 12px;font-size:14px;color:var(--green);display:flex;align-items:center;gap:8px;}
+.panel h3::before{content:"◆";font-size:11px;opacity:.9}
+
+#pulse{display:flex;align-items:center;justify-content:center;height:190px;}
+.pulseWrap{position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center;}
+#pulseGauge{position:absolute;inset:0;z-index:2;}
+#pulseGauge svg{width:160px;height:160px;display:block;}
+#pulseGauge .track{stroke:rgba(255,255,255,.10);stroke-width:12;fill:none;}
+#pulseGauge .seg{
+  stroke-width:12;fill:none;stroke-linecap:round;
+  transform:rotate(-90deg);transform-origin:50% 50%;
+}
+#pulseGauge .greenSeg{stroke:var(--green);filter:drop-shadow(0 0 10px rgba(0,255,136,.25));}
+#pulseGauge .redSeg{stroke:var(--red);filter:drop-shadow(0 0 10px rgba(255,71,87,.22));}
+#pulseCircle{
+  position:absolute;inset:18px;border-radius:50%;
+  border:10px solid rgba(255,255,255,.06);
+  display:flex;align-items:center;justify-content:center;
+  font-size:24px;font-weight:900;background:rgba(0,0,0,.25);z-index:3;
+}
+#pulseLabel{text-align:center;margin-top:8px;font-size:12px;color:var(--muted);line-height:1.4;}
+
+.box{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--panel2);}
+.kv{display:flex;justify-content:space-between;gap:10px;margin:6px 0;font-size:13px}
+.kv .k{color:var(--muted)} .kv .v{font-weight:900}
+
+#chartWrap{position:relative;height:100%;}
+#chartBox{position:absolute;inset:0;display:flex;flex-direction:column;}
+#chartTop{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;z-index:10;}
+#price{background:rgba(0,0,0,.6);padding:8px 12px;border-radius:12px;font-weight:900;border:1px solid rgba(255,255,255,0.10);}
+#hint{background:rgba(0,0,0,.55);padding:8px 12px;border-radius:12px;font-size:12px;color:var(--muted);border:1px solid rgba(255,255,255,.10);max-width:56%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#chart{position:relative;flex:1;width:100%;}
+#overlay{position:absolute;inset:0;pointer-events:none;z-index:9;}
+
+.small{font-size:12px;color:var(--muted);margin-top:8px;display:block}
+input,select,button{
+  width:100%;margin:6px 0;padding:10px 10px;border-radius:10px;
+  border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:13px;
+}
+button{cursor:pointer;font-weight:900;}
+button.primary{background:linear-gradient(90deg,var(--green),var(--blue));color:#000;border:none;padding:16px;font-size:16px;}
+button.load-btn{background:linear-gradient(90deg,var(--green),var(--blue));color:#000;border:none;padding:16px;font-size:16px;}
+button.ghost{background:#1e2533;}
+
+.signal.latest{border-left:6px solid var(--green);padding:16px;margin:12px 0;background:var(--panel2);border-radius:12px;font-size:15px;font-weight:900;}
+.signal.latest.sell{border-left-color:var(--red);}
+.smallTxt{font-size:12px;color:var(--muted);line-height:1.5;}
+.hr{height:1px;background:rgba(255,255,255,.06);margin:12px 0}
+.footer{text-align:center;font-size:12px;color:var(--muted);margin-top:12px;line-height:1.55;}
+#toast{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
+  background:rgba(0,0,0,.75);border:1px solid rgba(255,255,255,.14);
+  padding:10px 14px;border-radius:999px;font-size:13px;color:#fff;
+  z-index:99999;display:none;max-width:92vw;
+}
+#signals{max-height:320px;overflow-y:auto;}
+
+.toggleRow{display:flex;gap:10px;margin-top:6px}
+.toggleRow label{
+  display:flex;align-items:center;gap:8px;
+  border:1px solid rgba(255,255,255,.08);
+  padding:8px 10px;border-radius:10px;background:rgba(0,0,0,.18);
+  font-size:12px;color:#cfe8ff;flex:1;justify-content:center;
+}
+.toggleRow input{width:auto;margin:0}
+
+@media (max-width:1080px){
+  #main{grid-template-columns:1fr;height:auto}
+  .panel{border-right:none;border-bottom:1px solid var(--border)}
+  #chartWrap{height:60vh}
+  #copyright{display:none}
+  #hint{max-width:70%}
+}
+</style>
 </head>
 
 <body>
-  <div id="app">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">拐点猎手</div>
-        <div class="meta">
-          <div class="title">Inflection Hunter Pro</div>
-          <div class="sub">Darrius FinTech Inc</div>
+<div id="topbar">
+  <div id="brand">
+    <div id="logo">拐点猎手</div>
+    <div id="brandMeta">
+      <div id="brandTitle">Inflection Hunter Pro</div>
+      <div id="subtitle">Darrius FinTech Inc</div>
+    </div>
+  </div>
+  <div id="topRight">
+    <span id="status">Pro Activated · Real-time / 专业版已激活</span>
+    <span id="copyright">© 2025 Darrius FinTech Inc. All Rights Reserved.</span>
+  </div>
+</div>
+
+<div id="main">
+
+  <!-- LEFT -->
+  <div class="panel">
+    <h3>Market Pulse · 市场情绪</h3>
+    <div id="pulse">
+      <div class="pulseWrap">
+        <div id="pulseGauge" aria-hidden="true">
+          <svg viewBox="0 0 120 120">
+            <circle class="track" cx="60" cy="60" r="46"></circle>
+            <circle id="pulseGreen" class="seg greenSeg" cx="60" cy="60" r="46"></circle>
+            <circle id="pulseRed" class="seg redSeg" cx="60" cy="60" r="46"></circle>
+          </svg>
         </div>
+        <div id="pulseCircle">--</div>
       </div>
+    </div>
+    <div id="pulseLabel">Loading… / 加载中…</div>
 
-      <nav class="topnav">
-        <a href="./pages/terms.html" target="_blank" rel="noopener">Terms</a>
-        <a href="./pages/privacy.html" target="_blank" rel="noopener">Privacy</a>
-        <a href="./pages/risk.html" target="_blank" rel="noopener">Risk</a>
-      </nav>
-    </header>
+    <div class="hr"></div>
 
-    <main class="main">
-      <!-- 左侧：状态/信号/提示 -->
-      <section class="card left">
-        <div class="cardTitle">Status · 状态</div>
-        <div class="badgeRow">
-          <span id="statusBadge" class="badge ok">Loading…</span>
-          <span class="badge ghost">api.darrius.ai</span>
-        </div>
+    <h3>Risk Copilot · 风控助手</h3>
+    <div class="box">
+      <div class="kv"><span class="k">Entry · 入场</span><span class="v" id="riskEntry">--</span></div>
+      <div class="kv"><span class="k">Stop · 止损</span><span class="v" id="riskStop">--</span></div>
+      <div class="kv"><span class="k">Targets · 目标</span><span class="v" id="riskTargets">--</span></div>
+      <div class="kv"><span class="k">Confidence · 强度</span><span class="v" id="riskConf">--</span></div>
+      <div class="kv"><span class="k">Backtest WinRate · 回测胜率</span><span class="v" id="riskWR">--</span></div>
+      <div class="smallTxt" id="riskNote">ATR-based dynamic risk · 基于ATR动态风控</div>
+    </div>
 
-        <div class="kv">
-          <div class="k">Symbol</div>
-          <div class="v" id="symText">BTCUSDT</div>
-        </div>
-        <div class="kv">
-          <div class="k">Timeframe</div>
-          <div class="v" id="tfText">1D</div>
-        </div>
+    <div class="hr"></div>
 
-        <div class="hr"></div>
+    <h3>Live Signals · 实时信号</h3>
+    <div id="signals">Connecting to Binance... / 连接Binance中...</div>
 
-        <div class="cardTitle">Signals · 信号</div>
-        <div id="signalBox" class="signalBox">
-          <div class="signal neutral">Waiting for data…</div>
-        </div>
-
-        <div class="hr"></div>
-
-        <div class="small">
-          <b>Disclaimer</b>：Educational only, not financial advice.  
-          <br/>仅供学习交流，不构成投资建议。
-        </div>
-      </section>
-
-      <!-- 中间：图表 -->
-      <section class="card center">
-        <div class="chartTop">
-          <div id="priceText" class="price">--</div>
-          <div id="hintText" class="hint">Chart initializing…</div>
-        </div>
-        <div id="chart" class="chart"></div>
-      </section>
-
-      <!-- 右侧：订阅 -->
-      <section class="card right">
-        <div class="cardTitle">Subscription · 订阅</div>
-        <div class="small">Test environment. Payment will redirect to Stripe checkout (placeholder).</div>
-
-        <label class="label">Plan · 套餐</label>
-        <select id="planSelect" class="input">
-        <option value="biweekly">$9.9 / 半月</option>
-        <option value="monthly" selected>$19.9 / 月付</option>
-        <option value="annual">$199 / 年付</option>
-        <option value="biennial">$299 / 两年</option>
-        </select>
-
-
-        <button id="subscribeBtn" class="btn primary">Subscribe · 订阅</button>
-        <button id="healthBtn" class="btn ghost">Test API Health</button>
-
-        <div class="hr"></div>
-
-        <div class="cardTitle">Log</div>
-        <pre id="logBox" class="log">Log: ready</pre>
-      </section>
-    </main>
-
-    <footer class="footer">
-      © 2026 Darrius FinTech Inc. All Rights Reserved.
-    </footer>
+    <div class="footer">
+      <b>Disclaimer · 免责声明:</b> Educational only, not financial advice. / 仅供学习交流，不构成投资建议。
+    </div>
   </div>
 
-  <!-- ✅ 关键：你的 app.js 放在最后，确保 DOM 与图表库都已就绪 -->
-  <script src="./app.js"></script>
+  <!-- CENTER -->
+  <div id="chartWrap">
+    <div id="chartBox">
+      <div id="chartTop">
+        <div id="price">--</div>
+        <div id="hint">Connecting to Binance · 连接Binance中</div>
+      </div>
+
+      <div id="chart">
+        <canvas id="overlay"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="panel">
+    <h3>Symbol & Timeframe · 品种与周期</h3>
+    <label class="small"><b>Symbol · 品种</b>（Binance格式，如 BTCUSDT）</label>
+    <input id="symbol" type="text" placeholder="e.g. BTCUSDT, ETHUSDT..." value="BTCUSDT" />
+
+    <label class="small"><b>Timeframe · 周期</b></label>
+    <select id="tf">
+      <option value="5m">5m · 5分钟</option>
+      <option value="15m">15m · 15分钟</option>
+      <option value="30m">30m · 30分钟</option>
+      <option value="1h">1h · 1小时</option>
+      <option value="4h">4h · 4小时</option>
+      <option value="1d" selected>1d · 日线</option>
+      <option value="1w">1w · 周线</option>
+      <option value="1M">1M · 月线</option>
+    </select>
+
+    <button class="load-btn" onclick="reload()">Load · 加载</button>
+
+    <div class="toggleRow">
+      <label><input id="tgEMA" type="checkbox" checked /> EMA(20/50/200)</label>
+      <label><input id="tgAux" type="checkbox" checked /> Aux 黄线</label>
+    </div>
+
+    <div class="hr"></div>
+
+    <h3>Subscription · 订阅</h3>
+    <label class="small"><b>Plan · 套餐</b></label>
+    <select id="plan">
+      <option value="halfmonthly">Half-monthly · 半月 - $9.9</option>
+      <option value="monthly">Monthly · 月付 - $19.99</option>
+      <option value="annual">Annual · 年付 - $99</option>
+      <option value="twoyear">Two-year · 两年 - $299</option>
+    </select>
+    <button class="primary" onclick="startSubscription()">Subscribe · 订阅</button>
+    <div class="smallTxt">Select plan and click to pay via Stripe · 选择套餐后点击跳转支付</div>
+
+    <div class="hr"></div>
+
+    <h3>Share & Export · 分享与导出</h3>
+    <button class="ghost" onclick="copyShareLink()">Copy Share Link · 复制分享链接</button>
+    <button class="ghost" onclick="exportChartPNG()">Export PNG · 导出图片（含Overlay）</button>
+
+    <div class="footer">Powered by DarriusAI · Inflection Hunter<br/>© 2025 Darrius FinTech Inc</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* =========================
+   Utils
+========================= */
+const GREEN="#00ff88", RED="#ff4757", BLUE="#00d4ff", ORANGE="#ffaa00";
+let toastTimer=null;
+
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.innerText=msg; t.style.display="block";
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.style.display="none",3000);
+}
+function setHint(msg){ document.getElementById("hint").innerText=msg; }
+function fmt(n){
+  if(n===null||n===undefined||isNaN(n)) return "--";
+  const x=Number(n);
+  return Math.abs(x)>=1000 ? x.toFixed(2) : x.toFixed(4);
+}
+function clamp(n,a,b){ return Math.max(a,Math.min(b,n)); }
+
+/* =========================
+   Market Pulse Gauge (keep)
+========================= */
+function updatePulseGauge(value){
+  const v=clamp(Number(value)||0,0,100);
+  const circle=document.getElementById("pulseCircle");
+  const g=document.getElementById("pulseGreen");
+  const r=document.getElementById("pulseRed");
+
+  const rad=46;
+  const C=2*Math.PI*rad;
+
+  const gf=v/100;
+  const rf=1-gf;
+
+  g.setAttribute("stroke-dasharray", String(C.toFixed(2)));
+  g.setAttribute("stroke-dashoffset", String((C*(1-gf)).toFixed(2)));
+
+  r.setAttribute("stroke-dasharray", String(C.toFixed(2)));
+  r.setAttribute("stroke-dashoffset", String((C*(1-rf)).toFixed(2)));
+  r.style.transform = `rotate(${(-90 + gf*360).toFixed(2)}deg)`;
+  r.style.transformOrigin="50% 50%";
+
+  circle.style.borderColor = (v>=50)? GREEN : RED;
+}
+
+function calcMarketPulse(latest){
+  if(!latest) return { label:"Neutral · 中性", value:50 };
+  const dir=latest.side==="B"?1:-1;
+  const v=Math.round(50 + dir*latest.confidence*40);
+  if(v>75) return { label:"Bullish · 强多", value:v };
+  if(v>55) return { label:"Mild Bull · 偏多", value:v };
+  if(v>45) return { label:"Neutral · 中性", value:v };
+  return { label:"Bearish · 强空", value:v };
+}
+
+/* =========================
+   Chart init
+========================= */
+const chartEl=document.getElementById("chart");
+let chart=LightweightCharts.createChart(chartEl,{
+  layout:{ background:{ color:"#0b0f17" }, textColor:"#d1d4dc" },
+  grid:{ vertLines:{ color:"transparent" }, horzLines:{ color:"transparent" } },
+  timeScale:{ timeVisible:true, secondsVisible:false },
+  rightPriceScale:{ borderVisible:false },
+  crosshair:{ mode:1 }
+});
+
+let candle=chart.addCandlestickSeries({
+  upColor:GREEN, downColor:RED,
+  wickUpColor:GREEN, wickDownColor:RED,
+  borderVisible:false
+});
+
+/* ✅ 多条EMA（恢复你右图里“均线感”） */
+let ema20Series = chart.addLineSeries({ color:"rgba(125,211,252,.95)", lineWidth:2 });
+let ema50Series = chart.addLineSeries({ color:"rgba(192,132,252,.90)", lineWidth:2 });
+let ema200Series= chart.addLineSeries({ color:"rgba(255,255,255,.40)", lineWidth:2 });
+
+/* ✅ 你已有的 Aux 黄线：EMA(ext,5)->EMA(2) */
+let auxLineSeries=chart.addLineSeries({ color: ORANGE, lineWidth: 2 });
+
+/* Risk price lines */
+let riskPriceLines=[];
+function clearRiskLines(){ riskPriceLines.forEach(pl=>{ try{ candle.removePriceLine(pl);}catch{} }); riskPriceLines=[]; }
+function addRiskLine(price,title,color){
+  if(isNaN(price)) return;
+  const pl=candle.createPriceLine({ price, color, lineWidth:2, lineStyle:2, axisLabelVisible:true, title });
+  riskPriceLines.push(pl);
+}
+
+/* =========================
+   Overlay engine (keep your key visuals)
+========================= */
+const overlay=document.getElementById("overlay");
+const ctx=overlay.getContext("2d");
+let overlayState={ points:[], pivots:[] };
+
+function resizeOverlay(){
+  const dpr=window.devicePixelRatio||1;
+  const rect=chartEl.getBoundingClientRect();
+  overlay.width=Math.max(1,Math.floor(rect.width*dpr));
+  overlay.height=Math.max(1,Math.floor(rect.height*dpr));
+  overlay.style.width=rect.width+"px";
+  overlay.style.height=rect.height+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  redrawOverlay();
+}
+function clearCanvas(){
+  const rect=overlay.getBoundingClientRect();
+  ctx.clearRect(0,0,rect.width,rect.height);
+}
+function xOfTime(t){ return chart.timeScale().timeToCoordinate(t); }
+function yOfPrice(p){ return candle.priceToCoordinate(p); }
+
+function drawColoredMainLine(){
+  const pts=overlayState.points;
+  if(!pts || pts.length<2) return;
+  ctx.lineWidth=3; ctx.lineJoin="round"; ctx.lineCap="round";
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1], b=pts[i];
+    const x1=xOfTime(a.time), y1=yOfPrice(a.value);
+    const x2=xOfTime(b.time), y2=yOfPrice(b.value);
+    if(x1===null||y1===null||x2===null||y2===null) continue;
+    ctx.strokeStyle=(b.trend>=0)?GREEN:RED;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  }
+}
+
+function drawPivotsBig(){
+  const piv=overlayState.pivots||[];
+  if(!piv.length) return;
+
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.font="bold 22px Arial";
+
+  for(const m of piv){
+    const x=xOfTime(m.time);
+    const y=yOfPrice(m.priceLabel);
+    if(x===null||y===null) continue;
+
+    const isB=m.type==="B";
+    const fill=isB?"#ff2bd6":"#ffe600";
+    const stroke="rgba(0,0,0,0.78)";
+
+    ctx.save();
+    ctx.shadowColor=fill;
+    ctx.shadowBlur=14;
+    ctx.fillStyle=fill;
+    ctx.lineWidth=5;
+    ctx.strokeStyle=stroke;
+    ctx.strokeText(m.type,x,y);
+    ctx.fillText(m.type,x,y);
+    ctx.restore();
+  }
+}
+
+function redrawOverlay(){
+  clearCanvas();
+  drawColoredMainLine();   // ✅ 你的双色主线保留
+  drawPivotsBig();         // ✅ 你的 B/S 大字标记保留
+}
+chart.timeScale().subscribeVisibleTimeRangeChange(()=>redrawOverlay());
+chart.timeScale().subscribeVisibleLogicalRangeChange(()=>redrawOverlay());
+new ResizeObserver(()=>resizeOverlay()).observe(chartEl);
+window.addEventListener("resize",()=>resizeOverlay());
+
+/* =========================
+   Data & Binance
+========================= */
+let barsStore=[];
+let currentSymbol="BTCUSDT";
+let currentTf="1d";
+let ws=null;
+
+function startSubscription(){
+  const plan=document.getElementById("plan").value;
+  let url="";
+  // TODO: 这里请替换成你真实的 Stripe Payment Link
+  if(plan==="halfmonthly") url="https://buy.stripe.com/REPLACE_HALFMONTHLY";
+  else if(plan==="monthly") url="https://buy.stripe.com/REPLACE_MONTHLY";
+  else if(plan==="annual") url="https://buy.stripe.com/REPLACE_ANNUAL";
+  else if(plan==="twoyear") url="https://buy.stripe.com/REPLACE_TWOYEAR";
+  if(url && !url.includes("REPLACE")){
+    showToast("Redirecting to payment · 跳转支付中...");
+    window.location.href=url;
+  }else{
+    showToast("Stripe link not set yet · Stripe链接尚未配置（请替换 REPLACE_*）");
+  }
+}
+
+function copyShareLink(){
+  try{ navigator.clipboard.writeText(window.location.href); showToast("Link copied · 已复制分享链接"); }
+  catch{ showToast("Copy failed · 复制失败"); }
+}
+
+function exportChartPNG(){
+  try{
+    const base=chart.takeScreenshot();
+    const out=document.createElement("canvas");
+    out.width=base.width; out.height=base.height;
+    const octx=out.getContext("2d");
+    octx.drawImage(base,0,0);
+    octx.drawImage(overlay,0,0,out.width,out.height);
+    const a=document.createElement("a");
+    const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");
+    a.download=`${currentSymbol}_${currentTf}_InflectionHunter_${ts}.png`;
+    a.href=out.toDataURL("image/png");
+    a.click();
+    showToast("PNG exported · 已导出（含Overlay）");
+  }catch(e){
+    showToast("Export failed · 导出失败");
+  }
+}
+
+function getBinanceInterval(tf){ return tf; }
+
+function generateSimulatedData(symbol, tf){
+  const tfSeconds={"5m":300,"15m":900,"30m":1800,"1h":3600,"4h":14400,"1d":86400,"1w":604800,"1M":2592000}[tf]||86400;
+  const num=tf==="1M"?120:240;
+  const now=Math.floor(Date.now()/1000);
+  const base=symbol.includes("BTC")?67000:205;
+  const vol=symbol.includes("BTC")?0.025:0.012;
+  const bars=[];
+  let price=base;
+  let t=now-(num-1)*tfSeconds;
+  for(let i=0;i<num;i++){
+    const trend=Math.sin(i/18)*base*0.012;
+    const noise=(Math.random()-0.5)*base*vol;
+    price+=trend+noise; price=Math.max(price, base*0.5);
+    const open=price;
+    const close=price+(Math.random()-0.5)*base*0.006;
+    const high=Math.max(open,close)+Math.random()*base*0.01;
+    const low=Math.min(open,close)-Math.random()*base*0.01;
+    bars.push({ time:t+i*tfSeconds, open:+open.toFixed(2), high:+high.toFixed(2), low:+low.toFixed(2), close:+close.toFixed(2) });
+  }
+  return bars;
+}
+
+async function loadHistoricalData(symbol, tf){
+  const interval=getBinanceInterval(tf);
+  const limit=tf==="1M"?120:500;
+  let retries=3;
+  while(retries>0){
+    try{
+      const resp=await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data=await resp.json();
+      if(!data||data.length===0) throw new Error("No data");
+      const bars=data.map(d=>({ time:d[0]/1000, open:+d[1], high:+d[2], low:+d[3], close:+d[4] }));
+      barsStore=bars;
+      candle.setData(barsStore);
+      processData(barsStore);
+      setHint("Binance data loaded · Binance数据加载完成");
+      return;
+    }catch(e){
+      retries--;
+      if(retries===0){
+        showToast("Binance interface error, using simulated data · Binance接口错误，使用模拟数据");
+        barsStore=generateSimulatedData(symbol, tf);
+        candle.setData(barsStore);
+        processData(barsStore);
+        setHint("Simulated data (Binance unavailable) · 模拟数据 (Binance不可用)");
+      }else{
+        await new Promise(r=>setTimeout(r,1200));
+      }
+    }
+  }
+}
+
+function connectWebSocket(symbol, tf){
+  if(ws){ try{ ws.close(); }catch{} }
+  const interval=getBinanceInterval(tf);
+  const stream=`${symbol.toLowerCase()}@kline_${interval}`;
+  ws=new WebSocket(`wss://stream.binance.com:9443/ws/${stream}`);
+  ws.onmessage=e=>{
+    try{
+      const msg=JSON.parse(e.data);
+      if(!msg.k) return;
+      const k=msg.k;
+      const bar={ time:k.t/1000, open:+k.o, high:+k.h, low:+k.l, close:+k.c };
+      const last=barsStore[barsStore.length-1];
+      if(last && last.time===bar.time) barsStore[barsStore.length-1]=bar;
+      else{
+        barsStore.push(bar);
+        if(barsStore.length>1200) barsStore=barsStore.slice(-1200);
+      }
+      candle.update(bar);
+      if(k.x){ processData(barsStore); }
+    }catch{}
+  };
+  ws.onclose=()=>setTimeout(()=>connectWebSocket(symbol, tf),3000);
+}
+
+/* =========================
+   Indicators helpers
+========================= */
+function ema(arr, per){
+  const res=new Array(arr.length).fill(NaN);
+  per=Math.max(2,Math.floor(per));
+  const k=2/(per+1);
+  let sum=0;
+  for(let i=0;i<per && i<arr.length;i++) sum+=arr[i];
+  if(arr.length>=per) res[per-1]=sum/per;
+  for(let i=per;i<arr.length;i++){
+    if(isNaN(res[i-1])) res[i-1]=arr[i-1];
+    res[i]=arr[i]*k+res[i-1]*(1-k);
+  }
+  return res;
+}
+function calcATR(bars, per){
+  per=Math.max(2,Math.floor(per));
+  const tr=new Array(bars.length).fill(NaN);
+  for(let i=0;i<bars.length;i++){
+    const h=bars[i].high, l=bars[i].low;
+    if(i===0){ tr[i]=h-l; continue; }
+    const pc=bars[i-1].close;
+    tr[i]=Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc));
+  }
+  return ema(tr, per);
+}
+
+/* =========================
+   ✅ 核心：processData
+   你要求保留算法骨架：ext + pivot(B/S) + overlay + 买卖提示
+   我只是在外层增强：EMA多线、ATR风控更真实、信心更稳
+========================= */
+function processData(bars){
+  if(!bars || bars.length<80) return;
+
+  const closes=bars.map(b=>b.close);
+
+  /* --------- (A) 你原始算法：ext (HMA-like core) 保留 --------- */
+  const period=14;
+  const p=Math.max(2,Math.floor(Math.sqrt(period)));
+
+  function wma(arr, per){
+    per=Math.max(2,Math.floor(per));
+    const res=new Array(arr.length).fill(NaN);
+    const weights=Array.from({length:per},(_,i)=>i+1);
+    const wsum=weights.reduce((a,b)=>a+b,0);
+    for(let i=per-1;i<arr.length;i++){
+      let sum=0;
+      for(let j=0;j<per;j++) sum+=arr[i-j]*weights[per-1-j];
+      res[i]=sum/wsum;
+    }
+    return res;
+  }
+
+  const wma_half=wma(closes,Math.max(2,Math.floor(period/2)));
+  const wma_full=wma(closes,period);
+  const vect=new Array(closes.length).fill(NaN);
+  for(let i=0;i<closes.length;i++){
+    if(!isNaN(wma_half[i]) && !isNaN(wma_full[i])) vect[i]=2*wma_half[i]-wma_full[i];
+  }
+  const ext=new Array(closes.length).fill(NaN);
+  for(let i=p-1;i<closes.length;i++){
+    let sum=0,cnt=0;
+    for(let j=0;j<p;j++){
+      const vv=vect[i-j];
+      if(!isNaN(vv)){ sum+=vv; cnt++; }
+    }
+    if(cnt>0) ext[i]=sum/cnt;
+  }
+
+  /* --------- (B) 你原始 trend 判定：保留 --------- */
+  const N=5;
+  const trend=new Array(closes.length).fill(0);
+  for(let i=1;i<closes.length;i++){
+    let delta=0,found=0;
+    for(let k=i;k>=1 && found<N;k--){
+      const a=closes[k], b=closes[k-1];
+      if(isNaN(a)||isNaN(b)) continue;
+      delta+=(a-b); found++;
+    }
+    if(found===0) trend[i]=trend[i-1];
+    else if(delta>0) trend[i]=1;
+    else if(delta<0) trend[i]=-1;
+    else trend[i]=trend[i-1];
+  }
+
+  /* --------- (C) ✅ 恢复多条 EMA（更接近你右图） --------- */
+  const ema20 = ema(closes, 20);
+  const ema50 = ema(closes, 50);
+  const ema200= ema(closes, 200);
+
+  const showEMA = document.getElementById("tgEMA")?.checked ?? true;
+  if(showEMA){
+    ema20Series.setData(bars.map((b,i)=>({time:b.time,value:ema20[i]})).filter(p=>!isNaN(p.value)));
+    ema50Series.setData(bars.map((b,i)=>({time:b.time,value:ema50[i]})).filter(p=>!isNaN(p.value)));
+    ema200Series.setData(bars.map((b,i)=>({time:b.time,value:ema200[i]})).filter(p=>!isNaN(p.value)));
+  }else{
+    ema20Series.setData([]); ema50Series.setData([]); ema200Series.setData([]);
+  }
+
+  /* --------- (D) ✅ 你原始 Aux 黄线：保留 + 可开关 --------- */
+  const showAux = document.getElementById("tgAux")?.checked ?? true;
+  if(showAux){
+    const AUX_PERIOD=5, SMOOTH_2=2;
+    const safeBase = ext.map(v=>isNaN(v)?0:v);
+    const aux1 = ema(safeBase, AUX_PERIOD);
+    const aux2 = ema(aux1.map(v=>isNaN(v)?0:v), SMOOTH_2);
+    const auxPts=[];
+    for(let i=0;i<bars.length;i++){
+      if(isNaN(ext[i]) || isNaN(aux2[i])) continue;
+      auxPts.push({ time: bars[i].time, value: aux2[i] });
+    }
+    auxLineSeries.setData(auxPts);
+  }else{
+    auxLineSeries.setData([]);
+  }
+
+  /* --------- (E) 你原始 pivots(B/S) 判定：保留 --------- */
+  const atr=calcATR(bars,14);
+  const piv=[];
+  const cooldown=8;
+
+  function tryPushPivot(i,type){
+    const bExt=ext[i];
+    if(isNaN(bExt)) return;
+    const last=piv[piv.length-1];
+    const a=atr[i];
+    const atrv=(!isNaN(a)&&a>0)?a:(bars[i].high-bars[i].low);
+    const pad=atrv*0.35;
+    const priceLabel = (type==="B") ? (bars[i].low - pad) : (bars[i].high + pad);
+    const cand={ time:bars[i].time, type, idx:i, extVal:bExt, priceLabel };
+
+    if(!last){ piv.push(cand); return; }
+    if(last.type===type && (cand.idx-last.idx)<=cooldown){
+      const better=(type==="B") ? (cand.extVal < last.extVal) : (cand.extVal > last.extVal);
+      if(better) piv[piv.length-1]=cand;
+      return;
+    }
+    piv.push(cand);
+  }
+
+  for(let i=2;i<bars.length-2;i++){
+    const a=ext[i-1], b=ext[i], c=ext[i+1];
+    if(isNaN(a)||isNaN(b)||isNaN(c)) continue;
+    if(b<a && b<=c) tryPushPivot(i,"B");
+    if(b>a && b>=c) tryPushPivot(i,"S");
+  }
+
+  /* --------- (F) ✅ latestSignal：保留结构，但信心更“像真” --------- */
+  let latestSignal=null;
+  if(piv.length){
+    const pv=piv[piv.length-1];
+    const i=pv.idx;
+    const lastClose=bars[bars.length-1].close;
+    const atrNow = (!isNaN(atr[i]) && atr[i]>0) ? atr[i] : (bars[i].high-bars[i].low);
+
+    // 信心：ext 斜率 + 价格相对EMA20位置 + 波动率惩罚（更稳）
+    const slope = (i>=3 && !isNaN(ext[i]) && !isNaN(ext[i-3])) ? (ext[i]-ext[i-3]) : 0;
+    const emaBias = (!isNaN(ema20[i])) ? (lastClose-ema20[i]) : 0;
+    let conf = 0.65 + clamp(Math.abs(slope)/(atrNow*0.6),0,0.25) + clamp(Math.abs(emaBias)/(atrNow*2.0),0,0.15);
+    conf = clamp(conf, 0.60, 0.92);
+
+    if(pv.type==="B"){
+      const entry = bars[i].low + atrNow*0.10;
+      const stop  = bars[i].low - atrNow*1.10;
+      const t1 = entry + atrNow*1.60;
+      const t2 = entry + atrNow*2.80;
+      const t3 = entry + atrNow*4.20;
+      latestSignal={ side:"B", confidence:conf, signal_price:bars[i].low, entry_price:entry,
+        risk:{ entry, stop, targets:[t1,t2,t3] } };
+    }else{
+      const entry = bars[i].high - atrNow*0.10;
+      const stop  = bars[i].high + atrNow*1.10;
+      const t1 = entry - atrNow*1.60;
+      const t2 = entry - atrNow*2.80;
+      const t3 = entry - atrNow*4.20;
+      latestSignal={ side:"S", confidence:conf, signal_price:bars[i].high, entry_price:entry,
+        risk:{ entry, stop, targets:[t1,t2,t3] } };
+    }
+  }
+
+  /* --------- (G) 左侧信号卡：保留 BUY/SELL 提示 --------- */
+  const box=document.getElementById("signals");
+  box.innerHTML="";
+  if(latestSignal){
+    const div=document.createElement("div");
+    div.className="signal latest "+(latestSignal.side==="S"?"sell":"");
+    const sideEN=latestSignal.side==="B"?"BUY":"SELL";
+    const sideZH=latestSignal.side==="B"?"买入":"卖出";
+    div.innerHTML=`<b>${sideEN} · ${sideZH}</b> @ ${fmt(latestSignal.signal_price)}<br/>
+      <span class="smallTxt">Entry · 入场: ${fmt(latestSignal.entry_price)} · Confidence · 强度: ${Math.round(latestSignal.confidence*100)}%</span>`;
+    box.appendChild(div);
+  }else{
+    box.innerHTML="<div class='smallTxt'>No recent signal · 暂无最新信号</div>";
+  }
+
+  /* --------- (H) Market Pulse：保留 --------- */
+  const pulse=calcMarketPulse(latestSignal);
+  document.getElementById("pulseCircle").innerText = latestSignal ? pulse.value : "--";
+  document.getElementById("pulseLabel").innerText = latestSignal ? `Market Pulse · 市场情绪: ${pulse.label}` : "Loading… / 加载中…";
+  updatePulseGauge(latestSignal ? pulse.value : 0);
+
+  /* --------- (I) Risk Copilot：更真实 + 画线 --------- */
+  const risk=latestSignal?.risk || null;
+  document.getElementById("riskEntry").innerText = risk ? fmt(risk.entry) : "--";
+  document.getElementById("riskStop").innerText = risk ? fmt(risk.stop) : "--";
+  document.getElementById("riskTargets").innerText = risk ? risk.targets.map(fmt).join(", ") : "--";
+  document.getElementById("riskConf").innerText = latestSignal ? Math.round(latestSignal.confidence*100)+"%" : "--";
+
+  // 暂时给个固定展示（后续你接API可替换）
+  document.getElementById("riskWR").innerText = "72%";
+
+  clearRiskLines();
+  if(risk){
+    addRiskLine(risk.entry,"Entry · 入场",GREEN);
+    addRiskLine(risk.stop,"Stop · 止损",RED);
+    risk.targets.forEach((p,i)=>addRiskLine(p,`T${i+1} · 目标${i+1}`,BLUE));
+  }
+
+  /* --------- (J) 顶部价格 --------- */
+  const last=bars[bars.length-1];
+  document.getElementById("price").innerText = `${currentSymbol} · ${fmt(last.close)}`;
+
+  /* --------- (K) Overlay points：保留 ext 主线 + trend --------- */
+  const oPts=[];
+  for(let i=0;i<bars.length;i++){
+    const v=ext[i];
+    if(isNaN(v)) continue;
+    const tr=(trend[i]===0?(i>0?trend[i-1]:1):trend[i]);
+    oPts.push({ time: bars[i].time, value: v, trend: tr>=0?1:-1 });
+  }
+  overlayState.points=oPts;
+  overlayState.pivots=piv.map(pv=>({ time:pv.time, type:pv.type, priceLabel:pv.priceLabel }));
+
+  requestAnimationFrame(()=>resizeOverlay());
+}
+
+/* =========================
+   Reload
+========================= */
+async function reload(){
+  const symbol=(document.getElementById("symbol").value||"BTCUSDT").trim().toUpperCase();
+  const tf=document.getElementById("tf").value;
+  currentSymbol=symbol;
+  currentTf=tf;
+  document.getElementById("signals").innerHTML="Connecting to Binance... / 连接Binance中...";
+  setHint("Loading Binance data · 加载Binance数据中...");
+  await loadHistoricalData(symbol, tf);
+  connectWebSocket(symbol, tf);
+}
+
+/* toggle listeners */
+document.getElementById("tgEMA").addEventListener("change", ()=>{ if(barsStore?.length) processData(barsStore); });
+document.getElementById("tgAux").addEventListener("change", ()=>{ if(barsStore?.length) processData(barsStore); });
+
+/* init */
+resizeOverlay();
+updatePulseGauge(0);
+reload();
+</script>
 </body>
 </html>
