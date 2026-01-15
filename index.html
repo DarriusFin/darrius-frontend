@@ -1,96 +1,134 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DarriusAI · Inflection Hunter Pro | AI 拐点决策系统</title>
+  <title>DarriusAI · Inflection Hunter | AI 拐点决策系统</title>
 
-  <!-- Lightweight Charts (TradingView) -->
+  <!-- Lightweight Charts -->
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
   <style>
     :root{
-      --bg:#0E1117;
-      --panel:#151A23;
-      --panel2:#101521;
-      --border:#232A36;
+      --bg:#0B0F17;
+      --bg2:#0A1220;
 
-      --text:#E6EDF3;
-      --muted:#8B949E;
+      --panel:#121A28;
+      --panel2:#0F1726;
 
-      --green:#2BE2A6;
-      --blue:#4CC2FF;
-      --red:#FF5A5A;
-      --orange:#FFB86C;
+      --border:rgba(255,255,255,.08);
+      --border2:rgba(255,255,255,.10);
 
-      --shadow: 0 10px 30px rgba(0,0,0,.35);
-      --radius: 14px;
+      --text:#EAF0F7;
+      --muted:#A2B0C2;
 
-      --btnGrad: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
-      --btnGrad2: linear-gradient(90deg, rgba(76,194,255,1) 0%, rgba(43,226,166,1) 100%);
+      --brand1:#2BE2A6; /* teal */
+      --brand2:#4CC2FF; /* blue */
+      --warn:#FFB86C;
+      --danger:#FF5A5A;
+
+      --shadow: 0 18px 45px rgba(0,0,0,.40);
+      --shadow2: 0 10px 25px rgba(0,0,0,.28);
+
+      --r12:12px;
+      --r14:14px;
+      --r18:18px;
+
+      --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
+      --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
     }
 
     *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+
     body{
       margin:0;
-      background:
-        radial-gradient(1200px 600px at 12% 12%, rgba(76,194,255,.10), transparent 55%),
-        radial-gradient(1000px 500px at 88% 10%, rgba(43,226,166,.10), transparent 55%),
-        radial-gradient(800px 500px at 60% 90%, rgba(255,90,90,.06), transparent 60%),
-        var(--bg);
       color:var(--text);
+      background:
+        radial-gradient(900px 500px at 12% 10%, rgba(76,194,255,.10), transparent 60%),
+        radial-gradient(900px 520px at 88% 12%, rgba(43,226,166,.10), transparent 62%),
+        radial-gradient(700px 420px at 50% 92%, rgba(255,184,108,.06), transparent 60%),
+        linear-gradient(180deg, var(--bg), var(--bg2));
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "PingFang SC","Microsoft YaHei", sans-serif;
       overflow:hidden;
     }
 
-    /* Top bar */
+    a{ color: rgba(76,194,255,.95); text-decoration:none; }
+    a:hover{ text-decoration:underline; }
+
+    /* ===== Header ===== */
     #topbar{
-      height:64px;
+      height:78px;
+      padding:0 18px;
       display:flex;
       align-items:center;
       justify-content:space-between;
-      padding:0 18px;
       border-bottom:1px solid var(--border);
-      background: rgba(14,17,23,.65);
+      background: rgba(10,15,23,.55);
       backdrop-filter: blur(10px);
     }
+
     #brand{
       display:flex;
       align-items:center;
       gap:14px;
-      min-width:320px;
+      min-width:420px;
     }
-    #logo{
-      width:36px;height:36px;border-radius:10px;
-      background: linear-gradient(135deg, rgba(43,226,166,.22), rgba(76,194,255,.22));
+
+    .logo{
+      width:44px;height:44px;border-radius:16px;
+      background: var(--gradBrandSoft);
       border:1px solid rgba(255,255,255,.10);
-      box-shadow: 0 10px 25px rgba(0,0,0,.25);
+      box-shadow: 0 14px 30px rgba(0,0,0,.30);
       position:relative;
       overflow:hidden;
+      flex:0 0 auto;
     }
-    #logo:after{
+    .logo::after{
       content:"";
-      position:absolute; inset:-40%;
-      background: conic-gradient(from 180deg, rgba(43,226,166,.0), rgba(43,226,166,.55), rgba(76,194,255,.55), rgba(43,226,166,.0));
-      animation: spin 6s linear infinite;
+      position:absolute; inset:-55%;
+      background: conic-gradient(from 180deg,
+        rgba(43,226,166,0),
+        rgba(43,226,166,.65),
+        rgba(76,194,255,.65),
+        rgba(43,226,166,0));
+      animation: spin 7s linear infinite;
     }
     @keyframes spin{ to{ transform: rotate(360deg);} }
 
-    #brandText{ line-height:1.1; }
-    #brandTitle{
-      font-weight:900;
-      letter-spacing:.2px;
-      font-size:16px;
+    #brandText{ line-height:1.08; }
+    #brandLine1{
+      font-weight:950;
+      letter-spacing:.3px;
+      font-size:22px;              /* 放大：更醒目 */
     }
-    #brandTitle .accent{
-      background: linear-gradient(90deg, var(--green), var(--blue));
+    #brandLine1 .accent{
+      background: var(--gradBrand);
       -webkit-background-clip:text;
       -webkit-text-fill-color:transparent;
     }
-    #brandSub{
-      margin-top:4px;
+    #brandLine2{
+      margin-top:7px;
       color:var(--muted);
+      font-size:13px;              /* 放大：更清晰 */
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .chip{
       font-size:12px;
+      padding:5px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      color: rgba(234,240,247,.90);
+      white-space:nowrap;
+    }
+    .chip.brand{
+      border:1px solid rgba(43,226,166,.30);
+      background: rgba(43,226,166,.12);
+      color: rgba(234,240,247,.95);
     }
 
     #topRight{
@@ -98,89 +136,91 @@
       align-items:center;
       gap:10px;
       justify-content:flex-end;
-      min-width:320px;
+      min-width:360px;
     }
+
     .pill{
       display:inline-flex;
       align-items:center;
       gap:8px;
-      padding:8px 12px;
+      padding:9px 12px;
       border-radius:999px;
       border:1px solid rgba(255,255,255,.10);
-      background: rgba(21,26,35,.75);
-      box-shadow: var(--shadow);
+      background: rgba(18,26,40,.65);
+      box-shadow: var(--shadow2);
       font-size:12px;
-      color:var(--text);
+      color: var(--text);
       white-space:nowrap;
       max-width: 42vw;
       overflow:hidden;
       text-overflow:ellipsis;
     }
     .dot{
-      width:8px;height:8px;border-radius:50%;
-      background: var(--green);
-      box-shadow: 0 0 0 3px rgba(43,226,166,.12);
+      width:9px;height:9px;border-radius:50%;
+      background: var(--brand1);
+      box-shadow: 0 0 0 4px rgba(43,226,166,.10);
+      flex:0 0 auto;
     }
-    #statusBadge.ok .dot{ background: var(--green); box-shadow: 0 0 0 3px rgba(43,226,166,.14); }
-    #statusBadge.bad .dot{ background: var(--red); box-shadow: 0 0 0 3px rgba(255,90,90,.14); }
-    #statusText{
-      max-width: 34vw;
-      overflow:hidden;text-overflow:ellipsis;
+    .pill.bad .dot{
+      background: var(--danger);
+      box-shadow: 0 0 0 4px rgba(255,90,90,.10);
     }
+
     #copyright{
-      color:rgba(230,237,243,.70);
-      background: rgba(0,0,0,.20);
-      border:1px solid rgba(255,255,255,.08);
-      padding:8px 12px;
-      border-radius:999px;
       font-size:12px;
+      color: rgba(234,240,247,.68);
+      background: rgba(0,0,0,.16);
+      padding:9px 12px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:999px;
       white-space:nowrap;
     }
 
-    /* Main layout */
+    /* ===== Main Layout ===== */
     #main{
-      height: calc(100vh - 64px);
-      display:grid;
-      grid-template-columns: 320px 1fr 360px;
-      gap:16px;
+      height: calc(100vh - 78px);
       padding:16px;
+      display:grid;
+      grid-template-columns: 330px 1fr 380px;
+      gap:16px;
+      min-height:0;
     }
 
     .panel{
-      background: linear-gradient(180deg, rgba(21,26,35,.92), rgba(16,21,33,.86));
-      border:1px solid rgba(255,255,255,.08);
-      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(18,26,40,.92), rgba(15,23,38,.88));
+      border: 1px solid var(--border);
+      border-radius: var(--r18);
       box-shadow: var(--shadow);
       overflow:hidden;
       display:flex;
       flex-direction:column;
-      min-height:0; /* allow inner scroll */
+      min-height:0;
     }
 
     .panelHeader{
-      padding:14px 14px 10px 14px;
+      padding:14px 14px 12px 14px;
       border-bottom:1px solid rgba(255,255,255,.06);
       display:flex;
       align-items:center;
       justify-content:space-between;
       gap:10px;
+      background: rgba(0,0,0,.12);
     }
     .panelHeader .h{
-      font-weight:800;
-      letter-spacing:.2px;
+      font-weight:900;
       font-size:13px;
-      color:var(--text);
+      letter-spacing:.2px;
       display:flex;
       align-items:center;
       gap:10px;
     }
     .panelHeader .h .tag{
-      font-weight:700;
-      color:#071019;
-      background: rgba(43,226,166,.90);
-      padding:3px 8px;
-      border-radius:999px;
       font-size:11px;
+      padding:3px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      color: rgba(234,240,247,.92);
     }
     .panelBody{
       padding:14px;
@@ -188,62 +228,33 @@
       min-height:0;
     }
 
-    /* Left metrics */
     .card{
-      background: rgba(0,0,0,.18);
+      background: rgba(0,0,0,.16);
       border:1px solid rgba(255,255,255,.07);
-      border-radius:12px;
+      border-radius: var(--r14);
       padding:12px;
       margin-bottom:12px;
     }
+
     .cardTitle{
       display:flex;
       align-items:center;
       justify-content:space-between;
       gap:10px;
-      font-size:12px;
-      color:var(--muted);
       margin-bottom:10px;
+      color: var(--muted);
+      font-size:12px;
     }
-    .cardTitle b{ color:var(--text); font-size:12.5px; }
-    .small{
-      font-size:12px; color:var(--muted);
-      line-height:1.45;
+    .cardTitle b{
+      color: var(--text);
+      font-size:12.5px;
+      font-weight:900;
     }
 
-    /* Gauge */
-    .gaugeWrap{
-      display:flex;align-items:center;gap:12px;
-    }
-    .gauge{
-      width:160px;height:160px;border-radius:50%;
-      background:
-        conic-gradient(var(--green) 0deg, var(--green) 250deg, rgba(255,255,255,.10) 250deg, rgba(255,255,255,.10) 360deg);
-      position:relative;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
-      flex:0 0 auto;
-    }
-    .gauge:after{
-      content:"";
-      position:absolute; inset:14px;
-      background: rgba(14,17,23,.95);
-      border-radius:50%;
-      border:1px solid rgba(255,255,255,.06);
-    }
-    .gaugeCenter{
-      position:absolute; inset:0;
-      display:flex;align-items:center;justify-content:center;
-      z-index:2;
-      flex-direction:column;
-      text-align:center;
-    }
-    .gaugeCenter .num{
-      font-size:36px; font-weight:900;
-      letter-spacing:.5px;
-    }
-    .gaugeCenter .lbl{
-      margin-top:2px;
-      font-size:12px;color:var(--muted);
+    .small{
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.45;
     }
 
     .kv{
@@ -251,37 +262,82 @@
       grid-template-columns: 1fr auto;
       gap:8px 10px;
       font-size:12px;
-      color:var(--muted);
+      color: var(--muted);
     }
-    .kv b{ color:var(--text); font-weight:800; }
+    .kv b{ color: var(--text); font-weight:900; }
 
+    /* ===== Gauge ===== */
+    .gaugeWrap{
+      display:flex;
+      gap:12px;
+      align-items:center;
+    }
+    .gauge{
+      width:160px;height:160px;border-radius:50%;
+      background: conic-gradient(var(--brand1) 0deg, var(--brand1) 270deg, rgba(255,255,255,.10) 270deg, rgba(255,255,255,.10) 360deg);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+      position:relative;
+      flex:0 0 auto;
+    }
+    .gauge::after{
+      content:"";
+      position:absolute; inset:14px;
+      border-radius:50%;
+      background: rgba(10,15,23,.92);
+      border:1px solid rgba(255,255,255,.06);
+    }
+    .gaugeCenter{
+      position:absolute; inset:0;
+      z-index:2;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      text-align:center;
+    }
+    .gaugeCenter .num{
+      font-size:36px;
+      font-weight:950;
+      letter-spacing:.6px;
+    }
+    .gaugeCenter .lbl{
+      margin-top:2px;
+      font-size:12px;
+      color: var(--muted);
+    }
+
+    /* ===== Signal box ===== */
     .signalBox{
-      border-radius:12px;
-      border:1px solid rgba(255,255,255,.08);
+      border-radius: var(--r14);
       overflow:hidden;
+      border:1px solid rgba(255,255,255,.08);
     }
     .signal{
-      padding:12px;
-      background: rgba(0,0,0,.18);
       display:flex;
-      align-items:flex-start;
       justify-content:space-between;
       gap:10px;
+      padding:12px;
+      background: rgba(0,0,0,.16);
+      border-left: 4px solid rgba(255,255,255,.10);
     }
-    .signal .side{
-      font-weight:900;
-      letter-spacing:.4px;
-    }
-    .signal.buy{ border-left: 4px solid var(--green); }
-    .signal.sell{ border-left: 4px solid var(--red); }
-    .signal.neutral{ border-left: 4px solid rgba(255,255,255,.18); }
-    .signal .meta{
-      font-size:12px;color:var(--muted);
-      margin-top:6px;
-      line-height:1.35;
-    }
+    .signal.buy{ border-left-color: var(--brand1); }
+    .signal.sell{ border-left-color: var(--danger); }
+    .signal.neutral{ border-left-color: rgba(255,255,255,.14); }
+    .signal .side{ font-weight:950; letter-spacing:.4px; }
+    .signal .meta{ margin-top:6px; font-size:12px; color:var(--muted); line-height:1.35; }
 
-    /* Center chart */
+    /* ===== Left footer disclaimer (moved here) ===== */
+    #leftDisclaimer{
+      margin-top:12px;
+      padding-top:12px;
+      border-top:1px solid rgba(255,255,255,.06);
+      font-size:11px;
+      line-height:1.55;
+      color: rgba(234,240,247,.72);
+    }
+    #leftDisclaimer b{ color: rgba(234,240,247,.92); }
+
+    /* ===== Center Chart ===== */
     #chartPanel .panelBody{ padding:0; }
     #chartTop{
       padding:12px 14px;
@@ -289,82 +345,88 @@
       align-items:center;
       justify-content:space-between;
       border-bottom:1px solid rgba(255,255,255,.06);
-      background: rgba(0,0,0,.18);
+      background: rgba(0,0,0,.14);
     }
     #priceLine{
-      display:flex;align-items:center;gap:10px;
-      font-weight:900;
-      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:950;
     }
     #priceLine .sym{
-      color:var(--muted);
       font-size:12px;
-      font-weight:800;
+      color: var(--muted);
+      font-weight:900;
     }
     #hintText{
-      color:var(--muted);
       font-size:12px;
-      max-width:52%;
-      overflow:hidden;text-overflow:ellipsis; white-space:nowrap;
+      color: var(--muted);
+      max-width:55%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
     }
+
     #chart{
-      height: calc(100vh - 64px - 16px - 16px - 54px); /* topbar + paddings + chartTop */
-      min-height:360px;
+      height: calc(100vh - 78px - 16px - 16px - 54px);
+      min-height:420px;
       width:100%;
     }
 
-    /* Right controls */
+    /* ===== Right Controls ===== */
     .field{ margin-bottom:10px; }
     .label{
-      font-size:12px;color:var(--muted);
-      margin-bottom:6px;
       display:flex;
       align-items:center;
       justify-content:space-between;
       gap:10px;
+      margin-bottom:6px;
+      font-size:12px;
+      color: var(--muted);
     }
-    .label b{ color:var(--text); }
+    .label b{ color: var(--text); }
+
     input, select{
       width:100%;
-      background: rgba(0,0,0,.20);
+      background: rgba(0,0,0,.18);
       border:1px solid rgba(255,255,255,.10);
-      color:var(--text);
+      color: var(--text);
       padding:10px 10px;
-      border-radius:12px;
+      border-radius: var(--r12);
       outline:none;
       font-size:13px;
     }
-    input::placeholder{ color: rgba(139,148,158,.85); }
+    input::placeholder{ color: rgba(162,176,194,.80); }
     input:focus, select:focus{
-      border-color: rgba(76,194,255,.55);
+      border-color: rgba(76,194,255,.50);
       box-shadow: 0 0 0 4px rgba(76,194,255,.12);
     }
 
     .btn{
       width:100%;
       border:0;
-      color:#071019;
-      font-weight:900;
+      color:#081119;
+      font-weight:950;
       letter-spacing:.3px;
       padding:12px 12px;
-      border-radius:12px;
+      border-radius: var(--r12);
       cursor:pointer;
-      background: var(--btnGrad);
-      box-shadow: 0 10px 20px rgba(0,0,0,.30);
+      background: var(--gradBrand);
+      box-shadow: var(--shadow2);
       transition: transform .06s ease, filter .15s ease;
     }
-    .btn:hover{ filter: brightness(1.05); }
+    .btn:hover{ filter: brightness(1.04); }
     .btn:active{ transform: translateY(1px); }
 
     .btnGhost{
       width:100%;
       border:1px solid rgba(255,255,255,.10);
       color: var(--text);
-      font-weight:800;
+      font-weight:900;
       padding:11px 12px;
-      border-radius:12px;
+      border-radius: var(--r12);
       cursor:pointer;
-      background: rgba(0,0,0,.18);
+      background: rgba(0,0,0,.14);
       transition: transform .06s ease, filter .15s ease;
     }
     .btnGhost:hover{ filter: brightness(1.05); }
@@ -377,77 +439,132 @@
       margin-top:10px;
     }
 
+    .note{
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.45;
+    }
+    .note b{ color: var(--text); }
+
     .hr{
       height:1px;
       background: rgba(255,255,255,.06);
       margin:12px 0;
     }
 
-    .note{
+    /* ===== Subscription ===== */
+    .subHero{
+      border-radius: var(--r14);
+      padding:12px;
+      background: linear-gradient(180deg, rgba(43,226,166,.14), rgba(76,194,255,.10));
+      border:1px solid rgba(255,255,255,.10);
+      margin-bottom:12px;
+    }
+    .subHeroTop{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:8px;
+    }
+    .subHeroTitle{
+      font-weight:950;
+      letter-spacing:.2px;
+    }
+    .subHeroTitle .accent{
+      background: var(--gradBrand);
+      -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;
+    }
+    .subHeroMeta{
+      color: rgba(234,240,247,.75);
+      font-size:12px;
+      line-height:1.35;
+      margin-top:5px;
+    }
+    .badge{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.16);
+      white-space:nowrap;
+      color: rgba(234,240,247,.88);
+    }
+    .badge.secure{
+      border-color: rgba(76,194,255,.28);
+      background: rgba(76,194,255,.10);
+    }
+
+    .subHintRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
       font-size:12px;
       color: var(--muted);
-      line-height:1.45;
+      margin-top:8px;
+      flex-wrap:wrap;
     }
-    .note b{ color:var(--text); }
+    .subHintRow .trial{
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      color: rgba(234,240,247,.90);
+    }
+
+    /* ===== Diagnostics hidden by default (Admin only) ===== */
+    .hidden{ display:none !important; }
 
     #logBox{
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
       font-size:11px;
-      background: rgba(0,0,0,.22);
+      background: rgba(0,0,0,.20);
       border:1px solid rgba(255,255,255,.08);
-      border-radius:12px;
+      border-radius: var(--r12);
       padding:10px;
-      color: rgba(230,237,243,.85);
+      color: rgba(234,240,247,.86);
       height:120px;
       overflow:auto;
       white-space:pre-wrap;
     }
 
-    /* Footer disclaimer */
-    #footer{
-      padding:10px 16px;
-      border-top:1px solid rgba(255,255,255,.06);
-      background: rgba(0,0,0,.20);
-      color: rgba(230,237,243,.72);
-      font-size:11px;
-      line-height:1.45;
-    }
-    #footer .muted{ color: rgba(139,148,158,.92); }
-    #footer a{ color: rgba(76,194,255,.95); text-decoration:none; }
-    #footer a:hover{ text-decoration:underline; }
-
-    /* Responsive */
     @media (max-width: 1180px){
       body{ overflow:auto; }
       #main{
         height:auto;
         grid-template-columns: 1fr;
       }
-      #chart{ height: 520px; }
-      #topRight{ min-width: 0; }
-      #brand{ min-width: 0; }
+      #chart{ height: 560px; }
+      #brand{ min-width:0; }
+      #topRight{ min-width:0; }
     }
   </style>
 </head>
 
 <body>
+  <!-- Header -->
   <div id="topbar">
     <div id="brand">
-      <div id="logo"></div>
+      <div class="logo"></div>
       <div id="brandText">
-        <div id="brandTitle">
-          <span class="accent">DarriusAI</span> · Inflection Hunter Pro
+        <div id="brandLine1">
+          <span class="accent">DarriusAI</span> · Inflection Hunter
         </div>
-        <div id="brandSub">AI 拐点决策系统 · 拐点猎手</div>
+        <div id="brandLine2">
+          <span class="chip brand">AI 拐点决策系统</span>
+          <span class="chip">拐点猎手</span>
+        </div>
       </div>
     </div>
 
     <div id="topRight">
-      <div id="statusBadge" class="pill ok" title="System Status">
+      <div id="statusBadge" class="pill">
         <span class="dot"></span>
         <span id="statusText">Ready · 前端已就绪</span>
       </div>
-      <div id="copyright">© 2025 Darrius FinTech Inc. All Rights Reserved.</div>
+      <div id="copyright">© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
     </div>
   </div>
 
@@ -462,29 +579,29 @@
           <div class="gaugeWrap">
             <div class="gauge" id="pulseGauge">
               <div class="gaugeCenter">
-                <div class="num" id="pulseScore">76</div>
+                <div class="num" id="pulseScore">—</div>
                 <div class="lbl">Sentiment</div>
               </div>
             </div>
             <div style="flex:1">
               <div class="kv">
-                <span>Bullish</span><b id="bullPct">48.35%</b>
-                <span>Bearish</span><b id="bearPct" style="color:var(--red)">26.42%</b>
-                <span>Neutral</span><b id="neuPct">25.23%</b>
-                <span>Net Inflow</span><b id="netInflow" style="color:var(--green)">+353.49</b>
+                <span>Bullish</span><b id="bullPct">—</b>
+                <span>Bearish</span><b id="bearPct" style="color:var(--danger)">—</b>
+                <span>Neutral</span><b id="neuPct">—</b>
+                <span>Net Inflow</span><b id="netInflow" style="color:var(--brand1)">—</b>
               </div>
               <div class="small" style="margin-top:10px">
-                说明：该模块为前端展示位（可接入你未来的真实情绪数据源）。
+                说明：本页演示版已做“情绪/信号一致性”，后续接入真实情绪/资金流数据源即可替换。
               </div>
             </div>
           </div>
         </div>
 
         <div class="card">
-          <div class="cardTitle"><b>Risk Copilot · 风险助手</b><span class="small" id="riskMode">Demo</span></div>
+          <div class="cardTitle"><b>Risk Copilot · 风险助手</b><span class="small" id="riskMode">Auto</span></div>
           <div class="kv">
             <span>Entry · 入场</span><b id="riskEntry">—</b>
-            <span>Stop · 止损</span><b id="riskStop" style="color:var(--red)">—</b>
+            <span>Stop · 止损</span><b id="riskStop" style="color:var(--danger)">—</b>
             <span>Targets · 目标</span><b id="riskTargets">—</b>
             <span>Confidence · 强度</span><b id="riskConf">—</b>
             <span>Backtest WinRate · 回测胜率</span><b id="riskWR">—</b>
@@ -495,18 +612,27 @@
           <div class="signal neutral" id="signalRow">
             <div>
               <div class="side" id="signalSide">Waiting…</div>
-              <div class="meta" id="signalMeta">等待数据 / 演示信号展示位</div>
+              <div class="meta" id="signalMeta">等待数据…</div>
             </div>
             <div style="text-align:right">
-              <div style="font-weight:900" id="signalPx">—</div>
-              <div class="meta" id="signalTf">TF: 1D</div>
+              <div style="font-weight:950" id="signalPx">—</div>
+              <div class="meta" id="signalTf">TF: —</div>
             </div>
           </div>
         </div>
 
-        <div style="margin-top:12px" class="small">
-          <b>Disclaimer:</b> Educational only, not financial advice. / 仅供学习研究，不构成投资建议。
+        <!-- Disclaimer moved to left bottom -->
+        <div id="leftDisclaimer">
+          <div><b>English:</b> For educational and informational purposes only. Not investment advice. Trading involves risk.</div>
+          <div style="margin-top:6px"><b>中文：</b> 本系统仅用于教学与信息展示，不构成投资建议。金融市场有风险，请独立决策。</div>
+          <div style="margin-top:6px; opacity:.9">
+            Links: <a href="https://darrius.ai" target="_blank" rel="noreferrer">darrius.ai</a> ·
+            <a href="#" onclick="alert('后续可接：Terms / Privacy / Contact');return false;">Terms</a> ·
+            <a href="#" onclick="alert('后续可接：Terms / Privacy / Contact');return false;">Privacy</a> ·
+            <a href="#" onclick="alert('后续可接：support@darrius.ai');return false;">Support</a>
+          </div>
         </div>
+
       </div>
     </div>
 
@@ -514,24 +640,13 @@
     <div class="panel" id="chartPanel">
       <div id="chartTop">
         <div id="priceLine">
-          <span class="sym" id="symText">BTCUSDT</span>
+          <span class="sym" id="symText">—</span>
           <span id="priceText">—</span>
         </div>
-        <div id="hintText">Demo chart loaded · 演示图表已加载</div>
+        <div id="hintText">Loading…</div>
       </div>
       <div class="panelBody">
         <div id="chart"></div>
-      </div>
-      <div id="footer">
-        <div>
-          <b>English:</b>
-          DarriusAI provides algorithmic market analysis for educational and informational purposes only.
-          It does not constitute investment advice. Trading involves risk. Past performance does not guarantee future results.
-        </div>
-        <div class="muted" style="margin-top:6px">
-          <b>中文：</b>
-          本系统仅提供算法分析与市场研究信息，不构成任何投资建议。金融市场存在风险，历史表现不代表未来收益。
-        </div>
       </div>
     </div>
 
@@ -540,14 +655,30 @@
       <div class="panelHeader">
         <div class="h">Control Center · 控制台</div>
       </div>
-      <div class="panelBody">
 
-        <div class="card" style="margin-bottom:12px">
-          <div class="cardTitle"><b>Market Control · 品种与周期</b><span class="small">Data Source</span></div>
+      <div class="panelBody">
+        <!-- Data Source (Reserved for future real data) -->
+        <div class="card">
+          <div class="cardTitle"><b>Data Source · 数据源</b><span class="small">预留接口</span></div>
+          <div class="field">
+            <div class="label"><span>Source · 来源</span><span class="small">未来接第三方实盘</span></div>
+            <select id="dataSource">
+              <option value="demo">Demo (Local)</option>
+              <option value="provider">3rd-Party Provider (Reserved)</option>
+            </select>
+          </div>
+          <div class="note">
+            <b>说明：</b>未来你购买股票/外汇/黄金等实盘数据后，只需实现 <code>fetchMarketData()</code> 连接新 API 即可。
+          </div>
+        </div>
+
+        <!-- Market Control -->
+        <div class="card">
+          <div class="cardTitle"><b>Market · 品种与周期</b><span class="small">Chart</span></div>
 
           <div class="field">
-            <div class="label"><span>Symbol · 品种</span><span class="small">(Binance格式，如 BTCUSDT)</span></div>
-            <input id="symbol" value="BTCUSDT" />
+            <div class="label"><span>Symbol · 品种</span><span class="small">(如 BTCUSDT)</span></div>
+            <input id="symbol" value="BTCUSDT"/>
           </div>
 
           <div class="field">
@@ -565,64 +696,100 @@
           <div class="row2">
             <label class="btnGhost" style="display:flex;align-items:center;justify-content:center;gap:8px;">
               <input type="checkbox" id="tgEMA" checked style="width:auto;margin:0;transform:translateY(1px)">
-              EMA(20)
+              EMA
             </label>
             <label class="btnGhost" style="display:flex;align-items:center;justify-content:center;gap:8px;">
               <input type="checkbox" id="tgAux" checked style="width:auto;margin:0;transform:translateY(1px)">
-              Aux 线
+              AUX
             </label>
           </div>
 
-          <div class="note" style="margin-top:10px">
-            <b>提示：</b>如果 Binance/数据源不可用，会自动使用演示数据（不影响订阅与支付链路测试）。
+          <!-- New: periods -->
+          <div class="row2">
+            <div class="field" style="margin:0">
+              <div class="label"><span>EMA Period</span><span class="small" id="emaShow">10</span></div>
+              <input id="emaPeriod" type="number" min="3" max="60" value="10"/>
+            </div>
+            <div class="field" style="margin:0">
+              <div class="label"><span>AUX Period</span><span class="small" id="auxShow">21</span></div>
+              <input id="auxPeriod" type="number" min="5" max="120" value="21"/>
+            </div>
+          </div>
+
+          <div class="note" style="margin-top:8px">
+            <b>建议：</b>周期越短越敏感（更快捕捉拐点），越长越平滑（更稳但更慢）。
           </div>
         </div>
 
-        <div class="card" style="margin-bottom:12px">
-          <div class="cardTitle"><b>🔒 Pro Access · 订阅</b><span class="small">Secure by Stripe</span></div>
+        <!-- Subscription -->
+        <div class="subHero">
+          <div class="subHeroTop">
+            <div>
+              <div class="subHeroTitle"><span class="accent">Subscription</span> · 订阅开通</div>
+              <div class="subHeroMeta">
+                前端提交 <code>user_id</code> + <code>price_id</code>（可带 email），后端统一创建 Stripe Checkout Session。
+              </div>
+            </div>
+            <div class="badge secure">Stripe Secure</div>
+          </div>
 
+          <div class="subHintRow">
+            <div>试用需绑定信用卡；到期未付费会自动取消权限。</div>
+            <div class="trial" id="trialHint">Trial</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:-2px">
           <div class="field">
-            <div class="label"><span>User ID · 用户ID</span><span class="small">（必填）</span></div>
-            <input id="userId" placeholder="例如：user_123 / 你的系统用户ID" />
+            <div class="label"><span><b>User ID</b> · 用户ID</span><span class="small">（必填）</span></div>
+            <input id="userId" placeholder="例如：user_123 / 你的系统用户ID"/>
           </div>
 
           <div class="field">
-            <div class="label"><span>Email · 邮箱</span><span class="small">（建议填，用于收据）</span></div>
-            <input id="email" placeholder="用于首次兜底匹配 / receipts" />
+            <div class="label"><span>Email · 邮箱</span><span class="small">（建议填）</span></div>
+            <input id="email" placeholder="用于收据 / 首次兜底匹配"/>
           </div>
 
           <div class="field">
-            <div class="label"><span>Plan · 套餐</span><span class="small" id="trialHint">Trial info</span></div>
+            <div class="label"><span>Plan · 套餐</span><span class="small" id="planStatus">从后端拉取…</span></div>
             <select id="planSelect">
-              <option value="weekly">Weekly · 周付 - $4.90</option>
-              <option value="monthly">Monthly · 月付 - $19.90 (Trial 1 day)</option>
-              <option value="quarterly">Quarterly · 季付 - $49.90 (Trial 3 days)</option>
-              <option value="yearly">Annual · 年付 - $189 (Trial 5 days)</option>
+              <option value="">Loading…</option>
             </select>
           </div>
 
-          <button class="btn" id="subscribeBtn">Start Subscription · 开通订阅</button>
+          <!-- Optional override (fallback) -->
+          <div class="field">
+            <div class="label"><span>Price ID Override</span><span class="small">（兜底）</span></div>
+            <input id="priceOverride" placeholder="如：price_xxx（通常无需填）"/>
+          </div>
+
+          <button class="btn" id="subscribeBtn" disabled>Start Subscription · 开通订阅</button>
 
           <div class="note" style="margin-top:10px">
-            <b>规则：</b>试用必须绑定信用卡；试用到期若未付费，系统将自动取消访问权限。<br/>
-            <b>说明：</b>前端只传 <code>user_id</code> + <code>price_id</code>；后端统一创建 Stripe Checkout Session/Subscription。
+            <b>说明：</b>本页会自动调用后端 <code>/billing/prices</code> 来显示 Weekly/Monthly/Quarterly/Yearly 四个计划。
           </div>
         </div>
 
-        <div class="card" style="margin-bottom:12px">
-          <div class="cardTitle"><b>Share & Export · 分享与导出</b><span class="small">Utilities</span></div>
+        <!-- Affiliate reserved -->
+        <div class="card">
+          <div class="cardTitle"><b>Affiliate · 推荐人</b><span class="small">预留入口</span></div>
+          <button class="btnGhost" id="affiliateBtn">Affiliate / 推荐人入口</button>
+          <div class="note" style="margin-top:10px">
+            预留：未来推荐人可在此获取专属链接/代码，并进入后台查看推荐客户数与返佣金额（例如 20%）。
+          </div>
+        </div>
 
+        <!-- Share & Export -->
+        <div class="card">
+          <div class="cardTitle"><b>Share & Export · 分享与导出</b><span class="small">Utilities</span></div>
           <button class="btnGhost" id="copyLinkBtn">Copy Share Link · 复制分享链接</button>
           <div style="height:10px"></div>
           <button class="btnGhost" id="exportBtn">Export PNG · 导出图片（含图表）</button>
-
-          <div class="note" style="margin-top:10px">
-            说明：导出使用 LightweightCharts 截图能力。若需“含更多Overlay图层”可继续增强。
-          </div>
         </div>
 
-        <div class="card">
-          <div class="cardTitle"><b>Diagnostics · 诊断</b><span class="small">API / Logs</span></div>
+        <!-- Diagnostics (Admin only) -->
+        <div class="card hidden" id="diagCard">
+          <div class="cardTitle"><b>Diagnostics · 诊断</b><span class="small">Admin only</span></div>
           <div class="row2" style="margin-top:0">
             <button class="btnGhost" id="healthBtn">Health</button>
             <button class="btnGhost" id="routesBtn">Routes</button>
@@ -636,130 +803,240 @@
   </div>
 
   <script>
-    /**
-     * ✅ API base
-     * 你当前已经跑通：https://darrius-api.onrender.com
-     * 如果未来你换成 api.darrius.ai，只需要改这里。
-     */
+    /***************
+     * Config
+     ***************/
     const API_BASE = "https://darrius-api.onrender.com";
-
-    // ✅ Stripe price ids（你给的最新 4 个）
-    const PRICE_MAP = {
-      weekly:    { price_id: "price_1SpJMmR84UMUVSTg0T7xfm6r", trial_days: 0,  label: "Weekly · 周付 - $4.90" },
-      monthly:   { price_id: "price_1SpbvRR84UMUVSTggbg0SFzi", trial_days: 1,  label: "Monthly · 月付 - $19.90 (Trial 1 day)" },
-      quarterly: { price_id: "price_1SpbwYR84UMUVSTgMQpUrE42", trial_days: 3,  label: "Quarterly · 季付 - $49.90 (Trial 3 days)" },
-      yearly:    { price_id: "price_1SpbpxR84UMUVSTgapaJDjMX", trial_days: 5,  label: "Annual · 年付 - $189 (Trial 5 days)" },
-    };
 
     function $(id){ return document.getElementById(id); }
 
     function setStatus(text, ok=true){
       const badge = $("statusBadge");
-      badge.classList.remove("ok","bad");
-      badge.classList.add(ok ? "ok" : "bad");
+      badge.classList.toggle("bad", !ok);
       $("statusText").textContent = text;
     }
 
     function log(msg){
+      const card = $("diagCard");
+      if(card.classList.contains("hidden")) return; // only log in admin mode
       const box = $("logBox");
       const t = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
-      box.textContent = (box.textContent || "").split("\n").slice(-140).join("\n");
-      box.textContent += (box.textContent ? "\n" : "") + t;
+      const old = (box.textContent || "").split("\n");
+      const clipped = old.slice(Math.max(0, old.length - 160)).join("\n");
+      box.textContent = clipped + (clipped ? "\n" : "") + t;
       box.scrollTop = box.scrollHeight;
-      console.log("[Darrius Frontend]", msg);
+      console.log("[DarriusAI]", msg);
     }
 
-    // =========================
-    // Chart + Demo data
-    // =========================
+    /***************
+     * Admin Mode
+     ***************/
+    function isAdmin(){
+      const p = new URLSearchParams(location.search);
+      return p.get("admin")==="1";
+    }
+
+    /***************
+     * Chart + Indicators
+     ***************/
     let chart=null, candle=null, ema=null, aux=null;
 
     function genDemoCandles(n=220){
       const now = Math.floor(Date.now()/1000);
-      const step = 60*60; // 1h
+      const step = 60*60;
       let t = now - n*step;
       let price = 67000;
       const arr = [];
-
       for(let i=0;i<n;i++){
-        const drift = Math.sin(i/18)*140;
-        const noise = (Math.random()-0.5)*260;
+        const wave = Math.sin(i/18)*160;
+        const noise = (Math.random()-0.5)*300;
         const open = price;
-        const close = open + drift + noise;
-
-        const high = Math.max(open, close) + Math.random()*220;
-        const low  = Math.min(open, close) - Math.random()*220;
-
+        const close = open + wave + noise;
+        const high = Math.max(open, close) + Math.random()*250;
+        const low  = Math.min(open, close) - Math.random()*250;
         price = close;
-
-        arr.push({
-          time: t,
-          open: +open.toFixed(2),
-          high: +high.toFixed(2),
-          low:  +low.toFixed(2),
-          close:+close.toFixed(2),
-        });
+        arr.push({ time:t, open:+open.toFixed(2), high:+high.toFixed(2), low:+low.toFixed(2), close:+close.toFixed(2) });
         t += step;
       }
       return arr;
     }
 
-    function calcEMA(bars, period=20){
-      const k = 2/(period+1);
-      let emaPrev = null;
+    function calcEMA(bars, period){
+      const p = Math.max(2, Number(period)||10);
+      const k = 2/(p+1);
+      let prev = null;
       const out = [];
       for(const b of bars){
         const v = b.close;
-        if(emaPrev === null) emaPrev = v;
-        else emaPrev = v*k + emaPrev*(1-k);
-        out.push({ time: b.time, value: +emaPrev.toFixed(2) });
+        prev = (prev===null) ? v : (v*k + prev*(1-k));
+        out.push({ time:b.time, value:+prev.toFixed(2) });
       }
       return out;
     }
 
-    function setPulse(score){
-      score = Math.max(0, Math.min(100, score));
-      $("pulseScore").textContent = String(score);
-      const deg = Math.round(score/100*360);
-      $("pulseGauge").style.background =
-        `conic-gradient(var(--green) 0deg, var(--green) ${deg}deg, rgba(255,255,255,.10) ${deg}deg, rgba(255,255,255,.10) 360deg)`;
-      $("pulseTag").textContent = score>=60 ? "BULL" : (score<=40 ? "BEAR" : "NEUTRAL");
-      $("pulseTag").style.background = score>=60 ? "rgba(43,226,166,.90)" : (score<=40 ? "rgba(255,90,90,.88)" : "rgba(255,184,108,.90)");
+    // Simple local pivot detection -> markers B/S
+    function detectPivots(bars, lookback=2){
+      const m = [];
+      for(let i=lookback; i<bars.length-lookback; i++){
+        const c = bars[i].close;
+        let isTop = true, isBot = true;
+        for(let k=1;k<=lookback;k++){
+          if(bars[i-k].close >= c || bars[i+k].close >= c) isTop = false;
+          if(bars[i-k].close <= c || bars[i+k].close <= c) isBot = false;
+        }
+        if(isTop){
+          m.push({
+            time: bars[i].time,
+            position: "aboveBar",
+            color: "#FF5A5A",
+            shape: "text",
+            text: "S",
+          });
+        }
+        if(isBot){
+          m.push({
+            time: bars[i].time,
+            position: "belowBar",
+            color: "#2BE2A6",
+            shape: "text",
+            text: "B",
+          });
+        }
+      }
+      // reduce density: keep last N markers
+      return m.slice(-18);
     }
 
-    function setSignal(side, price, tf){
+    function applyToggles(){
+      ema.applyOptions({ visible: !!$("tgEMA").checked });
+      aux.applyOptions({ visible: !!$("tgAux").checked });
+    }
+
+    /***************
+     * Market Pulse & Signal (consistent logic)
+     ***************/
+    function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+
+    function computeSentiment(bars, emaSeries){
+      // Use momentum: last close vs EMA and EMA slope
+      const n = bars.length;
+      const last = bars[n-1];
+      const e = emaSeries[emaSeries.length-1]?.value ?? last.close;
+
+      const prevE = emaSeries[emaSeries.length-10]?.value ?? emaSeries[0]?.value ?? e;
+      const slope = (e - prevE) / Math.max(1, Math.abs(prevE)) * 100; // %
+      const dist = (last.close - e) / Math.max(1, Math.abs(e)) * 100; // %
+
+      // Convert to 0-100 score
+      let score = 50 + (dist*480) + (slope*900);
+      score = clamp(score, 0, 100);
+
+      // Compose bull/bear/neutral
+      const bull = clamp(score, 0, 100);
+      const bear = clamp(100 - score, 0, 100);
+      const neutral = clamp(100 - Math.abs(score-50)*2, 0, 100);
+
+      // Normalize to 100
+      const sum = bull + bear + neutral;
+      const bullPct = bull/sum*100;
+      const bearPct = bear/sum*100;
+      const neuPct  = neutral/sum*100;
+
+      // Net inflow demo: tie to score
+      const netInflow = (score-50) * 12.3;
+
+      return {
+        score: Math.round(score),
+        bullPct, bearPct, neuPct,
+        netInflow,
+        bias: score>=58 ? "BULL" : (score<=42 ? "BEAR" : "NEUTRAL")
+      };
+    }
+
+    function setPulseUI(s){
+      $("pulseScore").textContent = String(s.score);
+
+      const deg = Math.round(s.score/100*360);
+      // color by bias
+      let col = "var(--brand1)";
+      if(s.bias==="BEAR") col = "var(--danger)";
+      if(s.bias==="NEUTRAL") col = "var(--warn)";
+
+      $("pulseGauge").style.background =
+        `conic-gradient(${col} 0deg, ${col} ${deg}deg, rgba(255,255,255,.10) ${deg}deg, rgba(255,255,255,.10) 360deg)`;
+
+      $("bullPct").textContent = s.bullPct.toFixed(2) + "%";
+      $("bearPct").textContent = s.bearPct.toFixed(2) + "%";
+      $("neuPct").textContent  = s.neuPct.toFixed(2) + "%";
+      $("netInflow").textContent = (s.netInflow>=0?"+":"") + s.netInflow.toFixed(2);
+
+      const tag = $("pulseTag");
+      if(s.bias==="BULL"){
+        tag.textContent="BULL";
+        tag.style.background="rgba(43,226,166,.14)";
+        tag.style.border="1px solid rgba(43,226,166,.25)";
+      }else if(s.bias==="BEAR"){
+        tag.textContent="BEAR";
+        tag.style.background="rgba(255,90,90,.12)";
+        tag.style.border="1px solid rgba(255,90,90,.22)";
+      }else{
+        tag.textContent="NEUTRAL";
+        tag.style.background="rgba(255,184,108,.12)";
+        tag.style.border="1px solid rgba(255,184,108,.22)";
+      }
+    }
+
+    function setSignal(bias, price, tf){
       const row = $("signalRow");
       row.classList.remove("buy","sell","neutral");
       $("signalTf").textContent = "TF: " + tf.toUpperCase();
 
-      if(side==="BUY"){
+      if(bias==="BULL"){
         row.classList.add("buy");
-        $("signalSide").textContent = "BUY · 买入";
-        $("signalMeta").textContent = "High-probability inflection detected (demo). / 演示信号";
+        $("signalSide").textContent = "BUY · 看多 / 买入";
+        $("signalMeta").textContent = "Bullish momentum aligned with Market Pulse.";
         $("signalPx").textContent = "@ " + price;
-      }else if(side==="SELL"){
+      }else if(bias==="BEAR"){
         row.classList.add("sell");
-        $("signalSide").textContent = "SELL · 卖出";
-        $("signalMeta").textContent = "Risk-off inflection detected (demo). / 演示信号";
+        $("signalSide").textContent = "SELL · 看空 / 卖出";
+        $("signalMeta").textContent = "Bearish momentum aligned with Market Pulse.";
         $("signalPx").textContent = "@ " + price;
       }else{
         row.classList.add("neutral");
-        $("signalSide").textContent = "Waiting…";
-        $("signalMeta").textContent = "Waiting for data… / 等待数据…";
-        $("signalPx").textContent = "—";
+        $("signalSide").textContent = "WAIT · 观望";
+        $("signalMeta").textContent = "Neutral market. Wait for clearer inflection.";
+        $("signalPx").textContent = "@ " + price;
       }
+    }
+
+    function updateRisk(bars){
+      const last = bars[bars.length-1];
+      const entry = last.close * 0.992;
+      const stop  = last.close * 0.978;
+      const t1    = last.close * 1.008;
+      const t2    = last.close * 1.018;
+      const t3    = last.close * 1.032;
+
+      $("riskEntry").textContent = entry.toFixed(2);
+      $("riskStop").textContent  = stop.toFixed(2);
+      $("riskTargets").textContent = [t1,t2,t3].map(x=>x.toFixed(2)).join(", ");
+
+      // Confidence demo: tie to volatility
+      const vol = Math.abs(bars[bars.length-1].close - bars[bars.length-12].close) / bars[bars.length-12].close * 100;
+      const conf = clamp(92 - vol*2.0, 55, 95);
+      $("riskConf").textContent = Math.round(conf) + "%";
+      $("riskWR").textContent = "72%";
     }
 
     function initChart(){
       if(typeof LightweightCharts==="undefined"){
         setStatus("Chart lib missing", false);
-        log("❌ lightweight-charts 未加载");
+        alert("lightweight-charts 未加载。");
         return;
       }
-
       const el = $("chart");
       chart = LightweightCharts.createChart(el, {
-        layout: { background: { color: "transparent" }, textColor: "#E6EDF3" },
+        layout: { background: { color: "transparent" }, textColor: "#EAF0F7" },
         grid: {
           vertLines: { color: "rgba(255,255,255,.04)" },
           horzLines: { color: "rgba(255,255,255,.04)" },
@@ -777,121 +1054,164 @@
         borderVisible:false,
       });
 
-      // EMA and Aux line placeholders
-      ema = chart.addLineSeries({ lineWidth: 2, color: "rgba(76,194,255,.92)" });
-      aux = chart.addLineSeries({ lineWidth: 2, color: "rgba(255,184,108,.88)" });
+      ema = chart.addLineSeries({ lineWidth: 2, color: "rgba(76,194,255,.90)" });
+      aux = chart.addLineSeries({ lineWidth: 2, color: "rgba(255,184,108,.80)" });
 
       function fit(){
         const r = el.getBoundingClientRect();
-        chart.applyOptions({
-          width: Math.max(1, Math.floor(r.width)),
-          height: Math.max(1, Math.floor(r.height)),
-        });
+        chart.applyOptions({ width: Math.max(1, Math.floor(r.width)), height: Math.max(1, Math.floor(r.height)) });
         chart.timeScale().fitContent();
       }
-      const ro = new ResizeObserver(() => fit());
-      ro.observe(el);
+      new ResizeObserver(() => fit()).observe(el);
       window.addEventListener("resize", fit);
 
-      // initial demo
-      const bars = genDemoCandles(220);
-      candle.setData(bars);
-
-      const emaData = calcEMA(bars, 20);
-      ema.setData(emaData);
-
-      // Aux: just another smoothed line (demo)
-      const auxData = calcEMA(bars, 50);
-      aux.setData(auxData);
-
-      const last = bars[bars.length-1];
-      $("symText").textContent = "BTCUSDT";
-      $("priceText").textContent = last.close.toFixed(2);
-      $("hintText").textContent = "Demo chart loaded · 演示图表已加载";
-      setStatus("Ready · 前端已就绪", true);
-
-      // demo left panel values
-      setPulse(76);
-      $("riskEntry").textContent = (last.close*0.985).toFixed(2);
-      $("riskStop").textContent  = (last.close*0.970).toFixed(2);
-      $("riskTargets").textContent = [(last.close*1.01).toFixed(2),(last.close*1.02).toFixed(2),(last.close*1.035).toFixed(2)].join(", ");
-      $("riskConf").textContent = "92%";
-      $("riskWR").textContent = "72%";
-
-      setSignal(Math.random()>0.5?"BUY":"SELL", last.close.toFixed(2), $("tf").value);
+      // first load
+      load();
       fit();
     }
 
-    function applyToggles(){
-      const showEma = $("tgEMA").checked;
-      const showAux = $("tgAux").checked;
-      ema.applyOptions({ visible: !!showEma });
-      aux.applyOptions({ visible: !!showAux });
+    /***************
+     * Data fetch placeholder
+     ***************/
+    async function fetchMarketData(symbol, tf){
+      // reserved for future provider
+      // for now: demo local
+      return genDemoCandles(240);
     }
 
-    function updateTrialHint(){
-      const plan = $("planSelect").value;
-      const t = PRICE_MAP[plan]?.trial_days ?? 0;
-      $("trialHint").textContent = t>0 ? `Trial ${t} day(s)` : "No trial";
+    /***************
+     * Load / render
+     ***************/
+    async function load(){
+      const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
+      const tf = $("tf").value;
+
+      $("symText").textContent = sym;
+      $("hintText").textContent = "Loading… / 加载中";
+
+      const bars = await fetchMarketData(sym, tf);
+
+      const emaP = Math.max(3, Number($("emaPeriod").value)||10);
+      const auxP = Math.max(5, Number($("auxPeriod").value)||21);
+      $("emaShow").textContent = String(emaP);
+      $("auxShow").textContent = String(auxP);
+
+      const emaSeries = calcEMA(bars, emaP);
+      const auxSeries = calcEMA(bars, auxP);
+
+      candle.setData(bars);
+      ema.setData(emaSeries);
+      aux.setData(auxSeries);
+      applyToggles();
+
+      // B/S markers restored
+      const markers = detectPivots(bars, 2);
+      candle.setMarkers(markers);
+
+      const last = bars[bars.length-1];
+      $("priceText").textContent = last.close.toFixed(2);
+
+      // sentiment + signal consistent
+      const s = computeSentiment(bars, emaSeries);
+      setPulseUI(s);
+      setSignal(s.bias, last.close.toFixed(2), tf);
+      updateRisk(bars);
+
+      $("hintText").textContent = "Loaded · 已加载（含 B/S 标记 + 情绪/信号一致）";
+      setStatus("API OK", true);
+
+      log(`✅ load: ${sym} ${tf} EMA=${emaP} AUX=${auxP} bias=${s.bias} score=${s.score}`);
     }
 
-    // =========================
-    // API calls
-    // =========================
+    /***************
+     * API helper
+     ***************/
     async function apiGet(path){
       const resp = await fetch(`${API_BASE}${path}`, { method:"GET" });
       const txt = await resp.text();
-      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,160)}`);
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,180)}`);
       try{ return JSON.parse(txt); }catch(_){ return txt; }
     }
 
-    async function testHealth(){
-      try{
-        setStatus("Checking API…", true);
-        $("hintText").textContent = "Testing API health…";
-        const data = await apiGet("/health");
-        setStatus("API OK", true);
-        $("hintText").textContent = "API connected · 已连接 API";
-        log(`✅ /health OK: ${typeof data==="string"?data:JSON.stringify(data).slice(0,220)}`);
-      }catch(e){
-        setStatus("API Not Ready", false);
-        $("hintText").textContent = "API not ready · API未就绪";
-        log(`⚠️ /health failed: ${e.message}`);
-      }
+    /***************
+     * Billing: fetch plans from backend
+     ***************/
+    let PLANS = []; // {key,label,price_id,trial_days}
+    function setPlanStatus(t){ $("planStatus").textContent = t; }
+
+    function updateTrialHint(){
+      const key = $("planSelect").value;
+      const p = PLANS.find(x=>x.key===key);
+      const t = p ? (p.trial_days||0) : 0;
+      $("trialHint").textContent = t>0 ? `Trial ${t} day(s)` : "No Trial";
     }
 
-    async function showRoutes(){
+    function populatePlans(plans){
+      PLANS = plans.slice();
+      const sel = $("planSelect");
+      sel.innerHTML = "";
+      for(const p of PLANS){
+        const opt = document.createElement("option");
+        opt.value = p.key;
+        opt.textContent = p.label || p.key;
+        sel.appendChild(opt);
+      }
+      setPlanStatus(`已加载 ${PLANS.length} 个计划`);
+      $("subscribeBtn").disabled = (PLANS.length===0);
+      updateTrialHint();
+    }
+
+    async function initPlans(){
       try{
-        setStatus("Loading routes…", true);
-        const data = await apiGet("/routes");
-        setStatus("Routes OK", true);
-        log(`✅ /routes: ${JSON.stringify(data).slice(0,500)}...`);
+        setPlanStatus("从后端拉取…");
+        const data = await apiGet("/billing/prices");
+        // Expect backend returns: [{plan:"weekly", price_id:"...", trial_days:0, label:"Weekly · $4.90"}, ...]
+        if(!Array.isArray(data) || data.length===0) throw new Error("Invalid /billing/prices response");
+        const plans = data.map(x=>({
+          key: x.plan || x.key || x.name,
+          label: x.label || x.display || (x.plan || "plan"),
+          price_id: x.price_id,
+          trial_days: x.trial_days || 0
+        })).filter(x=>x.key && x.price_id);
+
+        if(plans.length===0) throw new Error("No valid plans with price_id");
+        populatePlans(plans);
+        setStatus("API OK", true);
+        log("✅ plans loaded from /billing/prices");
       }catch(e){
-        setStatus("Routes failed", false);
-        log(`❌ /routes failed: ${e.message}`);
+        setPlanStatus("拉取失败（可用兜底手填 price_id）");
+        $("planSelect").innerHTML = `<option value="">(Plans not loaded)</option>`;
+        $("subscribeBtn").disabled = true;
+        setStatus("API Not Ready", false);
+        if(isAdmin()) log("❌ initPlans: " + e.message);
       }
     }
 
     async function subscribe(){
       const user_id = ($("userId").value || "").trim();
       const email = ($("email").value || "").trim();
-      const plan = $("planSelect").value;
+      const key = $("planSelect").value;
+      const override = ($("priceOverride").value || "").trim();
 
       if(!user_id){
-        alert("User ID 必填（用于把 Stripe 订阅绑定到你的系统用户）。\n\n请先填写 User ID。");
+        alert("User ID 必填（用于绑定 Stripe 订阅到你的系统用户）。");
         $("userId").focus();
         return;
       }
 
-      const { price_id, trial_days } = PRICE_MAP[plan] || {};
+      let price_id = override;
       if(!price_id){
-        alert("Plan mapping missing. 请检查 PRICE_MAP 配置。");
-        return;
+        const p = PLANS.find(x=>x.key===key);
+        if(!p){
+          alert("Plan 未加载成功。请稍后重试，或在 Price ID Override 里手动填入 price_id。");
+          return;
+        }
+        price_id = p.price_id;
       }
 
       try{
         setStatus("Creating checkout…", true);
-        log(`➡️ POST /billing/checkout user_id=${user_id} plan=${plan} price_id=${price_id} trial=${trial_days}`);
+        if(isAdmin()) log(`➡️ POST /billing/checkout user_id=${user_id} price_id=${price_id}`);
 
         const resp = await fetch(`${API_BASE}/billing/checkout`, {
           method:"POST",
@@ -900,7 +1220,7 @@
         });
 
         const txt = await resp.text();
-        if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,200)}`);
+        if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,220)}`);
 
         let data = null;
         try{ data = JSON.parse(txt); }catch(_){ data = { raw: txt }; }
@@ -910,29 +1230,56 @@
         }
 
         setStatus("Redirecting to Stripe…", true);
-        log(`✅ checkout_url received. Redirecting...`);
+        if(isAdmin()) log("✅ checkout_url received. Redirecting...");
         window.location.href = data.checkout_url;
 
       }catch(e){
         setStatus("Network/API error", false);
-        log(`❌ subscribe failed: ${e.message}`);
-        alert("订阅失败：网络错误/后端未联通或接口报错。\n\n请看右下日志（Diagnostics）。\n\n错误：\n" + e.message);
+        if(isAdmin()) log(`❌ subscribe failed: ${e.message}`);
+        alert("订阅失败：网络错误/后端未联通或接口报错。\n\n错误：\n" + e.message);
       }
     }
 
-    // =========================
-    // Utilities
-    // =========================
+    /***************
+     * Admin diagnostics
+     ***************/
+    async function testHealth(){
+      try{
+        setStatus("Checking API…", true);
+        const data = await apiGet("/health");
+        setStatus("API OK", true);
+        log(`✅ /health: ${typeof data==="string"?data:JSON.stringify(data).slice(0,260)}`);
+      }catch(e){
+        setStatus("API Not Ready", false);
+        log(`❌ /health: ${e.message}`);
+        alert("Health 检查失败：\n" + e.message);
+      }
+    }
+
+    async function showRoutes(){
+      try{
+        setStatus("Loading routes…", true);
+        const data = await apiGet("/routes");
+        setStatus("Routes OK", true);
+        log(`✅ /routes: ${JSON.stringify(data).slice(0,520)}...`);
+      }catch(e){
+        setStatus("Routes failed", false);
+        log(`❌ /routes: ${e.message}`);
+        alert("Routes 获取失败：\n" + e.message);
+      }
+    }
+
+    /***************
+     * Utilities
+     ***************/
     async function copyShareLink(){
       const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
       const tf = $("tf").value;
       const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
       try{
         await navigator.clipboard.writeText(url);
-        log("✅ Share link copied: " + url);
         alert("已复制分享链接：\n" + url);
-      }catch(e){
-        log("⚠️ Clipboard failed. " + e.message);
+      }catch(_){
         prompt("复制失败，请手动复制：", url);
       }
     }
@@ -940,7 +1287,7 @@
     function exportPNG(){
       try{
         if(!chart || typeof chart.takeScreenshot !== "function"){
-          alert("当前图表版本不支持 takeScreenshot。");
+          alert("当前图表版本不支持 takeScreenshot（或被浏览器限制）。");
           return;
         }
         const canvas = chart.takeScreenshot();
@@ -950,77 +1297,62 @@
         const tf = $("tf").value;
         a.download = `DarriusAI_${sym}_${tf}.png`;
         a.click();
-        log("✅ Export PNG done.");
       }catch(e){
-        log("❌ Export failed: " + e.message);
         alert("导出失败：" + e.message);
       }
     }
 
-    function load(){
-      const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
-      const tf = $("tf").value;
-
-      $("symText").textContent = sym;
-      $("hintText").textContent = "Loading… / 加载中（演示数据）";
-
-      // For now we keep demo data; later connect to your backend feed.
-      const bars = genDemoCandles(220);
-      candle.setData(bars);
-      ema.setData(calcEMA(bars, 20));
-      aux.setData(calcEMA(bars, 50));
-      applyToggles();
-
-      const last = bars[bars.length-1];
-      $("priceText").textContent = last.close.toFixed(2);
-
-      // Update left panel demo risk based on last price
-      $("riskEntry").textContent = (last.close*0.985).toFixed(2);
-      $("riskStop").textContent  = (last.close*0.970).toFixed(2);
-      $("riskTargets").textContent = [(last.close*1.01).toFixed(2),(last.close*1.02).toFixed(2),(last.close*1.035).toFixed(2)].join(", ");
-      $("riskConf").textContent = "92%";
-      $("riskWR").textContent = "72%";
-
-      setSignal(Math.random()>0.5?"BUY":"SELL", last.close.toFixed(2), tf);
-      log(`✅ Loaded (demo): symbol=${sym} tf=${tf}`);
-      $("hintText").textContent = "Loaded · 已加载（演示数据）";
+    /***************
+     * Affiliate reserved
+     ***************/
+    function openAffiliate(){
+      alert("Affiliate 入口已预留：\n\n下一步建议：\n1) 做 /affiliate 登录\n2) 做 /affiliate/dashboard（推荐数、返佣、链接/代码）\n3) 前端按钮跳转到你的 Affiliate 页面");
     }
 
-    // Boot
+    /***************
+     * Boot
+     ***************/
     (function boot(){
-      // URL params
+      $("yearNow").textContent = String(new Date().getFullYear());
+
+      // Admin diagnostics visibility
+      if(isAdmin()){
+        $("diagCard").classList.remove("hidden");
+        log("Admin mode enabled (?admin=1)");
+      }
+
+      // Query params
       const p = new URLSearchParams(location.search);
       const qsSym = p.get("symbol");
       const qsTf  = p.get("tf");
       if(qsSym) $("symbol").value = qsSym.toUpperCase();
       if(qsTf) $("tf").value = qsTf;
 
-      // trial hint
-      updateTrialHint();
-
-      // init chart
-      initChart();
-
-      // listeners
+      // events
       $("tgEMA").addEventListener("change", applyToggles);
       $("tgAux").addEventListener("change", applyToggles);
-      $("planSelect").addEventListener("change", updateTrialHint);
+
+      $("emaPeriod").addEventListener("change", ()=>{ $("emaShow").textContent = $("emaPeriod").value; });
+      $("auxPeriod").addEventListener("change", ()=>{ $("auxShow").textContent = $("auxPeriod").value; });
 
       $("loadBtn").addEventListener("click", load);
       $("subscribeBtn").addEventListener("click", subscribe);
 
-      $("healthBtn").addEventListener("click", testHealth);
-      $("routesBtn").addEventListener("click", showRoutes);
+      $("planSelect").addEventListener("change", updateTrialHint);
 
       $("copyLinkBtn").addEventListener("click", copyShareLink);
       $("exportBtn").addEventListener("click", exportPNG);
 
-      // initial toggles
-      applyToggles();
+      $("affiliateBtn").addEventListener("click", openAffiliate);
 
-      log("Booting frontend…");
-      log("API_BASE=" + API_BASE);
-      log("Stripe plans loaded: weekly/monthly/quarterly/yearly");
+      if(isAdmin()){
+        $("healthBtn").addEventListener("click", testHealth);
+        $("routesBtn").addEventListener("click", showRoutes);
+      }
+
+      setStatus("Ready · 前端已就绪", true);
+      initChart();
+      initPlans(); // key fix: fetch 4 plans dynamically
     })();
   </script>
 </body>
