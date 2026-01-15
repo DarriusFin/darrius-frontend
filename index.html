@@ -1,853 +1,1027 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8" />
-<title>Inflection Hunter Pro v6.3.3e (Preserve Algo + Restore MAs + Better Risk) │ Darrius FinTech Inc</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DarriusAI · Inflection Hunter Pro | AI 拐点决策系统</title>
 
-<style>
-:root{
-  --bg:#0b0f17;--panel:#141a24;--panel2:#0f1522;--border:#2a3244;
-  --text:#e6edf3;--muted:#9aa4b2;
-  --green:#00ff88;--red:#ff4757;--blue:#00d4ff;--orange:#ffaa00;
-  --cyan:#7dd3fc;--purple:#c084fc;
-}
-*{box-sizing:border-box}
-body{
-  margin:0;background:radial-gradient(circle at top left,#182035,#0b0f17);
-  color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-}
-#topbar{
-  height:64px;display:flex;align-items:center;justify-content:space-between;
-  padding:0 18px;background:rgba(20,26,36,.95);border-bottom:1px solid var(--border);gap:12px;
-}
-#brand{display:flex;align-items:center;gap:14px;min-width:260px;}
-#logo{
-  font-size:26px;font-weight:900;background:linear-gradient(90deg,var(--green),var(--blue));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.5px;
-}
-#brandMeta{line-height:1.1}
-#brandTitle{font-weight:900}
-#subtitle{font-size:12px;color:var(--muted);margin-top:2px}
-#topRight{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex:1;min-width:0;}
-#status{
-  padding:7px 12px;border-radius:999px;font-size:12px;
-  background:linear-gradient(90deg,#00ff88,#00d4ff);color:#000;white-space:nowrap;
-}
-#copyright{
-  font-size:12px;color:#fff;opacity:0.85;background:rgba(0,0,0,0.35);
-  border:1px solid rgba(255,255,255,0.08);padding:6px 12px;border-radius:999px;
-  white-space:nowrap;max-width:38vw;overflow:hidden;text-overflow:ellipsis;
-}
+  <!-- Lightweight Charts (TradingView) -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
-#main{display:grid;grid-template-columns:320px 1fr 360px;height:calc(100vh - 64px);}
-.panel{background:var(--panel);border-right:1px solid var(--border);padding:16px;overflow:auto;}
-.panel:last-child{border-right:none;}
-.panel h3{margin:0 0 12px;font-size:14px;color:var(--green);display:flex;align-items:center;gap:8px;}
-.panel h3::before{content:"◆";font-size:11px;opacity:.9}
+  <style>
+    :root{
+      --bg:#0E1117;
+      --panel:#151A23;
+      --panel2:#101521;
+      --border:#232A36;
 
-#pulse{display:flex;align-items:center;justify-content:center;height:190px;}
-.pulseWrap{position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center;}
-#pulseGauge{position:absolute;inset:0;z-index:2;}
-#pulseGauge svg{width:160px;height:160px;display:block;}
-#pulseGauge .track{stroke:rgba(255,255,255,.10);stroke-width:12;fill:none;}
-#pulseGauge .seg{
-  stroke-width:12;fill:none;stroke-linecap:round;
-  transform:rotate(-90deg);transform-origin:50% 50%;
-}
-#pulseGauge .greenSeg{stroke:var(--green);filter:drop-shadow(0 0 10px rgba(0,255,136,.25));}
-#pulseGauge .redSeg{stroke:var(--red);filter:drop-shadow(0 0 10px rgba(255,71,87,.22));}
-#pulseCircle{
-  position:absolute;inset:18px;border-radius:50%;
-  border:10px solid rgba(255,255,255,.06);
-  display:flex;align-items:center;justify-content:center;
-  font-size:24px;font-weight:900;background:rgba(0,0,0,.25);z-index:3;
-}
-#pulseLabel{text-align:center;margin-top:8px;font-size:12px;color:var(--muted);line-height:1.4;}
+      --text:#E6EDF3;
+      --muted:#8B949E;
 
-.box{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--panel2);}
-.kv{display:flex;justify-content:space-between;gap:10px;margin:6px 0;font-size:13px}
-.kv .k{color:var(--muted)} .kv .v{font-weight:900}
+      --green:#2BE2A6;
+      --blue:#4CC2FF;
+      --red:#FF5A5A;
+      --orange:#FFB86C;
 
-#chartWrap{position:relative;height:100%;}
-#chartBox{position:absolute;inset:0;display:flex;flex-direction:column;}
-#chartTop{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;z-index:10;}
-#price{background:rgba(0,0,0,.6);padding:8px 12px;border-radius:12px;font-weight:900;border:1px solid rgba(255,255,255,0.10);}
-#hint{background:rgba(0,0,0,.55);padding:8px 12px;border-radius:12px;font-size:12px;color:var(--muted);border:1px solid rgba(255,255,255,.10);max-width:56%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#chart{position:relative;flex:1;width:100%;}
-#overlay{position:absolute;inset:0;pointer-events:none;z-index:9;}
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 14px;
 
-.small{font-size:12px;color:var(--muted);margin-top:8px;display:block}
-input,select,button{
-  width:100%;margin:6px 0;padding:10px 10px;border-radius:10px;
-  border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:13px;
-}
-button{cursor:pointer;font-weight:900;}
-button.primary{background:linear-gradient(90deg,var(--green),var(--blue));color:#000;border:none;padding:16px;font-size:16px;}
-button.load-btn{background:linear-gradient(90deg,var(--green),var(--blue));color:#000;border:none;padding:16px;font-size:16px;}
-button.ghost{background:#1e2533;}
+      --btnGrad: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
+      --btnGrad2: linear-gradient(90deg, rgba(76,194,255,1) 0%, rgba(43,226,166,1) 100%);
+    }
 
-.signal.latest{border-left:6px solid var(--green);padding:16px;margin:12px 0;background:var(--panel2);border-radius:12px;font-size:15px;font-weight:900;}
-.signal.latest.sell{border-left-color:var(--red);}
-.smallTxt{font-size:12px;color:var(--muted);line-height:1.5;}
-.hr{height:1px;background:rgba(255,255,255,.06);margin:12px 0}
-.footer{text-align:center;font-size:12px;color:var(--muted);margin-top:12px;line-height:1.55;}
-#toast{
-  position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
-  background:rgba(0,0,0,.75);border:1px solid rgba(255,255,255,.14);
-  padding:10px 14px;border-radius:999px;font-size:13px;color:#fff;
-  z-index:99999;display:none;max-width:92vw;
-}
-#signals{max-height:320px;overflow-y:auto;}
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      background:
+        radial-gradient(1200px 600px at 12% 12%, rgba(76,194,255,.10), transparent 55%),
+        radial-gradient(1000px 500px at 88% 10%, rgba(43,226,166,.10), transparent 55%),
+        radial-gradient(800px 500px at 60% 90%, rgba(255,90,90,.06), transparent 60%),
+        var(--bg);
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "PingFang SC","Microsoft YaHei", sans-serif;
+      overflow:hidden;
+    }
 
-.toggleRow{display:flex;gap:10px;margin-top:6px}
-.toggleRow label{
-  display:flex;align-items:center;gap:8px;
-  border:1px solid rgba(255,255,255,.08);
-  padding:8px 10px;border-radius:10px;background:rgba(0,0,0,.18);
-  font-size:12px;color:#cfe8ff;flex:1;justify-content:center;
-}
-.toggleRow input{width:auto;margin:0}
+    /* Top bar */
+    #topbar{
+      height:64px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 18px;
+      border-bottom:1px solid var(--border);
+      background: rgba(14,17,23,.65);
+      backdrop-filter: blur(10px);
+    }
+    #brand{
+      display:flex;
+      align-items:center;
+      gap:14px;
+      min-width:320px;
+    }
+    #logo{
+      width:36px;height:36px;border-radius:10px;
+      background: linear-gradient(135deg, rgba(43,226,166,.22), rgba(76,194,255,.22));
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow: 0 10px 25px rgba(0,0,0,.25);
+      position:relative;
+      overflow:hidden;
+    }
+    #logo:after{
+      content:"";
+      position:absolute; inset:-40%;
+      background: conic-gradient(from 180deg, rgba(43,226,166,.0), rgba(43,226,166,.55), rgba(76,194,255,.55), rgba(43,226,166,.0));
+      animation: spin 6s linear infinite;
+    }
+    @keyframes spin{ to{ transform: rotate(360deg);} }
 
-@media (max-width:1080px){
-  #main{grid-template-columns:1fr;height:auto}
-  .panel{border-right:none;border-bottom:1px solid var(--border)}
-  #chartWrap{height:60vh}
-  #copyright{display:none}
-  #hint{max-width:70%}
-}
-</style>
+    #brandText{ line-height:1.1; }
+    #brandTitle{
+      font-weight:900;
+      letter-spacing:.2px;
+      font-size:16px;
+    }
+    #brandTitle .accent{
+      background: linear-gradient(90deg, var(--green), var(--blue));
+      -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;
+    }
+    #brandSub{
+      margin-top:4px;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    #topRight{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      justify-content:flex-end;
+      min-width:320px;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 12px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(21,26,35,.75);
+      box-shadow: var(--shadow);
+      font-size:12px;
+      color:var(--text);
+      white-space:nowrap;
+      max-width: 42vw;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .dot{
+      width:8px;height:8px;border-radius:50%;
+      background: var(--green);
+      box-shadow: 0 0 0 3px rgba(43,226,166,.12);
+    }
+    #statusBadge.ok .dot{ background: var(--green); box-shadow: 0 0 0 3px rgba(43,226,166,.14); }
+    #statusBadge.bad .dot{ background: var(--red); box-shadow: 0 0 0 3px rgba(255,90,90,.14); }
+    #statusText{
+      max-width: 34vw;
+      overflow:hidden;text-overflow:ellipsis;
+    }
+    #copyright{
+      color:rgba(230,237,243,.70);
+      background: rgba(0,0,0,.20);
+      border:1px solid rgba(255,255,255,.08);
+      padding:8px 12px;
+      border-radius:999px;
+      font-size:12px;
+      white-space:nowrap;
+    }
+
+    /* Main layout */
+    #main{
+      height: calc(100vh - 64px);
+      display:grid;
+      grid-template-columns: 320px 1fr 360px;
+      gap:16px;
+      padding:16px;
+    }
+
+    .panel{
+      background: linear-gradient(180deg, rgba(21,26,35,.92), rgba(16,21,33,.86));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height:0; /* allow inner scroll */
+    }
+
+    .panelHeader{
+      padding:14px 14px 10px 14px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .panelHeader .h{
+      font-weight:800;
+      letter-spacing:.2px;
+      font-size:13px;
+      color:var(--text);
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .panelHeader .h .tag{
+      font-weight:700;
+      color:#071019;
+      background: rgba(43,226,166,.90);
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+    }
+    .panelBody{
+      padding:14px;
+      overflow:auto;
+      min-height:0;
+    }
+
+    /* Left metrics */
+    .card{
+      background: rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.07);
+      border-radius:12px;
+      padding:12px;
+      margin-bottom:12px;
+    }
+    .cardTitle{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:10px;
+    }
+    .cardTitle b{ color:var(--text); font-size:12.5px; }
+    .small{
+      font-size:12px; color:var(--muted);
+      line-height:1.45;
+    }
+
+    /* Gauge */
+    .gaugeWrap{
+      display:flex;align-items:center;gap:12px;
+    }
+    .gauge{
+      width:160px;height:160px;border-radius:50%;
+      background:
+        conic-gradient(var(--green) 0deg, var(--green) 250deg, rgba(255,255,255,.10) 250deg, rgba(255,255,255,.10) 360deg);
+      position:relative;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+      flex:0 0 auto;
+    }
+    .gauge:after{
+      content:"";
+      position:absolute; inset:14px;
+      background: rgba(14,17,23,.95);
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,.06);
+    }
+    .gaugeCenter{
+      position:absolute; inset:0;
+      display:flex;align-items:center;justify-content:center;
+      z-index:2;
+      flex-direction:column;
+      text-align:center;
+    }
+    .gaugeCenter .num{
+      font-size:36px; font-weight:900;
+      letter-spacing:.5px;
+    }
+    .gaugeCenter .lbl{
+      margin-top:2px;
+      font-size:12px;color:var(--muted);
+    }
+
+    .kv{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px 10px;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .kv b{ color:var(--text); font-weight:800; }
+
+    .signalBox{
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);
+      overflow:hidden;
+    }
+    .signal{
+      padding:12px;
+      background: rgba(0,0,0,.18);
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .signal .side{
+      font-weight:900;
+      letter-spacing:.4px;
+    }
+    .signal.buy{ border-left: 4px solid var(--green); }
+    .signal.sell{ border-left: 4px solid var(--red); }
+    .signal.neutral{ border-left: 4px solid rgba(255,255,255,.18); }
+    .signal .meta{
+      font-size:12px;color:var(--muted);
+      margin-top:6px;
+      line-height:1.35;
+    }
+
+    /* Center chart */
+    #chartPanel .panelBody{ padding:0; }
+    #chartTop{
+      padding:12px 14px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      background: rgba(0,0,0,.18);
+    }
+    #priceLine{
+      display:flex;align-items:center;gap:10px;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+    #priceLine .sym{
+      color:var(--muted);
+      font-size:12px;
+      font-weight:800;
+    }
+    #hintText{
+      color:var(--muted);
+      font-size:12px;
+      max-width:52%;
+      overflow:hidden;text-overflow:ellipsis; white-space:nowrap;
+    }
+    #chart{
+      height: calc(100vh - 64px - 16px - 16px - 54px); /* topbar + paddings + chartTop */
+      min-height:360px;
+      width:100%;
+    }
+
+    /* Right controls */
+    .field{ margin-bottom:10px; }
+    .label{
+      font-size:12px;color:var(--muted);
+      margin-bottom:6px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .label b{ color:var(--text); }
+    input, select{
+      width:100%;
+      background: rgba(0,0,0,.20);
+      border:1px solid rgba(255,255,255,.10);
+      color:var(--text);
+      padding:10px 10px;
+      border-radius:12px;
+      outline:none;
+      font-size:13px;
+    }
+    input::placeholder{ color: rgba(139,148,158,.85); }
+    input:focus, select:focus{
+      border-color: rgba(76,194,255,.55);
+      box-shadow: 0 0 0 4px rgba(76,194,255,.12);
+    }
+
+    .btn{
+      width:100%;
+      border:0;
+      color:#071019;
+      font-weight:900;
+      letter-spacing:.3px;
+      padding:12px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      background: var(--btnGrad);
+      box-shadow: 0 10px 20px rgba(0,0,0,.30);
+      transition: transform .06s ease, filter .15s ease;
+    }
+    .btn:hover{ filter: brightness(1.05); }
+    .btn:active{ transform: translateY(1px); }
+
+    .btnGhost{
+      width:100%;
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--text);
+      font-weight:800;
+      padding:11px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      background: rgba(0,0,0,.18);
+      transition: transform .06s ease, filter .15s ease;
+    }
+    .btnGhost:hover{ filter: brightness(1.05); }
+    .btnGhost:active{ transform: translateY(1px); }
+
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+
+    .hr{
+      height:1px;
+      background: rgba(255,255,255,.06);
+      margin:12px 0;
+    }
+
+    .note{
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.45;
+    }
+    .note b{ color:var(--text); }
+
+    #logBox{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:11px;
+      background: rgba(0,0,0,.22);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      padding:10px;
+      color: rgba(230,237,243,.85);
+      height:120px;
+      overflow:auto;
+      white-space:pre-wrap;
+    }
+
+    /* Footer disclaimer */
+    #footer{
+      padding:10px 16px;
+      border-top:1px solid rgba(255,255,255,.06);
+      background: rgba(0,0,0,.20);
+      color: rgba(230,237,243,.72);
+      font-size:11px;
+      line-height:1.45;
+    }
+    #footer .muted{ color: rgba(139,148,158,.92); }
+    #footer a{ color: rgba(76,194,255,.95); text-decoration:none; }
+    #footer a:hover{ text-decoration:underline; }
+
+    /* Responsive */
+    @media (max-width: 1180px){
+      body{ overflow:auto; }
+      #main{
+        height:auto;
+        grid-template-columns: 1fr;
+      }
+      #chart{ height: 520px; }
+      #topRight{ min-width: 0; }
+      #brand{ min-width: 0; }
+    }
+  </style>
 </head>
 
 <body>
-<div id="topbar">
-  <div id="brand">
-    <div id="logo">拐点猎手</div>
-    <div id="brandMeta">
-      <div id="brandTitle">Inflection Hunter Pro</div>
-      <div id="subtitle">Darrius FinTech Inc</div>
-    </div>
-  </div>
-  <div id="topRight">
-    <span id="status">Pro Activated · Real-time / 专业版已激活</span>
-    <span id="copyright">© 2025 Darrius FinTech Inc. All Rights Reserved.</span>
-  </div>
-</div>
-
-<div id="main">
-
-  <!-- LEFT -->
-  <div class="panel">
-    <h3>Market Pulse · 市场情绪</h3>
-    <div id="pulse">
-      <div class="pulseWrap">
-        <div id="pulseGauge" aria-hidden="true">
-          <svg viewBox="0 0 120 120">
-            <circle class="track" cx="60" cy="60" r="46"></circle>
-            <circle id="pulseGreen" class="seg greenSeg" cx="60" cy="60" r="46"></circle>
-            <circle id="pulseRed" class="seg redSeg" cx="60" cy="60" r="46"></circle>
-          </svg>
+  <div id="topbar">
+    <div id="brand">
+      <div id="logo"></div>
+      <div id="brandText">
+        <div id="brandTitle">
+          <span class="accent">DarriusAI</span> · Inflection Hunter Pro
         </div>
-        <div id="pulseCircle">--</div>
+        <div id="brandSub">AI 拐点决策系统 · 拐点猎手</div>
       </div>
     </div>
-    <div id="pulseLabel">Loading… / 加载中…</div>
 
-    <div class="hr"></div>
-
-    <h3>Risk Copilot · 风控助手</h3>
-    <div class="box">
-      <div class="kv"><span class="k">Entry · 入场</span><span class="v" id="riskEntry">--</span></div>
-      <div class="kv"><span class="k">Stop · 止损</span><span class="v" id="riskStop">--</span></div>
-      <div class="kv"><span class="k">Targets · 目标</span><span class="v" id="riskTargets">--</span></div>
-      <div class="kv"><span class="k">Confidence · 强度</span><span class="v" id="riskConf">--</span></div>
-      <div class="kv"><span class="k">Backtest WinRate · 回测胜率</span><span class="v" id="riskWR">--</span></div>
-      <div class="smallTxt" id="riskNote">ATR-based dynamic risk · 基于ATR动态风控</div>
-    </div>
-
-    <div class="hr"></div>
-
-    <h3>Live Signals · 实时信号</h3>
-    <div id="signals">Connecting to Binance... / 连接Binance中...</div>
-
-    <div class="footer">
-      <b>Disclaimer · 免责声明:</b> Educational only, not financial advice. / 仅供学习交流，不构成投资建议。
+    <div id="topRight">
+      <div id="statusBadge" class="pill ok" title="System Status">
+        <span class="dot"></span>
+        <span id="statusText">Ready · 前端已就绪</span>
+      </div>
+      <div id="copyright">© 2025 Darrius FinTech Inc. All Rights Reserved.</div>
     </div>
   </div>
 
-  <!-- CENTER -->
-  <div id="chartWrap">
-    <div id="chartBox">
+  <div id="main">
+    <!-- LEFT -->
+    <div class="panel" id="leftPanel">
+      <div class="panelHeader">
+        <div class="h">Market Pulse · 市场情绪 <span class="tag" id="pulseTag">LIVE</span></div>
+      </div>
+      <div class="panelBody">
+        <div class="card">
+          <div class="gaugeWrap">
+            <div class="gauge" id="pulseGauge">
+              <div class="gaugeCenter">
+                <div class="num" id="pulseScore">76</div>
+                <div class="lbl">Sentiment</div>
+              </div>
+            </div>
+            <div style="flex:1">
+              <div class="kv">
+                <span>Bullish</span><b id="bullPct">48.35%</b>
+                <span>Bearish</span><b id="bearPct" style="color:var(--red)">26.42%</b>
+                <span>Neutral</span><b id="neuPct">25.23%</b>
+                <span>Net Inflow</span><b id="netInflow" style="color:var(--green)">+353.49</b>
+              </div>
+              <div class="small" style="margin-top:10px">
+                说明：该模块为前端展示位（可接入你未来的真实情绪数据源）。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardTitle"><b>Risk Copilot · 风险助手</b><span class="small" id="riskMode">Demo</span></div>
+          <div class="kv">
+            <span>Entry · 入场</span><b id="riskEntry">—</b>
+            <span>Stop · 止损</span><b id="riskStop" style="color:var(--red)">—</b>
+            <span>Targets · 目标</span><b id="riskTargets">—</b>
+            <span>Confidence · 强度</span><b id="riskConf">—</b>
+            <span>Backtest WinRate · 回测胜率</span><b id="riskWR">—</b>
+          </div>
+        </div>
+
+        <div class="signalBox">
+          <div class="signal neutral" id="signalRow">
+            <div>
+              <div class="side" id="signalSide">Waiting…</div>
+              <div class="meta" id="signalMeta">等待数据 / 演示信号展示位</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:900" id="signalPx">—</div>
+              <div class="meta" id="signalTf">TF: 1D</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px" class="small">
+          <b>Disclaimer:</b> Educational only, not financial advice. / 仅供学习研究，不构成投资建议。
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="panel" id="chartPanel">
       <div id="chartTop">
-        <div id="price">--</div>
-        <div id="hint">Connecting to Binance · 连接Binance中</div>
+        <div id="priceLine">
+          <span class="sym" id="symText">BTCUSDT</span>
+          <span id="priceText">—</span>
+        </div>
+        <div id="hintText">Demo chart loaded · 演示图表已加载</div>
       </div>
+      <div class="panelBody">
+        <div id="chart"></div>
+      </div>
+      <div id="footer">
+        <div>
+          <b>English:</b>
+          DarriusAI provides algorithmic market analysis for educational and informational purposes only.
+          It does not constitute investment advice. Trading involves risk. Past performance does not guarantee future results.
+        </div>
+        <div class="muted" style="margin-top:6px">
+          <b>中文：</b>
+          本系统仅提供算法分析与市场研究信息，不构成任何投资建议。金融市场存在风险，历史表现不代表未来收益。
+        </div>
+      </div>
+    </div>
 
-      <div id="chart">
-        <canvas id="overlay"></canvas>
+    <!-- RIGHT -->
+    <div class="panel" id="rightPanel">
+      <div class="panelHeader">
+        <div class="h">Control Center · 控制台</div>
+      </div>
+      <div class="panelBody">
+
+        <div class="card" style="margin-bottom:12px">
+          <div class="cardTitle"><b>Market Control · 品种与周期</b><span class="small">Data Source</span></div>
+
+          <div class="field">
+            <div class="label"><span>Symbol · 品种</span><span class="small">(Binance格式，如 BTCUSDT)</span></div>
+            <input id="symbol" value="BTCUSDT" />
+          </div>
+
+          <div class="field">
+            <div class="label"><span>Timeframe · 周期</span></div>
+            <select id="tf">
+              <option value="1d">1d · 日线</option>
+              <option value="4h">4h · 4小时</option>
+              <option value="1h">1h · 1小时</option>
+              <option value="15m">15m · 15分钟</option>
+            </select>
+          </div>
+
+          <button class="btn" id="loadBtn">Load · 加载</button>
+
+          <div class="row2">
+            <label class="btnGhost" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+              <input type="checkbox" id="tgEMA" checked style="width:auto;margin:0;transform:translateY(1px)">
+              EMA(20)
+            </label>
+            <label class="btnGhost" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+              <input type="checkbox" id="tgAux" checked style="width:auto;margin:0;transform:translateY(1px)">
+              Aux 线
+            </label>
+          </div>
+
+          <div class="note" style="margin-top:10px">
+            <b>提示：</b>如果 Binance/数据源不可用，会自动使用演示数据（不影响订阅与支付链路测试）。
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:12px">
+          <div class="cardTitle"><b>🔒 Pro Access · 订阅</b><span class="small">Secure by Stripe</span></div>
+
+          <div class="field">
+            <div class="label"><span>User ID · 用户ID</span><span class="small">（必填）</span></div>
+            <input id="userId" placeholder="例如：user_123 / 你的系统用户ID" />
+          </div>
+
+          <div class="field">
+            <div class="label"><span>Email · 邮箱</span><span class="small">（建议填，用于收据）</span></div>
+            <input id="email" placeholder="用于首次兜底匹配 / receipts" />
+          </div>
+
+          <div class="field">
+            <div class="label"><span>Plan · 套餐</span><span class="small" id="trialHint">Trial info</span></div>
+            <select id="planSelect">
+              <option value="weekly">Weekly · 周付 - $4.90</option>
+              <option value="monthly">Monthly · 月付 - $19.90 (Trial 1 day)</option>
+              <option value="quarterly">Quarterly · 季付 - $49.90 (Trial 3 days)</option>
+              <option value="yearly">Annual · 年付 - $189 (Trial 5 days)</option>
+            </select>
+          </div>
+
+          <button class="btn" id="subscribeBtn">Start Subscription · 开通订阅</button>
+
+          <div class="note" style="margin-top:10px">
+            <b>规则：</b>试用必须绑定信用卡；试用到期若未付费，系统将自动取消访问权限。<br/>
+            <b>说明：</b>前端只传 <code>user_id</code> + <code>price_id</code>；后端统一创建 Stripe Checkout Session/Subscription。
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:12px">
+          <div class="cardTitle"><b>Share & Export · 分享与导出</b><span class="small">Utilities</span></div>
+
+          <button class="btnGhost" id="copyLinkBtn">Copy Share Link · 复制分享链接</button>
+          <div style="height:10px"></div>
+          <button class="btnGhost" id="exportBtn">Export PNG · 导出图片（含图表）</button>
+
+          <div class="note" style="margin-top:10px">
+            说明：导出使用 LightweightCharts 截图能力。若需“含更多Overlay图层”可继续增强。
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardTitle"><b>Diagnostics · 诊断</b><span class="small">API / Logs</span></div>
+          <div class="row2" style="margin-top:0">
+            <button class="btnGhost" id="healthBtn">Health</button>
+            <button class="btnGhost" id="routesBtn">Routes</button>
+          </div>
+          <div style="height:10px"></div>
+          <div id="logBox"></div>
+        </div>
+
       </div>
     </div>
   </div>
 
-  <!-- RIGHT -->
-  <div class="panel">
-    <h3>Symbol & Timeframe · 品种与周期</h3>
-    <label class="small"><b>Symbol · 品种</b>（Binance格式，如 BTCUSDT）</label>
-    <input id="symbol" type="text" placeholder="e.g. BTCUSDT, ETHUSDT..." value="BTCUSDT" />
+  <script>
+    /**
+     * ✅ API base
+     * 你当前已经跑通：https://darrius-api.onrender.com
+     * 如果未来你换成 api.darrius.ai，只需要改这里。
+     */
+    const API_BASE = "https://darrius-api.onrender.com";
 
-    <label class="small"><b>Timeframe · 周期</b></label>
-    <select id="tf">
-      <option value="5m">5m · 5分钟</option>
-      <option value="15m">15m · 15分钟</option>
-      <option value="30m">30m · 30分钟</option>
-      <option value="1h">1h · 1小时</option>
-      <option value="4h">4h · 4小时</option>
-      <option value="1d" selected>1d · 日线</option>
-      <option value="1w">1w · 周线</option>
-      <option value="1M">1M · 月线</option>
-    </select>
+    // ✅ Stripe price ids（你给的最新 4 个）
+    const PRICE_MAP = {
+      weekly:    { price_id: "price_1SpJMmR84UMUVSTg0T7xfm6r", trial_days: 0,  label: "Weekly · 周付 - $4.90" },
+      monthly:   { price_id: "price_1SpbvRR84UMUVSTggbg0SFzi", trial_days: 1,  label: "Monthly · 月付 - $19.90 (Trial 1 day)" },
+      quarterly: { price_id: "price_1SpbwYR84UMUVSTgMQpUrE42", trial_days: 3,  label: "Quarterly · 季付 - $49.90 (Trial 3 days)" },
+      yearly:    { price_id: "price_1SpbpxR84UMUVSTgapaJDjMX", trial_days: 5,  label: "Annual · 年付 - $189 (Trial 5 days)" },
+    };
 
-    <button class="load-btn" onclick="reload()">Load · 加载</button>
+    function $(id){ return document.getElementById(id); }
 
-    <div class="toggleRow">
-      <label><input id="tgEMA" type="checkbox" /> EMA(20)</label>
-      <label><input id="tgAux" type="checkbox" checked /> Aux 黄线</label>
-    </div>
-
-    <div class="hr"></div>
-
-    <!-- ✅ Subscription -->
-    <h3>Subscription · 订阅</h3>
-
-    <!-- ✅ user_id 必填：你 webhook / 权限绑定要用 -->
-    <label class="small"><b>User ID · 用户ID（必填）</b></label>
-    <input id="userId" type="text" placeholder="例如：user_123 / 你的系统用户ID" />
-
-    <label class="small"><b>Email · 邮箱（建议填）</b></label>
-    <input id="email" type="email" placeholder="用于首次兜底匹配 / receipts" />
-
-    <label class="small"><b>Plan · 套餐</b></label>
-    <select id="plan">
-      <option value="weekly">Weekly · 周付 - $4.90</option>
-      <option value="monthly">Monthly · 月付 - $19.90（Trial 1 day）</option>
-      <option value="quarterly">Quarterly · 季付 - $49.90（Trial 3 days）</option>
-      <option value="yearly">Yearly · 年付 - $189（Trial 5 days）</option>
-    </select>
-
-    <button class="primary" onclick="startSubscription()">Subscribe · 订阅</button>
-
-    <div class="smallTxt">
-      ✅ 规则：试用必须绑定信用卡；试用到期若未付费，将自动取消访问权限。<br/>
-      说明：试用天数由后端创建订阅时统一设置（Stripe Checkout Session / Subscription），前端只传 price_id。
-    </div>
-
-    <div class="hr"></div>
-
-    <h3>Share & Export · 分享与导出</h3>
-    <button class="ghost" onclick="copyShareLink()">Copy Share Link · 复制分享链接</button>
-    <button class="ghost" onclick="exportChartPNG()">Export PNG · 导出图片（含Overlay）</button>
-
-    <div class="footer">Powered by DarriusAI · Inflection Hunter<br/>© 2025 Darrius FinTech Inc</div>
-  </div>
-</div>
-
-<div id="toast"></div>
-
-<script>
-/* =========================
-   ✅ API 配置（你现在的后端）
-   现在用 Render URL 最稳：避免 api.darrius.ai 还没指过去
-========================= */
-const API_BASE = "https://darrius-api.onrender.com";
-
-/* ✅ 你给的 4 个 Live Price ID（固定写死到前端，确保对齐） */
-const PRICE_MAP = {
-  weekly:    "price_1SpJMmR84UMUVSTg0T7xfm6r",
-  monthly:   "price_1SpbvRR84UMUVSTggbg0SFzi",
-  quarterly: "price_1SpbwYR84UMUVSTgMQpUrE42",
-  yearly:    "price_1SpbpxR84UMUVSTgapaJDjMX",
-};
-
-/* =========================
-   Utils
-========================= */
-const GREEN="#00ff88", RED="#ff4757", BLUE="#00d4ff", ORANGE="#ffaa00";
-let toastTimer=null;
-
-function showToast(msg){
-  const t=document.getElementById("toast");
-  t.innerText=msg; t.style.display="block";
-  clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>t.style.display="none",3000);
-}
-function setHint(msg){ document.getElementById("hint").innerText=msg; }
-function fmt(n){
-  if(n===null||n===undefined||isNaN(n)) return "--";
-  const x=Number(n);
-  return Math.abs(x)>=1000 ? x.toFixed(2) : x.toFixed(4);
-}
-function clamp(n,a,b){ return Math.max(a,Math.min(b,n)); }
-
-/* =========================
-   ✅ 订阅入口：调用后端创建 Checkout Session
-   你后端需要提供：POST /billing/checkout
-   Body: { user_id, email, price_id, success_url, cancel_url }
-   Resp: { url }  或 { checkout_url }
-========================= */
-async function startSubscription(){
-  const plan = document.getElementById("plan").value;
-  const price_id = PRICE_MAP[plan];
-
-  const user_id = (document.getElementById("userId").value || "").trim();
-  const email   = (document.getElementById("email").value || "").trim();
-
-  if(!user_id){
-    showToast("Missing user_id · 请先填写 User ID");
-    return;
-  }
-  if(!price_id){
-    showToast("Unknown plan/price_id · 套餐/价格ID未配置");
-    return;
-  }
-
-  const payload = {
-    user_id,
-    email: email || null,
-    price_id,
-    // ✅ 让 Stripe 支付完回到你的网站
-    success_url: window.location.origin + "/?paid=1",
-    cancel_url:  window.location.origin + "/?canceled=1",
-  };
-
-  showToast("Creating checkout… / 正在创建支付页面…");
-  try{
-    const resp = await fetch(`${API_BASE}/billing/checkout`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const text = await resp.text();
-    let data = {};
-    try{ data = JSON.parse(text); }catch{ /* ignore */ }
-
-    if(!resp.ok){
-      console.error("checkout error:", resp.status, text);
-      showToast(`Checkout error: HTTP ${resp.status}`);
-      return;
+    function setStatus(text, ok=true){
+      const badge = $("statusBadge");
+      badge.classList.remove("ok","bad");
+      badge.classList.add(ok ? "ok" : "bad");
+      $("statusText").textContent = text;
     }
 
-    const url = data.url || data.checkout_url || data.session_url;
-    if(!url){
-      console.error("missing url in response:", data);
-      showToast("Checkout created but missing URL · 后端没返回 url");
-      return;
+    function log(msg){
+      const box = $("logBox");
+      const t = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
+      box.textContent = (box.textContent || "").split("\n").slice(-140).join("\n");
+      box.textContent += (box.textContent ? "\n" : "") + t;
+      box.scrollTop = box.scrollHeight;
+      console.log("[Darrius Frontend]", msg);
     }
 
-    // ✅ 跳转 Stripe Checkout
-    window.location.href = url;
+    // =========================
+    // Chart + Demo data
+    // =========================
+    let chart=null, candle=null, ema=null, aux=null;
 
-  }catch(e){
-    console.error(e);
-    showToast("Network error · 网络错误（后端未连通？）");
-  }
-}
+    function genDemoCandles(n=220){
+      const now = Math.floor(Date.now()/1000);
+      const step = 60*60; // 1h
+      let t = now - n*step;
+      let price = 67000;
+      const arr = [];
 
-/* =========================
-   Market Pulse Gauge
-========================= */
-function updatePulseGauge(value){
-  const v=clamp(Number(value)||0,0,100);
-  const circle=document.getElementById("pulseCircle");
-  const g=document.getElementById("pulseGreen");
-  const r=document.getElementById("pulseRed");
+      for(let i=0;i<n;i++){
+        const drift = Math.sin(i/18)*140;
+        const noise = (Math.random()-0.5)*260;
+        const open = price;
+        const close = open + drift + noise;
 
-  const rad=46;
-  const C=2*Math.PI*rad;
+        const high = Math.max(open, close) + Math.random()*220;
+        const low  = Math.min(open, close) - Math.random()*220;
 
-  const gf=v/100;
-  const rf=1-gf;
+        price = close;
 
-  g.setAttribute("stroke-dasharray", String(C.toFixed(2)));
-  g.setAttribute("stroke-dashoffset", String((C*(1-gf)).toFixed(2)));
+        arr.push({
+          time: t,
+          open: +open.toFixed(2),
+          high: +high.toFixed(2),
+          low:  +low.toFixed(2),
+          close:+close.toFixed(2),
+        });
+        t += step;
+      }
+      return arr;
+    }
 
-  r.setAttribute("stroke-dasharray", String(C.toFixed(2)));
-  r.setAttribute("stroke-dashoffset", String((C*(1-rf)).toFixed(2)));
-  r.style.transform = `rotate(${(-90 + gf*360).toFixed(2)}deg)`;
-  r.style.transformOrigin="50% 50%";
+    function calcEMA(bars, period=20){
+      const k = 2/(period+1);
+      let emaPrev = null;
+      const out = [];
+      for(const b of bars){
+        const v = b.close;
+        if(emaPrev === null) emaPrev = v;
+        else emaPrev = v*k + emaPrev*(1-k);
+        out.push({ time: b.time, value: +emaPrev.toFixed(2) });
+      }
+      return out;
+    }
 
-  circle.style.borderColor = (v>=50)? GREEN : RED;
-}
+    function setPulse(score){
+      score = Math.max(0, Math.min(100, score));
+      $("pulseScore").textContent = String(score);
+      const deg = Math.round(score/100*360);
+      $("pulseGauge").style.background =
+        `conic-gradient(var(--green) 0deg, var(--green) ${deg}deg, rgba(255,255,255,.10) ${deg}deg, rgba(255,255,255,.10) 360deg)`;
+      $("pulseTag").textContent = score>=60 ? "BULL" : (score<=40 ? "BEAR" : "NEUTRAL");
+      $("pulseTag").style.background = score>=60 ? "rgba(43,226,166,.90)" : (score<=40 ? "rgba(255,90,90,.88)" : "rgba(255,184,108,.90)");
+    }
 
-function calcMarketPulse(latest){
-  if(!latest) return { label:"Neutral · 中性", value:50 };
-  const dir=latest.side==="B"?1:-1;
-  const v=Math.round(50 + dir*latest.confidence*40);
-  if(v>75) return { label:"Bullish · 强多", value:v };
-  if(v>55) return { label:"Mild Bull · 偏多", value:v };
-  if(v>45) return { label:"Neutral · 中性", value:v };
-  return { label:"Bearish · 强空", value:v };
-}
+    function setSignal(side, price, tf){
+      const row = $("signalRow");
+      row.classList.remove("buy","sell","neutral");
+      $("signalTf").textContent = "TF: " + tf.toUpperCase();
 
-/* =========================
-   Chart init
-========================= */
-const chartEl=document.getElementById("chart");
-let chart=LightweightCharts.createChart(chartEl,{
-  layout:{ background:{ color:"#0b0f17" }, textColor:"#d1d4dc" },
-  grid:{ vertLines:{ color:"transparent" }, horzLines:{ color:"transparent" } },
-  timeScale:{ timeVisible:true, secondsVisible:false },
-  rightPriceScale:{ borderVisible:false },
-  crosshair:{ mode:1 }
-});
-
-let candle=chart.addCandlestickSeries({
-  upColor:GREEN, downColor:RED,
-  wickUpColor:GREEN, wickDownColor:RED,
-  borderVisible:false
-});
-
-/* ✅ 只保留一条 EMA(20) 可选（你说蓝/紫均线太多，这里先收敛） */
-let ema20Series = chart.addLineSeries({ color:"rgba(125,211,252,.95)", lineWidth:2 });
-
-/* ✅ Aux 黄线 */
-let auxLineSeries=chart.addLineSeries({ color: ORANGE, lineWidth: 2 });
-
-/* Risk price lines */
-let riskPriceLines=[];
-function clearRiskLines(){ riskPriceLines.forEach(pl=>{ try{ candle.removePriceLine(pl);}catch{} }); riskPriceLines=[]; }
-function addRiskLine(price,title,color){
-  if(isNaN(price)) return;
-  const pl=candle.createPriceLine({ price, color, lineWidth:2, lineStyle:2, axisLabelVisible:true, title });
-  riskPriceLines.push(pl);
-}
-
-/* =========================
-   Overlay engine
-========================= */
-const overlay=document.getElementById("overlay");
-const ctx=overlay.getContext("2d");
-let overlayState={ points:[], pivots:[] };
-
-function resizeOverlay(){
-  const dpr=window.devicePixelRatio||1;
-  const rect=chartEl.getBoundingClientRect();
-  overlay.width=Math.max(1,Math.floor(rect.width*dpr));
-  overlay.height=Math.max(1,Math.floor(rect.height*dpr));
-  overlay.style.width=rect.width+"px";
-  overlay.style.height=rect.height+"px";
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  redrawOverlay();
-}
-function clearCanvas(){
-  const rect=overlay.getBoundingClientRect();
-  ctx.clearRect(0,0,rect.width,rect.height);
-}
-function xOfTime(t){ return chart.timeScale().timeToCoordinate(t); }
-function yOfPrice(p){ return candle.priceToCoordinate(p); }
-
-function drawColoredMainLine(){
-  const pts=overlayState.points;
-  if(!pts || pts.length<2) return;
-  ctx.lineWidth=3; ctx.lineJoin="round"; ctx.lineCap="round";
-  for(let i=1;i<pts.length;i++){
-    const a=pts[i-1], b=pts[i];
-    const x1=xOfTime(a.time), y1=yOfPrice(a.value);
-    const x2=xOfTime(b.time), y2=yOfPrice(b.value);
-    if(x1===null||y1===null||x2===null||y2===null) continue;
-    ctx.strokeStyle=(b.trend>=0)?GREEN:RED;
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-  }
-}
-
-function drawPivotsBig(){
-  const piv=overlayState.pivots||[];
-  if(!piv.length) return;
-
-  ctx.textAlign="center"; ctx.textBaseline="middle";
-  ctx.font="bold 22px Arial";
-
-  for(const m of piv){
-    const x=xOfTime(m.time);
-    const y=yOfPrice(m.priceLabel);
-    if(x===null||y===null) continue;
-
-    const isB=m.type==="B";
-    const fill=isB?"#ff2bd6":"#ffe600";
-    const stroke="rgba(0,0,0,0.78)";
-
-    ctx.save();
-    ctx.shadowColor=fill;
-    ctx.shadowBlur=14;
-    ctx.fillStyle=fill;
-    ctx.lineWidth=5;
-    ctx.strokeStyle=stroke;
-    ctx.strokeText(m.type,x,y);
-    ctx.fillText(m.type,x,y);
-    ctx.restore();
-  }
-}
-
-function redrawOverlay(){
-  clearCanvas();
-  drawColoredMainLine();
-  drawPivotsBig();
-}
-chart.timeScale().subscribeVisibleTimeRangeChange(()=>redrawOverlay());
-chart.timeScale().subscribeVisibleLogicalRangeChange(()=>redrawOverlay());
-new ResizeObserver(()=>resizeOverlay()).observe(chartEl);
-window.addEventListener("resize",()=>resizeOverlay());
-
-/* =========================
-   Data & Binance
-========================= */
-let barsStore=[];
-let currentSymbol="BTCUSDT";
-let currentTf="1d";
-let ws=null;
-
-function copyShareLink(){
-  try{ navigator.clipboard.writeText(window.location.href); showToast("Link copied · 已复制分享链接"); }
-  catch{ showToast("Copy failed · 复制失败"); }
-}
-
-function exportChartPNG(){
-  try{
-    const base=chart.takeScreenshot();
-    const out=document.createElement("canvas");
-    out.width=base.width; out.height=base.height;
-    const octx=out.getContext("2d");
-    octx.drawImage(base,0,0);
-    octx.drawImage(overlay,0,0,out.width,out.height);
-    const a=document.createElement("a");
-    const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");
-    a.download=`${currentSymbol}_${currentTf}_InflectionHunter_${ts}.png`;
-    a.href=out.toDataURL("image/png");
-    a.click();
-    showToast("PNG exported · 已导出（含Overlay）");
-  }catch(e){
-    showToast("Export failed · 导出失败");
-  }
-}
-
-function getBinanceInterval(tf){ return tf; }
-
-function generateSimulatedData(symbol, tf){
-  const tfSeconds={"5m":300,"15m":900,"30m":1800,"1h":3600,"4h":14400,"1d":86400,"1w":604800,"1M":2592000}[tf]||86400;
-  const num=tf==="1M"?120:240;
-  const now=Math.floor(Date.now()/1000);
-  const base=symbol.includes("BTC")?67000:205;
-  const vol=symbol.includes("BTC")?0.025:0.012;
-  const bars=[];
-  let price=base;
-  let t=now-(num-1)*tfSeconds;
-  for(let i=0;i<num;i++){
-    const trend=Math.sin(i/18)*base*0.012;
-    const noise=(Math.random()-0.5)*base*vol;
-    price+=trend+noise; price=Math.max(price, base*0.5);
-    const open=price;
-    const close=price+(Math.random()-0.5)*base*0.006;
-    const high=Math.max(open,close)+Math.random()*base*0.01;
-    const low=Math.min(open,close)-Math.random()*base*0.01;
-    bars.push({ time:t+i*tfSeconds, open:+open.toFixed(2), high:+high.toFixed(2), low:+low.toFixed(2), close:+close.toFixed(2) });
-  }
-  return bars;
-}
-
-async function loadHistoricalData(symbol, tf){
-  const interval=getBinanceInterval(tf);
-  const limit=tf==="1M"?120:500;
-  let retries=3;
-  while(retries>0){
-    try{
-      const resp=await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
-      if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data=await resp.json();
-      if(!data||data.length===0) throw new Error("No data");
-      const bars=data.map(d=>({ time:d[0]/1000, open:+d[1], high:+d[2], low:+d[3], close:+d[4] }));
-      barsStore=bars;
-      candle.setData(barsStore);
-      processData(barsStore);
-      setHint("Binance data loaded · Binance数据加载完成");
-      return;
-    }catch(e){
-      retries--;
-      if(retries===0){
-        showToast("Binance interface error, using simulated data · Binance接口错误，使用模拟数据");
-        barsStore=generateSimulatedData(symbol, tf);
-        candle.setData(barsStore);
-        processData(barsStore);
-        setHint("Simulated data (Binance unavailable) · 模拟数据 (Binance不可用)");
+      if(side==="BUY"){
+        row.classList.add("buy");
+        $("signalSide").textContent = "BUY · 买入";
+        $("signalMeta").textContent = "High-probability inflection detected (demo). / 演示信号";
+        $("signalPx").textContent = "@ " + price;
+      }else if(side==="SELL"){
+        row.classList.add("sell");
+        $("signalSide").textContent = "SELL · 卖出";
+        $("signalMeta").textContent = "Risk-off inflection detected (demo). / 演示信号";
+        $("signalPx").textContent = "@ " + price;
       }else{
-        await new Promise(r=>setTimeout(r,1200));
+        row.classList.add("neutral");
+        $("signalSide").textContent = "Waiting…";
+        $("signalMeta").textContent = "Waiting for data… / 等待数据…";
+        $("signalPx").textContent = "—";
       }
     }
-  }
-}
 
-function connectWebSocket(symbol, tf){
-  if(ws){ try{ ws.close(); }catch{} }
-  const interval=getBinanceInterval(tf);
-  const stream=`${symbol.toLowerCase()}@kline_${interval}`;
-  ws=new WebSocket(`wss://stream.binance.com:9443/ws/${stream}`);
-  ws.onmessage=e=>{
-    try{
-      const msg=JSON.parse(e.data);
-      if(!msg.k) return;
-      const k=msg.k;
-      const bar={ time:k.t/1000, open:+k.o, high:+k.h, low:+k.l, close:+k.c };
-      const last=barsStore[barsStore.length-1];
-      if(last && last.time===bar.time) barsStore[barsStore.length-1]=bar;
-      else{
-        barsStore.push(bar);
-        if(barsStore.length>1200) barsStore=barsStore.slice(-1200);
+    function initChart(){
+      if(typeof LightweightCharts==="undefined"){
+        setStatus("Chart lib missing", false);
+        log("❌ lightweight-charts 未加载");
+        return;
       }
-      candle.update(bar);
-      if(k.x){ processData(barsStore); }
-    }catch{}
-  };
-  ws.onclose=()=>setTimeout(()=>connectWebSocket(symbol, tf),3000);
-}
 
-/* =========================
-   Indicators helpers
-========================= */
-function ema(arr, per){
-  const res=new Array(arr.length).fill(NaN);
-  per=Math.max(2,Math.floor(per));
-  const k=2/(per+1);
-  let sum=0;
-  for(let i=0;i<per && i<arr.length;i++) sum+=arr[i];
-  if(arr.length>=per) res[per-1]=sum/per;
-  for(let i=per;i<arr.length;i++){
-    if(isNaN(res[i-1])) res[i-1]=arr[i-1];
-    res[i]=arr[i]*k+res[i-1]*(1-k);
-  }
-  return res;
-}
-function calcATR(bars, per){
-  per=Math.max(2,Math.floor(per));
-  const tr=new Array(bars.length).fill(NaN);
-  for(let i=0;i<bars.length;i++){
-    const h=bars[i].high, l=bars[i].low;
-    if(i===0){ tr[i]=h-l; continue; }
-    const pc=bars[i-1].close;
-    tr[i]=Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc));
-  }
-  return ema(tr, per);
-}
+      const el = $("chart");
+      chart = LightweightCharts.createChart(el, {
+        layout: { background: { color: "transparent" }, textColor: "#E6EDF3" },
+        grid: {
+          vertLines: { color: "rgba(255,255,255,.04)" },
+          horzLines: { color: "rgba(255,255,255,.04)" },
+        },
+        rightPriceScale: { borderVisible:false },
+        timeScale: { timeVisible:true, secondsVisible:false, borderVisible:false },
+        crosshair: { mode: 1 },
+      });
 
-/* =========================
-   processData (保持你的算法骨架)
-========================= */
-function processData(bars){
-  if(!bars || bars.length<80) return;
+      candle = chart.addCandlestickSeries({
+        upColor: "#2BE2A6",
+        downColor:"#FF5A5A",
+        wickUpColor:"#2BE2A6",
+        wickDownColor:"#FF5A5A",
+        borderVisible:false,
+      });
 
-  const closes=bars.map(b=>b.close);
+      // EMA and Aux line placeholders
+      ema = chart.addLineSeries({ lineWidth: 2, color: "rgba(76,194,255,.92)" });
+      aux = chart.addLineSeries({ lineWidth: 2, color: "rgba(255,184,108,.88)" });
 
-  const period=14;
-  const p=Math.max(2,Math.floor(Math.sqrt(period)));
+      function fit(){
+        const r = el.getBoundingClientRect();
+        chart.applyOptions({
+          width: Math.max(1, Math.floor(r.width)),
+          height: Math.max(1, Math.floor(r.height)),
+        });
+        chart.timeScale().fitContent();
+      }
+      const ro = new ResizeObserver(() => fit());
+      ro.observe(el);
+      window.addEventListener("resize", fit);
 
-  function wma(arr, per){
-    per=Math.max(2,Math.floor(per));
-    const res=new Array(arr.length).fill(NaN);
-    const weights=Array.from({length:per},(_,i)=>i+1);
-    const wsum=weights.reduce((a,b)=>a+b,0);
-    for(let i=per-1;i<arr.length;i++){
-      let sum=0;
-      for(let j=0;j<per;j++) sum+=arr[i-j]*weights[per-1-j];
-      res[i]=sum/wsum;
+      // initial demo
+      const bars = genDemoCandles(220);
+      candle.setData(bars);
+
+      const emaData = calcEMA(bars, 20);
+      ema.setData(emaData);
+
+      // Aux: just another smoothed line (demo)
+      const auxData = calcEMA(bars, 50);
+      aux.setData(auxData);
+
+      const last = bars[bars.length-1];
+      $("symText").textContent = "BTCUSDT";
+      $("priceText").textContent = last.close.toFixed(2);
+      $("hintText").textContent = "Demo chart loaded · 演示图表已加载";
+      setStatus("Ready · 前端已就绪", true);
+
+      // demo left panel values
+      setPulse(76);
+      $("riskEntry").textContent = (last.close*0.985).toFixed(2);
+      $("riskStop").textContent  = (last.close*0.970).toFixed(2);
+      $("riskTargets").textContent = [(last.close*1.01).toFixed(2),(last.close*1.02).toFixed(2),(last.close*1.035).toFixed(2)].join(", ");
+      $("riskConf").textContent = "92%";
+      $("riskWR").textContent = "72%";
+
+      setSignal(Math.random()>0.5?"BUY":"SELL", last.close.toFixed(2), $("tf").value);
+      fit();
     }
-    return res;
-  }
 
-  const wma_half=wma(closes,Math.max(2,Math.floor(period/2)));
-  const wma_full=wma(closes,period);
-  const vect=new Array(closes.length).fill(NaN);
-  for(let i=0;i<closes.length;i++){
-    if(!isNaN(wma_half[i]) && !isNaN(wma_full[i])) vect[i]=2*wma_half[i]-wma_full[i];
-  }
-  const ext=new Array(closes.length).fill(NaN);
-  for(let i=p-1;i<closes.length;i++){
-    let sum=0,cnt=0;
-    for(let j=0;j<p;j++){
-      const vv=vect[i-j];
-      if(!isNaN(vv)){ sum+=vv; cnt++; }
+    function applyToggles(){
+      const showEma = $("tgEMA").checked;
+      const showAux = $("tgAux").checked;
+      ema.applyOptions({ visible: !!showEma });
+      aux.applyOptions({ visible: !!showAux });
     }
-    if(cnt>0) ext[i]=sum/cnt;
-  }
 
-  const N=5;
-  const trend=new Array(closes.length).fill(0);
-  for(let i=1;i<closes.length;i++){
-    let delta=0,found=0;
-    for(let k=i;k>=1 && found<N;k--){
-      const a=closes[k], b=closes[k-1];
-      if(isNaN(a)||isNaN(b)) continue;
-      delta+=(a-b); found++;
+    function updateTrialHint(){
+      const plan = $("planSelect").value;
+      const t = PRICE_MAP[plan]?.trial_days ?? 0;
+      $("trialHint").textContent = t>0 ? `Trial ${t} day(s)` : "No trial";
     }
-    if(found===0) trend[i]=trend[i-1];
-    else if(delta>0) trend[i]=1;
-    else if(delta<0) trend[i]=-1;
-    else trend[i]=trend[i-1];
-  }
 
-  const showEMA = document.getElementById("tgEMA")?.checked ?? false;
-  if(showEMA){
-    const ema20 = ema(closes, 20);
-    ema20Series.setData(bars.map((b,i)=>({time:b.time,value:ema20[i]})).filter(p=>!isNaN(p.value)));
-  }else{
-    ema20Series.setData([]);
-  }
-
-  const showAux = document.getElementById("tgAux")?.checked ?? true;
-  if(showAux){
-    const AUX_PERIOD=5, SMOOTH_2=2;
-    const safeBase = ext.map(v=>isNaN(v)?0:v);
-    const aux1 = ema(safeBase, AUX_PERIOD);
-    const aux2 = ema(aux1.map(v=>isNaN(v)?0:v), SMOOTH_2);
-    const auxPts=[];
-    for(let i=0;i<bars.length;i++){
-      if(isNaN(ext[i]) || isNaN(aux2[i])) continue;
-      auxPts.push({ time: bars[i].time, value: aux2[i] });
+    // =========================
+    // API calls
+    // =========================
+    async function apiGet(path){
+      const resp = await fetch(`${API_BASE}${path}`, { method:"GET" });
+      const txt = await resp.text();
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,160)}`);
+      try{ return JSON.parse(txt); }catch(_){ return txt; }
     }
-    auxLineSeries.setData(auxPts);
-  }else{
-    auxLineSeries.setData([]);
-  }
 
-  const atr=calcATR(bars,14);
-  const piv=[];
-  const cooldown=8;
-
-  function tryPushPivot(i,type){
-    const bExt=ext[i];
-    if(isNaN(bExt)) return;
-    const last=piv[piv.length-1];
-    const a=atr[i];
-    const atrv=(!isNaN(a)&&a>0)?a:(bars[i].high-bars[i].low);
-    const pad=atrv*0.35;
-    const priceLabel = (type==="B") ? (bars[i].low - pad) : (bars[i].high + pad);
-    const cand={ time:bars[i].time, type, idx:i, extVal:bExt, priceLabel };
-
-    if(!last){ piv.push(cand); return; }
-    if(last.type===type && (cand.idx-last.idx)<=cooldown){
-      const better=(type==="B") ? (cand.extVal < last.extVal) : (cand.extVal > last.extVal);
-      if(better) piv[piv.length-1]=cand;
-      return;
+    async function testHealth(){
+      try{
+        setStatus("Checking API…", true);
+        $("hintText").textContent = "Testing API health…";
+        const data = await apiGet("/health");
+        setStatus("API OK", true);
+        $("hintText").textContent = "API connected · 已连接 API";
+        log(`✅ /health OK: ${typeof data==="string"?data:JSON.stringify(data).slice(0,220)}`);
+      }catch(e){
+        setStatus("API Not Ready", false);
+        $("hintText").textContent = "API not ready · API未就绪";
+        log(`⚠️ /health failed: ${e.message}`);
+      }
     }
-    piv.push(cand);
-  }
 
-  for(let i=2;i<bars.length-2;i++){
-    const a=ext[i-1], b=ext[i], c=ext[i+1];
-    if(isNaN(a)||isNaN(b)||isNaN(c)) continue;
-    if(b<a && b<=c) tryPushPivot(i,"B");
-    if(b>a && b>=c) tryPushPivot(i,"S");
-  }
-
-  let latestSignal=null;
-  if(piv.length){
-    const pv=piv[piv.length-1];
-    const i=pv.idx;
-    const lastClose=bars[bars.length-1].close;
-    const atrNow = (!isNaN(atr[i]) && atr[i]>0) ? atr[i] : (bars[i].high-bars[i].low);
-    const slope = (i>=3 && !isNaN(ext[i]) && !isNaN(ext[i-3])) ? (ext[i]-ext[i-3]) : 0;
-    let conf = 0.65 + clamp(Math.abs(slope)/(atrNow*0.6),0,0.25);
-    conf = clamp(conf, 0.60, 0.92);
-
-    if(pv.type==="B"){
-      const entry = bars[i].low + atrNow*0.10;
-      const stop  = bars[i].low - atrNow*1.10;
-      const t1 = entry + atrNow*1.60;
-      const t2 = entry + atrNow*2.80;
-      const t3 = entry + atrNow*4.20;
-      latestSignal={ side:"B", confidence:conf, signal_price:bars[i].low, entry_price:entry,
-        risk:{ entry, stop, targets:[t1,t2,t3] } };
-    }else{
-      const entry = bars[i].high - atrNow*0.10;
-      const stop  = bars[i].high + atrNow*1.10;
-      const t1 = entry - atrNow*1.60;
-      const t2 = entry - atrNow*2.80;
-      const t3 = entry - atrNow*4.20;
-      latestSignal={ side:"S", confidence:conf, signal_price:bars[i].high, entry_price:entry,
-        risk:{ entry, stop, targets:[t1,t2,t3] } };
+    async function showRoutes(){
+      try{
+        setStatus("Loading routes…", true);
+        const data = await apiGet("/routes");
+        setStatus("Routes OK", true);
+        log(`✅ /routes: ${JSON.stringify(data).slice(0,500)}...`);
+      }catch(e){
+        setStatus("Routes failed", false);
+        log(`❌ /routes failed: ${e.message}`);
+      }
     }
-  }
 
-  const box=document.getElementById("signals");
-  box.innerHTML="";
-  if(latestSignal){
-    const div=document.createElement("div");
-    div.className="signal latest "+(latestSignal.side==="S"?"sell":"");
-    const sideEN=latestSignal.side==="B"?"BUY":"SELL";
-    const sideZH=latestSignal.side==="B"?"买入":"卖出";
-    div.innerHTML=`<b>${sideEN} · ${sideZH}</b> @ ${fmt(latestSignal.signal_price)}<br/>
-      <span class="smallTxt">Entry · 入场: ${fmt(latestSignal.entry_price)} · Confidence · 强度: ${Math.round(latestSignal.confidence*100)}%</span>`;
-    box.appendChild(div);
-  }else{
-    box.innerHTML="<div class='smallTxt'>No recent signal · 暂无最新信号</div>";
-  }
+    async function subscribe(){
+      const user_id = ($("userId").value || "").trim();
+      const email = ($("email").value || "").trim();
+      const plan = $("planSelect").value;
 
-  const pulse=calcMarketPulse(latestSignal);
-  document.getElementById("pulseCircle").innerText = latestSignal ? pulse.value : "--";
-  document.getElementById("pulseLabel").innerText = latestSignal ? `Market Pulse · 市场情绪: ${pulse.label}` : "Loading… / 加载中…";
-  updatePulseGauge(latestSignal ? pulse.value : 0);
+      if(!user_id){
+        alert("User ID 必填（用于把 Stripe 订阅绑定到你的系统用户）。\n\n请先填写 User ID。");
+        $("userId").focus();
+        return;
+      }
 
-  const risk=latestSignal?.risk || null;
-  document.getElementById("riskEntry").innerText = risk ? fmt(risk.entry) : "--";
-  document.getElementById("riskStop").innerText = risk ? fmt(risk.stop) : "--";
-  document.getElementById("riskTargets").innerText = risk ? risk.targets.map(fmt).join(", ") : "--";
-  document.getElementById("riskConf").innerText = latestSignal ? Math.round(latestSignal.confidence*100)+"%" : "--";
-  document.getElementById("riskWR").innerText = "72%";
+      const { price_id, trial_days } = PRICE_MAP[plan] || {};
+      if(!price_id){
+        alert("Plan mapping missing. 请检查 PRICE_MAP 配置。");
+        return;
+      }
 
-  clearRiskLines();
-  if(risk){
-    addRiskLine(risk.entry,"Entry · 入场",GREEN);
-    addRiskLine(risk.stop,"Stop · 止损",RED);
-    risk.targets.forEach((p,i)=>addRiskLine(p,`T${i+1} · 目标${i+1}`,BLUE));
-  }
+      try{
+        setStatus("Creating checkout…", true);
+        log(`➡️ POST /billing/checkout user_id=${user_id} plan=${plan} price_id=${price_id} trial=${trial_days}`);
 
-  const last=bars[bars.length-1];
-  document.getElementById("price").innerText = `${currentSymbol} · ${fmt(last.close)}`;
+        const resp = await fetch(`${API_BASE}/billing/checkout`, {
+          method:"POST",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify({ user_id, email: email || undefined, price_id })
+        });
 
-  const oPts=[];
-  for(let i=0;i<bars.length;i++){
-    const v=ext[i];
-    if(isNaN(v)) continue;
-    const tr=(trend[i]===0?(i>0?trend[i-1]:1):trend[i]);
-    oPts.push({ time: bars[i].time, value: v, trend: tr>=0?1:-1 });
-  }
-  overlayState.points=oPts;
-  overlayState.pivots=piv.map(pv=>({ time:pv.time, type:pv.type, priceLabel:pv.priceLabel }));
+        const txt = await resp.text();
+        if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,200)}`);
 
-  requestAnimationFrame(()=>resizeOverlay());
-}
+        let data = null;
+        try{ data = JSON.parse(txt); }catch(_){ data = { raw: txt }; }
 
-/* =========================
-   Reload
-========================= */
-async function reload(){
-  const symbol=(document.getElementById("symbol").value||"BTCUSDT").trim().toUpperCase();
-  const tf=document.getElementById("tf").value;
-  currentSymbol=symbol;
-  currentTf=tf;
-  document.getElementById("signals").innerHTML="Connecting to Binance... / 连接Binance中...";
-  setHint("Loading Binance data · 加载Binance数据中...");
-  await loadHistoricalData(symbol, tf);
-  connectWebSocket(symbol, tf);
-}
+        if(!data || !data.checkout_url){
+          throw new Error("No checkout_url returned");
+        }
 
-/* toggle listeners */
-document.getElementById("tgEMA").addEventListener("change", ()=>{ if(barsStore?.length) processData(barsStore); });
-document.getElementById("tgAux").addEventListener("change", ()=>{ if(barsStore?.length) processData(barsStore); });
+        setStatus("Redirecting to Stripe…", true);
+        log(`✅ checkout_url received. Redirecting...`);
+        window.location.href = data.checkout_url;
 
-/* init */
-resizeOverlay();
-updatePulseGauge(0);
-reload();
-</script>
+      }catch(e){
+        setStatus("Network/API error", false);
+        log(`❌ subscribe failed: ${e.message}`);
+        alert("订阅失败：网络错误/后端未联通或接口报错。\n\n请看右下日志（Diagnostics）。\n\n错误：\n" + e.message);
+      }
+    }
+
+    // =========================
+    // Utilities
+    // =========================
+    async function copyShareLink(){
+      const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
+      const tf = $("tf").value;
+      const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+      try{
+        await navigator.clipboard.writeText(url);
+        log("✅ Share link copied: " + url);
+        alert("已复制分享链接：\n" + url);
+      }catch(e){
+        log("⚠️ Clipboard failed. " + e.message);
+        prompt("复制失败，请手动复制：", url);
+      }
+    }
+
+    function exportPNG(){
+      try{
+        if(!chart || typeof chart.takeScreenshot !== "function"){
+          alert("当前图表版本不支持 takeScreenshot。");
+          return;
+        }
+        const canvas = chart.takeScreenshot();
+        const a = document.createElement("a");
+        a.href = canvas.toDataURL("image/png");
+        const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
+        const tf = $("tf").value;
+        a.download = `DarriusAI_${sym}_${tf}.png`;
+        a.click();
+        log("✅ Export PNG done.");
+      }catch(e){
+        log("❌ Export failed: " + e.message);
+        alert("导出失败：" + e.message);
+      }
+    }
+
+    function load(){
+      const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
+      const tf = $("tf").value;
+
+      $("symText").textContent = sym;
+      $("hintText").textContent = "Loading… / 加载中（演示数据）";
+
+      // For now we keep demo data; later connect to your backend feed.
+      const bars = genDemoCandles(220);
+      candle.setData(bars);
+      ema.setData(calcEMA(bars, 20));
+      aux.setData(calcEMA(bars, 50));
+      applyToggles();
+
+      const last = bars[bars.length-1];
+      $("priceText").textContent = last.close.toFixed(2);
+
+      // Update left panel demo risk based on last price
+      $("riskEntry").textContent = (last.close*0.985).toFixed(2);
+      $("riskStop").textContent  = (last.close*0.970).toFixed(2);
+      $("riskTargets").textContent = [(last.close*1.01).toFixed(2),(last.close*1.02).toFixed(2),(last.close*1.035).toFixed(2)].join(", ");
+      $("riskConf").textContent = "92%";
+      $("riskWR").textContent = "72%";
+
+      setSignal(Math.random()>0.5?"BUY":"SELL", last.close.toFixed(2), tf);
+      log(`✅ Loaded (demo): symbol=${sym} tf=${tf}`);
+      $("hintText").textContent = "Loaded · 已加载（演示数据）";
+    }
+
+    // Boot
+    (function boot(){
+      // URL params
+      const p = new URLSearchParams(location.search);
+      const qsSym = p.get("symbol");
+      const qsTf  = p.get("tf");
+      if(qsSym) $("symbol").value = qsSym.toUpperCase();
+      if(qsTf) $("tf").value = qsTf;
+
+      // trial hint
+      updateTrialHint();
+
+      // init chart
+      initChart();
+
+      // listeners
+      $("tgEMA").addEventListener("change", applyToggles);
+      $("tgAux").addEventListener("change", applyToggles);
+      $("planSelect").addEventListener("change", updateTrialHint);
+
+      $("loadBtn").addEventListener("click", load);
+      $("subscribeBtn").addEventListener("click", subscribe);
+
+      $("healthBtn").addEventListener("click", testHealth);
+      $("routesBtn").addEventListener("click", showRoutes);
+
+      $("copyLinkBtn").addEventListener("click", copyShareLink);
+      $("exportBtn").addEventListener("click", exportPNG);
+
+      // initial toggles
+      applyToggles();
+
+      log("Booting frontend…");
+      log("API_BASE=" + API_BASE);
+      log("Stripe plans loaded: weekly/monthly/quarterly/yearly");
+    })();
+  </script>
 </body>
 </html>
