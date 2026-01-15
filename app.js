@@ -3,8 +3,8 @@
 // Step 2: Frontend align with Stripe LIVE price_id
 // ===============================
 
-// ✅ API base（统一到 api.darrius.ai）
-const API_BASE = "https://api.darrius.ai";
+// ✅ API base（统一到 https://darrius-api.onrender.com）
+const API_BASE = "https://darrius-api.onrender.com";
 
 // ✅ Stripe Plans (LIVE price_id) - provided by you
 const PLANS = [
