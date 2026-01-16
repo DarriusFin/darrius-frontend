@@ -12,27 +12,35 @@
     :root{
       --bg:#0B0F17;
       --bg2:#0A1220;
+
       --panel:#121A28;
       --panel2:#0F1726;
+
       --border:rgba(255,255,255,.08);
       --border2:rgba(255,255,255,.10);
+
       --text:#EAF0F7;
       --muted:#A2B0C2;
-      --brand1:#2BE2A6;
-      --brand2:#4CC2FF;
+
+      --brand1:#2BE2A6; /* green/teal */
+      --brand2:#4CC2FF; /* blue */
       --warn:#FFB86C;
       --danger:#FF5A5A;
+
       --shadow: 0 18px 45px rgba(0,0,0,.40);
       --shadow2: 0 10px 25px rgba(0,0,0,.28);
+
       --r12:12px;
       --r14:14px;
       --r18:18px;
+
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
       --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
     }
 
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
+
     body{
       margin:0;
       color:var(--text);
@@ -362,7 +370,7 @@
     #leftDisclaimer .mut{ color: rgba(234,240,247,.62); }
 
     /* ===== Center Chart ===== */
-    #chartPanel .panelBody{ padding:0; display:flex; flex-direction:column; min-height:0; }
+    #chartPanel .panelBody{ padding:0; }
     #chartTop{
       padding:10px 14px;
       display:flex;
@@ -371,7 +379,6 @@
       border-bottom:1px solid rgba(255,255,255,.06);
       background: rgba(0,0,0,.14);
       gap:12px;
-      flex:0 0 auto;
     }
     #priceLine{
       display:flex;
@@ -424,7 +431,7 @@
     #chartWrap{
       position:relative;
       width:100%;
-      flex:1 1 auto;
+      height: calc(100vh - 78px - 16px - 16px - 52px);
       min-height:420px;
     }
     #chart{
@@ -433,10 +440,11 @@
       height:100%;
     }
 
+    /* Overlay for BIG glowing B/S */
     #sigOverlay{
       position:absolute; inset:0;
       pointer-events:none;
-      z-index:5;
+      z-index:20;
     }
     .sigMark{
       position:absolute;
@@ -477,15 +485,36 @@
     }
     .label b{ color: var(--text); }
 
+    /* FIX #2/#3: make selects dark (including dropdown options) */
     input, select{
       width:100%;
-      background: rgba(0,0,0,.18);
+      background: rgba(0,0,0,.24);
       border:1px solid rgba(255,255,255,.10);
       color: var(--text);
       padding:10px 10px;
       border-radius: var(--r12);
       outline:none;
       font-size:13px;
+    }
+    select{
+      appearance:none;
+      -webkit-appearance:none;
+      -moz-appearance:none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, rgba(234,240,247,.9) 50%),
+        linear-gradient(135deg, rgba(234,240,247,.9) 50%, transparent 50%),
+        linear-gradient(to right, transparent, transparent);
+      background-position:
+        calc(100% - 18px) calc(1em + 2px),
+        calc(100% - 13px) calc(1em + 2px),
+        0 0;
+      background-size:5px 5px, 5px 5px, 100% 100%;
+      background-repeat:no-repeat;
+      padding-right:34px;
+    }
+    select option{
+      background:#0B0F17;
+      color:var(--text);
     }
     input::placeholder{ color: rgba(162,176,194,.80); }
     input:focus, select:focus{
@@ -539,74 +568,7 @@
     }
     .note b{ color: var(--text); }
 
-    .hr{
-      height:1px;
-      background: rgba(255,255,255,.06);
-      margin:12px 0;
-    }
-
-    /* ===== Subscription (compact) ===== */
-    .subHero{
-      border-radius: var(--r14);
-      padding:10px 12px;
-      background: linear-gradient(180deg, rgba(43,226,166,.14), rgba(76,194,255,.10));
-      border:1px solid rgba(255,255,255,.10);
-      margin-bottom:10px;
-    }
-    .subHeroTop{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:10px;
-      margin-bottom:6px;
-    }
-    .subHeroTitle{
-      font-weight:950;
-      letter-spacing:.2px;
-    }
-    .subHeroTitle .accent{
-      background: var(--gradBrand);
-      -webkit-background-clip:text;
-      -webkit-text-fill-color:transparent;
-    }
-    .subHeroMeta{
-      color: rgba(234,240,247,.75);
-      font-size:12px;
-      line-height:1.35;
-      margin-top:4px;
-    }
-    .badge{
-      font-size:11px;
-      padding:4px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.16);
-      white-space:nowrap;
-      color: rgba(234,240,247,.88);
-    }
-    .badge.secure{
-      border-color: rgba(76,194,255,.28);
-      background: rgba(76,194,255,.10);
-    }
-
-    .subHintRow{
-      display:flex;
-      gap:10px;
-      align-items:center;
-      justify-content:space-between;
-      font-size:12px;
-      color: var(--muted);
-      margin-top:6px;
-      flex-wrap:wrap;
-    }
-    .subHintRow .trial{
-      padding:4px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.05);
-      color: rgba(234,240,247,.90);
-    }
-
+    /* ===== Diagnostics hidden by default (Admin only) ===== */
     .hidden{ display:none !important; }
 
     #logBox{
@@ -624,16 +586,20 @@
 
     @media (max-width: 1180px){
       body{ overflow:auto; }
-      #main{ height:auto; grid-template-columns: 1fr; }
+      #main{
+        height:auto;
+        grid-template-columns: 1fr;
+      }
+      #chartWrap{ height: 560px; }
       #brand{ min-width:0; }
       #topRight{ min-width:0; }
       #tfQuick{ justify-content:flex-start; }
-      #chartWrap{ height: 560px; }
     }
   </style>
 </head>
 
 <body>
+  <!-- Header -->
   <div id="topbar">
     <div id="brand">
       <div class="logo"></div>
@@ -680,8 +646,11 @@
                 <span>Neutral</span><b id="neuPct">—</b>
                 <span>Net Inflow</span><b id="netInflow" style="color:var(--brand1)">—</b>
               </div>
+
+              <!-- FIX #5: remove “future access” sentence, and enforce English first -->
               <div class="small" style="margin-top:10px">
-                说明：Market Pulse 为演示版动量模型。未来接入真实情绪/资金流/新闻因子后，可作为“可选过滤项”增强信号可靠性。
+                <b>Note:</b> Market Pulse is a demo momentum model, intended as an optional filter for signal interpretation.<br/>
+                <b>说明：</b>Market Pulse 为演示版动量模型，可作为信号解读的可选过滤项。
               </div>
             </div>
           </div>
@@ -696,16 +665,16 @@
             <span>Confidence · 强度</span><b id="riskConf">—</b>
             <span>Backtest WinRate · 回测胜率</span><b id="riskWR">—</b>
           </div>
-          <div class="small" style="margin-top:10px">
-            注：当前 Demo 数据可展示计算结构；接入实盘数据源后将自动以实盘 OHLC 计算风控参数。
-          </div>
+
+          <!-- FIX #6: delete the extra note block (removed) -->
         </div>
 
         <div class="signalBox">
           <div class="signal neutral" id="signalRow">
             <div>
               <div class="side" id="signalSide">Waiting…</div>
-              <div class="meta" id="signalMeta">等待数据/或等待拐点确认…</div>
+              <!-- FIX #7: remove strategy details + English first -->
+              <div class="meta" id="signalMeta">Waiting for confirmation…<br/>等待确认…</div>
             </div>
             <div style="text-align:right">
               <div style="font-weight:950" id="signalPx">—</div>
@@ -714,25 +683,35 @@
           </div>
         </div>
 
+        <!-- Affiliate (no commission leakage) -->
         <div class="card" id="affiliateCard" style="margin-top:12px">
           <div class="cardTitle"><b>Affiliate · 推荐人</b><span class="small">入口</span></div>
           <button class="btnGhost" id="affiliateBtn">Affiliate / 推荐入口</button>
           <div class="note" style="margin-top:10px">
-            说明：推荐计划将支持个人/机构、美国/非美身份。
-            后续注册时完成电子签署（W-9/1099 或 W-8 系列）与合作协议；返佣比例与结算规则仅在后台与合同中呈现，不在前端公开展示。
+            <b>Note:</b> Commission terms are disclosed only in the dashboard and agreement (not on the public front-end).<br/>
+            <b>说明：</b>返佣比例与结算规则仅在后台与合同中呈现，不在前端公开展示。
           </div>
         </div>
 
+        <!-- Compliance Disclaimer -->
         <div id="leftDisclaimer">
-          <div><b>English:</b> Educational & informational use only. Not investment advice. No offer or solicitation to buy/sell any security, futures, FX, crypto, or other financial instrument. Signals are algorithmic estimates and may be inaccurate, delayed, or incomplete. Past performance is not indicative of future results. You are solely responsible for your trading decisions and risk.</div>
-          <div style="margin-top:8px"><b>中文：</b> 本系统仅用于教学与信息展示，不构成任何投资建议、要约或招揽。算法信号可能存在误差、延迟或不完整；历史表现不代表未来收益。任何交易决策与风险均由用户自行承担。</div>
+          <!-- FIX #4: “Informational use only” + Chinese wording updated -->
+          <div>
+            <b>English:</b> Informational use only. Not investment advice. No offer or solicitation to buy/sell any security, futures, FX, crypto, or other financial instrument.
+            Signals are algorithmic estimates and may be inaccurate, delayed, or incomplete. Past performance is not indicative of future results. You are solely responsible for your trading decisions and risk.
+          </div>
+          <div style="margin-top:8px">
+            <b>中文：</b> 本系统仅用于信息展示，不构成任何投资建议、要约或招揽。算法信号可能存在误差、延迟或不完整；历史表现不代表未来收益。任何交易决策与风险均由用户自行承担。
+          </div>
           <div class="mut" style="margin-top:8px">
-            Links: <a href="https://darrius.ai" target="_blank" rel="noreferrer">darrius.ai</a> ·
+            Links:
+            <a href="https://darrius.ai" target="_blank" rel="noreferrer">darrius.ai</a> ·
             <a href="#" onclick="alert('后续可接：Terms / Privacy / Contact');return false;">Terms</a> ·
             <a href="#" onclick="alert('后续可接：Privacy Policy');return false;">Privacy</a> ·
             <a href="#" onclick="alert('support@darrius.ai');return false;">Support</a>
           </div>
         </div>
+
       </div>
     </div>
 
@@ -770,6 +749,7 @@
       </div>
 
       <div class="panelBody">
+        <!-- Data Source (Reserved for future real data) -->
         <div class="card">
           <div class="cardTitle"><b>Data Source · 数据源</b><span class="small">预留接口</span></div>
           <div class="field">
@@ -780,10 +760,12 @@
             </select>
           </div>
           <div class="note">
-            <b>说明：</b>未来接入实盘数据时，前端不暴露实现细节；仅通过后端安全代理或签名请求获取 OHLC 数据，确保数据合规与接口安全。
+            <b>Note:</b> For live data, requests should go through a secure backend proxy (not exposed on the front-end).<br/>
+            <b>说明：</b>接入实盘数据时建议通过后端安全代理/签名请求获取 OHLC，避免前端暴露关键实现细节。
           </div>
         </div>
 
+        <!-- Market Control -->
         <div class="card">
           <div class="cardTitle"><b>Market · 品种与周期</b><span class="small">Chart</span></div>
 
@@ -819,6 +801,7 @@
             </label>
           </div>
 
+          <!-- Admin-only internal params (hidden to customers) -->
           <div class="row2 hidden" id="paramRow">
             <div class="field" style="margin:0">
               <div class="label"><span>EMA (internal)</span><span class="small" id="emaShow">—</span></div>
@@ -831,29 +814,23 @@
           </div>
 
           <div class="note" style="margin-top:8px">
-            <b>说明：</b>EMA/AUX 参数为内部核心策略要素，对客户隐藏；系统会按周期自动适配，以提高拐点敏感度与一致性。
+            <b>Note:</b> EMA/AUX parameters are internal and hidden from end users.<br/>
+            <b>说明：</b>EMA/AUX 参数为内部策略要素，对客户隐藏；系统会按周期自动适配。
           </div>
         </div>
 
-        <!-- Subscription -->
-        <div class="subHero">
-          <div class="subHeroTop">
-            <div>
-              <div class="subHeroTitle"><span class="accent">Subscription</span> · 订阅开通</div>
-              <div class="subHeroMeta">
-                套餐从后端 <code>/billing/prices</code> 拉取（唯一真相）。若后端异常，将自动降级到本地 4 套餐兜底，保证用户端永不空白。
-              </div>
-            </div>
-            <div class="badge secure">Stripe Secure</div>
+        <!-- FIX #8: Subscription + Start/Manage in ONE card; remove Stripe/API text; keep trial sentence (English first) -->
+        <div class="card">
+          <div class="cardTitle">
+            <b>Subscription · 订阅开通</b>
+            <span class="small" id="planStatus">从后端拉取…</span>
           </div>
 
-          <div class="subHintRow">
-            <div id="subHintText">试用需绑定信用卡；到期未付费会自动取消权限。</div>
-            <div class="trial" id="trialHint">Trial</div>
+          <div class="note" style="margin-top:-2px;margin-bottom:10px">
+            <b>Note:</b> Trial requires a valid card. If payment is not completed when the trial ends, access will be disabled automatically.<br/>
+            <b>说明：</b>试用需绑定信用卡；到期未付费会自动取消权限。
           </div>
-        </div>
 
-        <div class="card" style="margin-top:-2px">
           <div class="field">
             <div class="label"><span><b>User ID</b> · 用户ID</span><span class="small">（必填）</span></div>
             <input id="userId" placeholder="例如：user_123 / 你的系统用户ID"/>
@@ -865,37 +842,41 @@
           </div>
 
           <div class="field">
-            <div class="label"><span>Plan · 套餐</span><span class="small" id="planStatus">从后端拉取…</span></div>
+            <div class="label"><span>Plan · 套餐</span><span class="small">—</span></div>
             <select id="planSelect">
               <option value="">Loading…</option>
             </select>
           </div>
 
+          <!-- hidden override (admin only) -->
           <div class="field hidden" id="priceOverrideRow">
-            <div class="label"><span>Price ID Override</span><span class="small">（Admin兜底）</span></div>
+            <div class="label"><span>Price ID Override</span><span class="small">（兜底）</span></div>
             <input id="priceOverride" placeholder="price_xxx（通常无需填）"/>
           </div>
 
           <div class="row2" style="margin-top:0">
             <button class="btn" id="subscribeBtn" disabled>Start · 开通</button>
-            <button class="btnGhost" id="manageBtn" disabled title="后端尚未提供 Portal 接口">Manage · 管理</button>
+            <button class="btnGhost" id="manageBtn" disabled>Manage · 管理</button>
           </div>
 
           <div class="note" style="margin-top:10px">
-            <b>Subscription Status：</b><span id="subStatusText" style="margin-left:6px;color:rgba(234,240,247,.88)">Unverified</span>
+            <b>Subscription Status：</b><span id="subStatusText" style="margin-left:6px;color:rgba(234,240,247,.88)">Unknown</span>
           </div>
         </div>
 
+        <!-- Share & Export -->
         <div class="card">
           <div class="cardTitle"><b>Share & Export · 分享与导出</b><span class="small">Utilities</span></div>
           <button class="btnGhost" id="copyLinkBtn">Copy Share Link · 复制分享链接</button>
           <div style="height:10px"></div>
-          <button class="btnGhost" id="exportBtn">Export PNG · 导出图片（图表截图）</button>
+          <button class="btnGhost" id="exportBtn">Export PNG · 导出图片（含图表）</button>
           <div class="note" style="margin-top:10px">
-            注：导出依赖 lightweight-charts 的截图能力；若你要“包含 DOM 覆盖层(B/S大字)”的整页导出，建议后续用 html2canvas 或后端渲染。
+            <b>Note:</b> Export depends on browser canvas support. For maximum stability, move export to backend rendering.<br/>
+            <b>说明：</b>导出依赖浏览器对 canvas 截图支持；若受限，可改为后端渲染导出（更稳定）。
           </div>
         </div>
 
+        <!-- Diagnostics (Admin only) -->
         <div class="card hidden" id="diagCard">
           <div class="cardTitle"><b>Diagnostics · 诊断</b><span class="small">Admin only</span></div>
           <div class="row2" style="margin-top:0">
@@ -930,25 +911,26 @@
       const box = $("logBox");
       const t = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
       const old = (box.textContent || "").split("\n");
-      const clipped = old.slice(Math.max(0, old.length - 180)).join("\n");
+      const clipped = old.slice(Math.max(0, old.length - 160)).join("\n");
       box.textContent = clipped + (clipped ? "\n" : "") + t;
       box.scrollTop = box.scrollHeight;
       console.log("[DarriusAI]", msg);
     }
 
+    /***************
+     * Admin Mode
+     ***************/
     function isAdmin(){
       const p = new URLSearchParams(location.search);
       return p.get("admin")==="1";
     }
-
-    function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
 
     /***************
      * Chart + Indicators
      ***************/
     let chart=null, candle=null, ema=null, aux=null;
     let CURRENT_BARS = [];
-    let CURRENT_SIGS = [];
+    let CURRENT_SIGS = []; // [{time, price, side:'B'|'S'}]
 
     const TF_PARAMS = {
       "5m":  { ema: 8,  aux: 20, cooldown: 10 },
@@ -975,13 +957,15 @@
       let price = 67000;
       const arr = [];
       for(let i=0;i<n;i++){
-        const wave1 = Math.sin(i/18)*160;
-        const wave2 = Math.sin(i/46)*320;
+        // multi-wave + moderate noise (ensure enough crosses)
+        const wave1 = Math.sin(i/14)*220;
+        const wave2 = Math.sin(i/33)*420;
+        const wave3 = Math.sin(i/85)*700;
         const noise = (Math.random()-0.5)*260;
-        const drift = Math.sin(i/120)*120;
+        const drift = Math.sin(i/170)*160;
 
         const open = price;
-        const close = open + wave1 + wave2 + drift + noise;
+        const close = open + wave1 + wave2 + wave3 + drift + noise;
         const high = Math.max(open, close) + Math.random()*220;
         const low  = Math.min(open, close) - Math.random()*220;
         price = close;
@@ -1013,53 +997,53 @@
 
     /***************
      * Core Signal Engine
-     * B/S: cross + EMA slope flip + cooldown
-     * Mark on CONFIRM candle
+     * Rule: EMA vs AUX cross => pending, confirm on next bar with EMA slope direction (to reduce noise)
+     * Mark on the CONFIRM candle.
      ***************/
-    function detectCrossSlopeSignals(bars, emaFast, auxSlow, cooldownBars){
+    function detectCrossConfirmSignals(bars, emaFast, auxSlow, cooldownBars){
       const sigs = [];
-      let pending = null;
       let lastSigIdx = -1e9;
+      let pending = null; // {side:'B'|'S', idxCross:number}
 
       for(let i=2; i<bars.length; i++){
         const diffPrev = (emaFast[i-1]?.value ?? bars[i-1].close) - (auxSlow[i-1]?.value ?? bars[i-1].close);
         const diffNow  = (emaFast[i]?.value ?? bars[i].close) - (auxSlow[i]?.value ?? bars[i].close);
 
-        const slopePrev = (emaFast[i-1]?.value ?? bars[i-1].close) - (emaFast[i-2]?.value ?? bars[i-2].close);
-        const slopeNow  = (emaFast[i]?.value ?? bars[i].close) - (emaFast[i-1]?.value ?? bars[i-1].close);
+        const crossUp = (diffPrev <= 0 && diffNow > 0);
+        const crossDn = (diffPrev >= 0 && diffNow < 0);
 
         if(!pending){
-          const crossUp = (diffPrev <= 0 && diffNow > 0);
-          const crossDn = (diffPrev >= 0 && diffNow < 0);
-          if(crossUp) pending = { side:'B', idxCross:i };
-          else if(crossDn) pending = { side:'S', idxCross:i };
+          if(crossUp) pending = { side:"B", idxCross:i };
+          if(crossDn) pending = { side:"S", idxCross:i };
         }else{
-          const sinceCross = i - pending.idxCross;
-          if(sinceCross >= 0){
-            if(pending.side==='B'){
-              const flipUp = (slopePrev <= 0 && slopeNow > 0);
-              if(flipUp){
-                if(i - lastSigIdx >= cooldownBars){
-                  sigs.push({ time: bars[i].time, price: bars[i].low, side:'B' });
-                  lastSigIdx = i;
-                }
-                pending = null;
-              }
-            }else{
-              const flipDn = (slopePrev >= 0 && slopeNow < 0);
-              if(flipDn){
-                if(i - lastSigIdx >= cooldownBars){
-                  sigs.push({ time: bars[i].time, price: bars[i].high, side:'S' });
-                  lastSigIdx = i;
-                }
-                pending = null;
-              }
+          // confirm on the next bar after cross
+          if(i === pending.idxCross + 1){
+            const eNow  = emaFast[i]?.value ?? bars[i].close;
+            const ePrev = emaFast[i-1]?.value ?? bars[i-1].close;
+            const slope = eNow - ePrev;
+
+            const ok =
+              (pending.side==="B" && slope >= 0) ||
+              (pending.side==="S" && slope <= 0);
+
+            if(ok && (i - lastSigIdx >= cooldownBars)){
+              sigs.push({
+                time: bars[i].time,
+                price: pending.side==="B" ? bars[i].low : bars[i].high,
+                side: pending.side
+              });
+              lastSigIdx = i;
             }
+            pending = null;
           }
-          if(pending && (i - pending.idxCross) > 80) pending = null;
+
+          // safety timeout
+          if(pending && (i - pending.idxCross) > 5){
+            pending = null;
+          }
         }
       }
-      return sigs.slice(-24);
+      return sigs.slice(-30);
     }
 
     function setChartMarkersFromSignals(sigs){
@@ -1073,6 +1057,9 @@
       candle.setMarkers(markers);
     }
 
+    /***************
+     * Overlay: BIG glowing B/S on chart
+     ***************/
     function repaintOverlay(){
       const ov = $("sigOverlay");
       if(!ov || !chart || !candle) return;
@@ -1080,12 +1067,14 @@
       if(!CURRENT_SIGS || CURRENT_SIGS.length===0) return;
 
       const ts = chart.timeScale();
+
       for(const s of CURRENT_SIGS){
         const x = ts.timeToCoordinate(s.time);
-        if(x==null) continue;
+        if(x===null || x===undefined) continue;
 
+        // candlestick series has priceToCoordinate in v4+
         const y = candle.priceToCoordinate(s.price ?? 0);
-        if(y==null) continue;
+        if(y===null || y===undefined) continue;
 
         const d = document.createElement("div");
         d.className = "sigMark " + (s.side==='B' ? "buy" : "sell");
@@ -1105,6 +1094,8 @@
     /***************
      * Market Pulse & Signal
      ***************/
+    function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+
     function computeSentiment(bars, emaSeries){
       const n = bars.length;
       const last = bars[n-1];
@@ -1138,6 +1129,7 @@
 
     function setPulseUI(s){
       $("pulseScore").textContent = String(s.score);
+
       const deg = Math.round(s.score/100*360);
       $("pulseGaugeMask").style.background =
         `conic-gradient(var(--brand1) 0deg, var(--brand1) ${deg}deg, rgba(255,90,90,.92) ${deg}deg, rgba(255,90,90,.92) 360deg)`;
@@ -1171,7 +1163,7 @@
       if(!lastSig){
         row.classList.add("neutral");
         $("signalSide").textContent = "WAIT · 观望";
-        $("signalMeta").textContent = "等待拐点确认（交叉 + EMA斜率翻转 + cooldown）。";
+        $("signalMeta").innerHTML = "Waiting for confirmation…<br/>等待确认…";
         $("signalPx").textContent = "@ " + lastPrice;
         return;
       }
@@ -1179,22 +1171,23 @@
       if(lastSig.side==="B"){
         row.classList.add("buy");
         $("signalSide").textContent = "BUY · 看多 / 买入";
-        $("signalMeta").textContent = pulseBias==="BEAR"
-          ? "BUY 已确认，但 Market Pulse 偏空（可作为过滤项谨慎）。"
-          : "BUY 已确认（交叉 + EMA斜率翻转）。";
+        $("signalMeta").innerHTML = (pulseBias==="BEAR")
+          ? "BUY confirmed, but Market Pulse is BEARISH (optional filter).<br/>BUY 已确认，但 Market Pulse 偏空（可选过滤项）。"
+          : "BUY confirmed.<br/>BUY 已确认。";
         $("signalPx").textContent = "@ " + lastPrice;
       }else{
         row.classList.add("sell");
         $("signalSide").textContent = "SELL · 看空 / 卖出";
-        $("signalMeta").textContent = pulseBias==="BULL"
-          ? "SELL 已确认，但 Market Pulse 偏多（可作为过滤项谨慎）。"
-          : "SELL 已确认（交叉 + EMA斜率翻转）。";
+        $("signalMeta").innerHTML = (pulseBias==="BULL")
+          ? "SELL confirmed, but Market Pulse is BULLISH (optional filter).<br/>SELL 已确认，但 Market Pulse 偏多（可选过滤项）。"
+          : "SELL confirmed.<br/>SELL 已确认。";
         $("signalPx").textContent = "@ " + lastPrice;
       }
     }
 
     function updateRisk(bars){
       const last = bars[bars.length-1];
+
       const entry = last.close * 0.992;
       const stop  = last.close * 0.978;
       const t1    = last.close * 1.008;
@@ -1209,6 +1202,7 @@
       const vol = Math.abs(last.close - base) / Math.max(1, base) * 100;
       const conf = clamp(92 - vol*1.6, 55, 95);
       $("riskConf").textContent = Math.round(conf) + "%";
+
       $("riskWR").textContent = "72%";
     }
 
@@ -1252,21 +1246,15 @@
       window.addEventListener("resize", fit);
 
       bindOverlayRepaint();
+
       load();
       fit();
     }
 
-    /***************
-     * Data fetch placeholder
-     ***************/
     async function fetchMarketData(symbol, tf){
-      // 未来：dataSource==provider -> 调后端
       return genDemoCandles(260, tf);
     }
 
-    /***************
-     * Load / render
-     ***************/
     async function load(){
       const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
       const tf = $("tf").value;
@@ -1295,7 +1283,8 @@
       aux.setData(auxSeries);
       applyToggles();
 
-      const sigs = detectCrossSlopeSignals(bars, emaSeries, auxSeries, cooldownBars);
+      // FIX #1: ensure B/S always appear (markers + big overlay)
+      const sigs = detectCrossConfirmSignals(bars, emaSeries, auxSeries, cooldownBars);
       CURRENT_SIGS = sigs;
       setChartMarkersFromSignals(sigs);
       repaintOverlay();
@@ -1311,17 +1300,13 @@
 
       updateRisk(bars);
 
-      $("hintText").textContent = `Loaded · 已加载（B/S=交叉+斜率翻转+cooldown；TF=${tf}）`;
-      setStatus("Ready", true);
+      $("hintText").textContent = `Loaded · 已加载（TF=${tf} · sigs=${sigs.length}）`;
+      setStatus("API OK", true);
 
       log(`✅ load: ${sym} ${tf} ema=${emaP} aux=${auxP} cooldown=${cooldownBars} sigs=${sigs.length} bias=${s.bias} score=${s.score}`);
-
       syncTfQuick(tf);
     }
 
-    /***************
-     * API helpers
-     ***************/
     async function apiGet(path){
       const resp = await fetch(`${API_BASE}${path}`, { method:"GET" });
       const txt = await resp.text();
@@ -1341,18 +1326,10 @@
     }
 
     /***************
-     * Plans: Source of truth = /billing/prices
+     * Billing / Plans
      ***************/
     let PLANS = []; // {key,label,price_id,trial_days}
-
     function setPlanStatus(t){ $("planStatus").textContent = t; }
-
-    function updateTrialHint(){
-      const key = $("planSelect").value;
-      const p = PLANS.find(x=>x.key===key);
-      const t = p ? (p.trial_days||0) : 0;
-      $("trialHint").textContent = t>0 ? `Trial ${t} day(s)` : "No Trial";
-    }
 
     function populatePlans(plans){
       PLANS = plans.slice();
@@ -1366,104 +1343,117 @@
       }
       setPlanStatus(`已加载 ${PLANS.length} 个计划`);
       $("subscribeBtn").disabled = (PLANS.length===0);
-      updateTrialHint();
     }
 
     function getLocalFallbackPlans(){
-      // 你口头确认的 4 套餐价格（永不空）
       return [
-        { key:"weekly",    label:"Weekly · $4.90",     price_id:"", trial_days:0 },
-        { key:"monthly",   label:"Monthly · $19.90",   price_id:"", trial_days:1 },
-        { key:"quarterly", label:"Quarterly · $49.90", price_id:"", trial_days:3 },
-        { key:"yearly",    label:"Yearly · $189",      price_id:"", trial_days:5 },
+        { key:"weekly",    label:"Weekly · $4.90",     price_id:"price_1SpJMmR84UMUVSTg0T7xfm6r", trial_days:0 },
+        { key:"monthly",   label:"Monthly · $19.90",   price_id:"price_1SpbvRR84UMUVSTggbg0SFzi", trial_days:1 },
+        { key:"quarterly", label:"Quarterly · $49.90", price_id:"price_1SpbwYR84UMUVSTgMQpUrE42", trial_days:3 },
+        { key:"yearly",    label:"Yearly · $189",      price_id:"price_1SpbpxR84UMUVSTgapaJDjMX", trial_days:5 },
       ];
-    }
-
-    function normalizeFromBillingPrices(legacy){
-      // 兼容你后端常见结构:
-      // { ok:true, prices:[{price_id,trial_days}], plan_to_price:{weekly:'price_x',...} }
-      const planToPrice = legacy?.plan_to_price || {};
-      const priceToTrial = {};
-      const priceSet = new Set();
-      if(Array.isArray(legacy?.prices)){
-        for(const it of legacy.prices){
-          if(it?.price_id) {
-            priceToTrial[it.price_id] = Number(it.trial_days||0);
-            priceSet.add(it.price_id);
-          }
-        }
-      }
-
-      const candidates = [
-        { key:"weekly",    label:"Weekly · $4.90",     price_id: planToPrice.weekly    || "", trial_days: priceToTrial[planToPrice.weekly]    ?? 0 },
-        { key:"monthly",   label:"Monthly · $19.90",   price_id: planToPrice.monthly   || "", trial_days: priceToTrial[planToPrice.monthly]   ?? 1 },
-        { key:"quarterly", label:"Quarterly · $49.90", price_id: planToPrice.quarterly || "", trial_days: priceToTrial[planToPrice.quarterly] ?? 3 },
-        { key:"yearly",    label:"Yearly · $189",      price_id: planToPrice.yearly    || "", trial_days: priceToTrial[planToPrice.yearly]    ?? 5 },
-      ];
-
-      const valid = candidates.filter(x=>x.key && x.label);
-      return valid;
     }
 
     async function initPlans(){
       try{
         setPlanStatus("从后端拉取…");
-        const legacy = await apiGet("/billing/prices");
-        if(!legacy || legacy.ok!==true){
-          throw new Error("Invalid /billing/prices response");
+        const data = await apiGet("/api/plans");
+        if(!data || data.ok!==true || !Array.isArray(data.plans) || data.plans.length===0){
+          throw new Error("Invalid /api/plans response");
         }
+        const plans = data.plans.map(x=>({
+          key: x.key,
+          label: x.label || x.key,
+          price_id: x.price_id,
+          trial_days: Number(x.trial_days||0)
+        })).filter(x=>x.key && x.price_id);
 
-        const plans = normalizeFromBillingPrices(legacy);
-
-        // 允许 price_id 为空（后端也可能按 plan 识别），但一般会有
+        if(plans.length===0) throw new Error("No valid plans with price_id");
         populatePlans(plans);
 
-        // 如果后端返回的 plan_to_price 不完整，提示降级（但仍可用）
-        const missing = plans.filter(p=>!p.price_id).map(p=>p.key);
-        if(missing.length){
-          setPlanStatus(`已加载（但缺少 price_id: ${missing.join(", ")}）`);
-          setStatus("Plans partial", false);
-          log("⚠️ /billing/prices loaded but some price_id missing: " + missing.join(","));
-        }else{
-          setPlanStatus("已加载 4 个计划（/billing/prices）");
-          setStatus("API OK", true);
-          log("✅ plans loaded from /billing/prices");
-        }
+        setStatus("API OK", true);
+        log("✅ plans loaded from /api/plans");
       }catch(e){
-        // Hard fallback: local plan labels (still stable)
-        const fallback = getLocalFallbackPlans();
-        populatePlans(fallback);
-        setPlanStatus("已加载 4 个计划（local fallback）");
-        setStatus("API Degraded", false);
-        if(isAdmin()) log("❌ initPlans failed: " + e.message + " -> using local fallback");
+        try{
+          const legacy = await apiGet("/billing/prices");
+          if(legacy && legacy.ok===true && Array.isArray(legacy.prices) && legacy.prices.length>0){
+            const planToPrice = legacy.plan_to_price || {};
+            const priceToTrial = {};
+            for(const it of legacy.prices) priceToTrial[it.price_id] = Number(it.trial_days||0);
+
+            const candidates = [
+              { key:"weekly",    label:"Weekly · $4.90",     price_id: planToPrice.weekly    || "", trial_days: priceToTrial[planToPrice.weekly]    || 0 },
+              { key:"monthly",   label:"Monthly · $19.90",   price_id: planToPrice.monthly   || "", trial_days: priceToTrial[planToPrice.monthly]   || 1 },
+              { key:"quarterly", label:"Quarterly · $49.90", price_id: planToPrice.quarterly || "", trial_days: priceToTrial[planToPrice.quarterly] || 3 },
+              { key:"yearly",    label:"Yearly · $189",      price_id: planToPrice.yearly    || "", trial_days: priceToTrial[planToPrice.yearly]    || 5 },
+            ].filter(x=>x.price_id);
+
+            if(candidates.length>=1){
+              populatePlans(candidates);
+              setPlanStatus(`已加载 ${candidates.length} 个计划（legacy fallback）`);
+              log("⚠️ plans loaded from /billing/prices fallback");
+              return;
+            }
+          }
+          throw new Error("Legacy fallback invalid");
+        }catch(_){
+          const fallback = getLocalFallbackPlans();
+          populatePlans(fallback);
+          setPlanStatus("已加载 4 个计划（local fallback）");
+          setStatus("API Degraded", false);
+          if(isAdmin()) log("❌ initPlans: " + e.message + " -> using local fallback");
+        }
       }
     }
 
-    /***************
-     * Subscription (checkout)
-     * Prefer: POST /billing/checkout
-     * Fallback: POST /create-checkout-session
-     ***************/
-    function persistUserInputs(){
+    async function refreshSubscriptionStatus(){
+      const user_id = ($("userId").value || "").trim();
+      if(!user_id){
+        $("subStatusText").textContent = "Unknown";
+        $("manageBtn").disabled = true;
+        return;
+      }
+
       try{
-        sessionStorage.setItem("darrius_user_id", ($("userId").value||"").trim());
-        sessionStorage.setItem("darrius_email", ($("email").value||"").trim());
-      }catch(_){}
+        const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
+        const status = data?.status || "unknown";
+        const has = !!data?.has_access;
+
+        $("subStatusText").textContent = `${status}${has ? " · Access ON" : " · Access OFF"}`;
+        $("manageBtn").disabled = !data?.customer_portal;
+        $("manageBtn").textContent = data?.customer_portal ? "Manage · 管理" : "Manage · (pending)";
+        log(`✅ subscription status: ${JSON.stringify(data).slice(0,220)}`);
+      }catch(e){
+        $("subStatusText").textContent = "Not implemented";
+        $("manageBtn").disabled = true;
+        if(isAdmin()) log("⚠️ status endpoint missing: " + e.message);
+      }
     }
 
-    function restoreUserInputs(){
+    async function openCustomerPortal(){
+      const user_id = ($("userId").value || "").trim();
+      if(!user_id){
+        alert("请先填写 User ID，再打开订阅管理。");
+        return;
+      }
       try{
-        const u = sessionStorage.getItem("darrius_user_id") || "";
-        const e = sessionStorage.getItem("darrius_email") || "";
-        if(u && !$("userId").value) $("userId").value = u;
-        if(e && !$("email").value) $("email").value = e;
-      }catch(_){}
+        const data = await apiPost("/api/billing/portal", { user_id });
+        if(!data || !data.url) throw new Error("No portal url");
+        window.location.href = data.url;
+      }catch(e){
+        alert(
+          "订阅管理（Customer Portal）暂未开通或接口未部署。\n\n" +
+          "后端需要提供：POST /api/billing/portal -> 返回 {url}\n\n" +
+          "错误：\n" + e.message
+        );
+        if(isAdmin()) log("❌ open portal: " + e.message);
+      }
     }
 
     async function subscribe(){
       const user_id = ($("userId").value || "").trim();
       const email = ($("email").value || "").trim();
-      const plan = ($("planSelect").value || "").trim();
+      const key = $("planSelect").value;
       const override = ($("priceOverride")?.value || "").trim();
 
       if(!user_id){
@@ -1472,76 +1462,48 @@
         return;
       }
 
-      persistUserInputs();
+      const plan = key || "";
+      let payload = { user_id, email: email || undefined };
 
-      // payload 设计：优先 plan，其次 price_id（若能拿到）
-      const payload = { user_id, email: email || undefined };
       if(override){
         payload.price_id = override;
       }else{
-        payload.plan = plan || undefined;
+        payload.plan = plan;
         const p = PLANS.find(x=>x.key===plan);
-        if(p?.price_id) payload.price_id = p.price_id;
+        if(p && p.price_id) payload.price_id = p.price_id;
       }
-
-      // 两条路由兜底（按你 /routes）
-      const candidates = ["/billing/checkout", "/create-checkout-session"];
 
       try{
         setStatus("Creating checkout…", true);
-        if(isAdmin()) log(`➡️ checkout payload: ${JSON.stringify(payload)}`);
+        if(isAdmin()) log(`➡️ POST /billing/checkout ${JSON.stringify(payload)}`);
 
-        let lastErr = null;
-        for(const path of candidates){
-          try{
-            const data = await apiPost(path, payload);
-            const url = data?.checkout_url || data?.url; // 兼容不同返回字段
-            if(!url) throw new Error("No checkout url in response");
-            setStatus("Redirecting to Stripe…", true);
-            if(isAdmin()) log(`✅ checkout via ${path} ok -> redirect`);
-            window.location.href = url;
-            return;
-          }catch(e){
-            lastErr = e;
-            if(isAdmin()) log(`⚠️ checkout via ${path} failed: ${e.message}`);
-          }
+        const resp = await fetch(`${API_BASE}/billing/checkout`, {
+          method:"POST",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const txt = await resp.text();
+        if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,260)}`);
+
+        let data = null;
+        try{ data = JSON.parse(txt); }catch(_){ data = { raw: txt }; }
+
+        if(!data || !data.checkout_url){
+          throw new Error("No checkout_url returned");
         }
-        throw lastErr || new Error("All checkout endpoints failed");
+
+        setStatus("Redirecting to Stripe…", true);
+        if(isAdmin()) log("✅ checkout_url received. Redirecting...");
+        window.location.href = data.checkout_url;
+
       }catch(e){
-        setStatus("Checkout failed", false);
-        alert("订阅失败：后端未联通/接口报错/未返回 checkout_url。\n\n错误：\n" + e.message);
+        setStatus("Network/API error", false);
+        if(isAdmin()) log(`❌ subscribe failed: ${e.message}`);
+        alert("订阅失败：网络错误/后端未联通或接口报错。\n\n错误：\n" + e.message);
       }
     }
 
-    /***************
-     * Subscription Status / Portal
-     * 说明：你当前 routes 未暴露 status/portal，因此这里保持“稳定但不误导”
-     ***************/
-    function refreshSubscriptionStatus(){
-      const user_id = ($("userId").value || "").trim();
-      if(!user_id){
-        $("subStatusText").textContent = "Unverified";
-        $("manageBtn").disabled = true;
-        return;
-      }
-      // 当前后端未提供 status endpoint：保持一致展示（不报错，不抖 UI）
-      $("subStatusText").textContent = "Unverified · (backend status endpoint not exposed)";
-      $("manageBtn").disabled = true;
-      $("manageBtn").title = "后端尚未提供 Customer Portal 接口";
-    }
-
-    function openCustomerPortal(){
-      alert(
-        "订阅管理（Customer Portal）当前未启用。\n\n" +
-        "若你希望启用：后端增加一个接口，例如：\n" +
-        "POST /billing/portal  {user_id} -> {url}\n\n" +
-        "前端即可自动放开 Manage 按钮。"
-      );
-    }
-
-    /***************
-     * Admin diagnostics
-     ***************/
     async function testHealth(){
       try{
         setStatus("Checking API…", true);
@@ -1568,9 +1530,6 @@
       }
     }
 
-    /***************
-     * Utilities
-     ***************/
     async function copyShareLink(){
       const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
       const tf = $("tf").value;
@@ -1612,9 +1571,6 @@
       );
     }
 
-    /***************
-     * TF Quick Buttons
-     ***************/
     function syncTfQuick(tf){
       document.querySelectorAll(".tfBtn").forEach(btn=>{
         btn.classList.toggle("active", btn.dataset.tf===tf);
@@ -1632,9 +1588,6 @@
       });
     }
 
-    /***************
-     * Boot
-     ***************/
     (function boot(){
       $("yearNow").textContent = String(new Date().getFullYear());
 
@@ -1645,14 +1598,11 @@
         log("Admin mode enabled (?admin=1)");
       }
 
-      // Query params
       const p = new URLSearchParams(location.search);
       const qsSym = p.get("symbol");
       const qsTf  = p.get("tf");
       if(qsSym) $("symbol").value = qsSym.toUpperCase();
       if(qsTf) $("tf").value = qsTf;
-
-      restoreUserInputs();
 
       bindTfQuick();
       syncTfQuick($("tf").value);
@@ -1664,8 +1614,6 @@
       $("subscribeBtn").addEventListener("click", subscribe);
       $("manageBtn").addEventListener("click", openCustomerPortal);
 
-      $("planSelect").addEventListener("change", updateTrialHint);
-
       $("copyLinkBtn").addEventListener("click", copyShareLink);
       $("exportBtn").addEventListener("click", exportPNG);
 
@@ -1673,14 +1621,7 @@
 
       $("userId").addEventListener("input", ()=>{
         window.clearTimeout(window.__subT);
-        window.__subT = window.setTimeout(()=>{
-          persistUserInputs();
-          refreshSubscriptionStatus();
-        }, 350);
-      });
-      $("email").addEventListener("input", ()=>{
-        window.clearTimeout(window.__mailT);
-        window.__mailT = window.setTimeout(persistUserInputs, 350);
+        window.__subT = window.setTimeout(refreshSubscriptionStatus, 400);
       });
 
       if(isAdmin()){
@@ -1696,3 +1637,4 @@
   </script>
 </body>
 </html>
+
