@@ -22,7 +22,7 @@
       --text:#EAF0F7;
       --muted:#A2B0C2;
 
-      --brand1:#2BE2A6; /* green */
+      --brand1:#2BE2A6; /* green/teal */
       --brand2:#4CC2FF; /* blue */
       --warn:#FFB86C;
       --danger:#FF5A5A;
@@ -72,13 +72,12 @@
       display:flex;
       align-items:center;
       gap:14px;
-      min-width:460px;
+      min-width:420px;
     }
 
-    /* ✅ Logo spinner: green -> blue -> red gradient */
     .logo{
       width:46px;height:46px;border-radius:16px;
-      background: rgba(255,255,255,.02);
+      background: var(--gradBrandSoft);
       border:1px solid rgba(255,255,255,.10);
       box-shadow: 0 14px 30px rgba(0,0,0,.30);
       position:relative;
@@ -87,23 +86,23 @@
     }
     .logo::after{
       content:"";
-      position:absolute; inset:-55%;
+      position:absolute; inset:-65%;
       background: conic-gradient(from 180deg,
-        rgba(41,255,122,0),
-        rgba(41,255,122,.70),
+        rgba(43,226,166,0),
+        rgba(43,226,166,.70),
         rgba(76,194,255,.70),
-        rgba(255,59,59,.70),
-        rgba(41,255,122,0));
-      animation: spin 5.4s linear infinite;
-      filter: saturate(1.15);
+        rgba(255,90,90,.55),
+        rgba(43,226,166,0));
+      animation: spin 6.5s linear infinite;
+      filter: blur(0.2px);
     }
     @keyframes spin{ to{ transform: rotate(360deg);} }
 
     #brandText{ line-height:1.08; }
     #brandLine1{
       font-weight:950;
-      letter-spacing:.2px;
-      font-size:26px;              /* ✅ 更醒目 */
+      letter-spacing:.3px;
+      font-size:24px;
     }
     #brandLine1 .accent{
       background: var(--gradBrand);
@@ -113,15 +112,15 @@
     #brandLine2{
       margin-top:7px;
       color:var(--muted);
-      font-size:14px;              /* ✅ 更清晰 */
+      font-size:13px;
       display:flex;
       gap:10px;
       align-items:center;
       flex-wrap:wrap;
     }
     .chip{
-      font-size:12.5px;
-      padding:6px 11px;
+      font-size:12px;
+      padding:5px 10px;
       border-radius:999px;
       border:1px solid rgba(255,255,255,.10);
       background: rgba(255,255,255,.05);
@@ -277,14 +276,32 @@
     }
     .gauge{
       width:160px;height:160px;border-radius:50%;
-      background: conic-gradient(
-        var(--brand1) 0deg 240deg,
-        var(--danger) 240deg 300deg,
-        rgba(255,255,255,.12) 300deg 360deg
-      );
+      background:
+        conic-gradient(
+          rgba(43,226,166,1) 0deg,
+          rgba(76,194,255,1) 120deg,
+          rgba(255,90,90,.95) 240deg,
+          rgba(43,226,166,1) 360deg
+        );
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
       position:relative;
       flex:0 0 auto;
+      overflow:hidden;
+    }
+    .gauge::before{
+      /* rotating glow ring */
+      content:"";
+      position:absolute; inset:-38%;
+      background: conic-gradient(from 180deg,
+        rgba(43,226,166,0),
+        rgba(43,226,166,.35),
+        rgba(76,194,255,.35),
+        rgba(255,90,90,.28),
+        rgba(43,226,166,0));
+      animation: spin 9s linear infinite;
+      filter: blur(1.2px);
+      opacity:.75;
+      pointer-events:none;
     }
     .gauge::after{
       content:"";
@@ -292,10 +309,19 @@
       border-radius:50%;
       background: rgba(10,15,23,.92);
       border:1px solid rgba(255,255,255,.06);
+      z-index:2;
+    }
+    .gaugeMask{
+      /* shows bull/bear proportion: green for score%, red for rest% */
+      position:absolute; inset:0;
+      border-radius:50%;
+      z-index:1;
+      background: conic-gradient(var(--brand1) 0deg, var(--brand1) 0deg, rgba(255,90,90,.92) 0deg, rgba(255,90,90,.92) 360deg);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
     }
     .gaugeCenter{
       position:absolute; inset:0;
-      z-index:2;
+      z-index:3;
       display:flex;
       align-items:center;
       justify-content:center;
@@ -333,27 +359,17 @@
     .signal .side{ font-weight:950; letter-spacing:.4px; }
     .signal .meta{ margin-top:6px; font-size:12px; color:var(--muted); line-height:1.35; }
 
-    /* ✅ Big BS glow (for left signal display) */
-    .bsBig{
-      font-weight:1000;
-      font-size:20px;
-      letter-spacing:.6px;
-      text-shadow: 0 0 10px currentColor;
-    }
-    .bsBig.buy{ color:#29ff7a; }
-    .bsBig.sell{ color:#ff3b3b; }
-    .bsBig.wait{ color:rgba(234,240,247,.82); }
-
-    /* ===== Left footer disclaimer (moved here) ===== */
+    /* ===== Left footer disclaimer ===== */
     #leftDisclaimer{
       margin-top:12px;
       padding-top:12px;
       border-top:1px solid rgba(255,255,255,.06);
       font-size:11px;
       line-height:1.55;
-      color: rgba(234,240,247,.72);
+      color: rgba(234,240,247,.74);
     }
     #leftDisclaimer b{ color: rgba(234,240,247,.92); }
+    #leftDisclaimer .mut{ color: rgba(234,240,247,.62); }
 
     /* ===== Center Chart ===== */
     #chartPanel .panelBody{ padding:0; }
@@ -364,55 +380,48 @@
       justify-content:space-between;
       border-bottom:1px solid rgba(255,255,255,.06);
       background: rgba(0,0,0,.14);
-      gap:10px;
+      gap:12px;
     }
     #priceLine{
       display:flex;
-      align-items:baseline;
+      align-items:center;
       gap:10px;
       font-weight:950;
-      min-width: 220px;
+      min-width: 260px;
     }
     #priceLine .sym{
-      font-size:16px; /* ✅ BTCUSDT 更大 */
-      color: rgba(234,240,247,.92);
+      font-size:13px;
+      color: var(--muted);
       font-weight:950;
       letter-spacing:.3px;
-    }
-    #priceText{
-      font-size:14px;
-      color: rgba(234,240,247,.82);
-      font-weight:900;
     }
     #hintText{
       font-size:12px;
       color: var(--muted);
-      max-width:40%;
+      max-width:55%;
       overflow:hidden;
       text-overflow:ellipsis;
       white-space:nowrap;
     }
 
-    /* ✅ Timeframe tabs */
-    .tfTabs{
+    /* timeframe quick pills */
+    #tfQuick{
       display:flex;
-      gap:6px;
+      gap:8px;
       align-items:center;
       flex-wrap:wrap;
       justify-content:flex-end;
-      max-width: 42%;
     }
     .tfBtn{
       border:1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.16);
-      color: rgba(234,240,247,.92);
-      font-size:12px;
-      padding:6px 10px;
+      background: rgba(0,0,0,.14);
+      color: rgba(234,240,247,.90);
       border-radius:999px;
+      padding:6px 10px;
+      font-size:12px;
       cursor:pointer;
-      font-weight:900;
-      transition: filter .12s ease, transform .06s ease;
       user-select:none;
+      transition: filter .15s ease, transform .06s ease;
     }
     .tfBtn:hover{ filter: brightness(1.06); }
     .tfBtn:active{ transform: translateY(1px); }
@@ -422,10 +431,48 @@
       background: rgba(76,194,255,.10);
     }
 
-    #chart{
-      height: calc(100vh - 78px - 16px - 16px - 54px);
-      min-height:420px;
+    #chartWrap{
+      position:relative;
       width:100%;
+      height: calc(100vh - 78px - 16px - 16px - 52px);
+      min-height:420px;
+    }
+    #chart{
+      position:absolute; inset:0;
+      width:100%;
+      height:100%;
+    }
+
+    /* Overlay for BIG glowing B/S */
+    #sigOverlay{
+      position:absolute; inset:0;
+      pointer-events:none;
+      z-index:5;
+    }
+    .sigMark{
+      position:absolute;
+      transform: translate(-50%, -50%);
+      font-weight:950;
+      letter-spacing:.5px;
+      font-size:22px;
+      padding:2px 8px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.22);
+      backdrop-filter: blur(2px);
+      box-shadow: 0 10px 24px rgba(0,0,0,.28);
+      white-space:nowrap;
+      opacity: 0.98;
+    }
+    .sigMark.buy{
+      color: rgba(43,226,166,1);
+      text-shadow: 0 0 10px rgba(43,226,166,.45), 0 0 18px rgba(43,226,166,.25);
+      border-color: rgba(43,226,166,.35);
+    }
+    .sigMark.sell{
+      color: rgba(255,90,90,1);
+      text-shadow: 0 0 10px rgba(255,90,90,.45), 0 0 18px rgba(255,90,90,.25);
+      border-color: rgba(255,90,90,.35);
     }
 
     /* ===== Right Controls ===== */
@@ -472,6 +519,7 @@
     }
     .btn:hover{ filter: brightness(1.04); }
     .btn:active{ transform: translateY(1px); }
+    .btn:disabled{ opacity:.55; cursor:not-allowed; }
 
     .btnGhost{
       width:100%;
@@ -486,6 +534,7 @@
     }
     .btnGhost:hover{ filter: brightness(1.05); }
     .btnGhost:active{ transform: translateY(1px); }
+    .btnGhost:disabled{ opacity:.55; cursor:not-allowed; }
 
     .row2{
       display:grid;
@@ -507,20 +556,20 @@
       margin:12px 0;
     }
 
-    /* ===== Subscription ===== */
+    /* ===== Subscription (compact) ===== */
     .subHero{
       border-radius: var(--r14);
-      padding:12px;
+      padding:10px 12px;
       background: linear-gradient(180deg, rgba(43,226,166,.14), rgba(76,194,255,.10));
       border:1px solid rgba(255,255,255,.10);
-      margin-bottom:12px;
+      margin-bottom:10px;
     }
     .subHeroTop{
       display:flex;
       align-items:flex-start;
       justify-content:space-between;
       gap:10px;
-      margin-bottom:8px;
+      margin-bottom:6px;
     }
     .subHeroTitle{
       font-weight:950;
@@ -535,7 +584,7 @@
       color: rgba(234,240,247,.75);
       font-size:12px;
       line-height:1.35;
-      margin-top:5px;
+      margin-top:4px;
     }
     .badge{
       font-size:11px;
@@ -558,7 +607,7 @@
       justify-content:space-between;
       font-size:12px;
       color: var(--muted);
-      margin-top:8px;
+      margin-top:6px;
       flex-wrap:wrap;
     }
     .subHintRow .trial{
@@ -591,11 +640,10 @@
         height:auto;
         grid-template-columns: 1fr;
       }
-      #chart{ height: 560px; }
+      #chartWrap{ height: 560px; }
       #brand{ min-width:0; }
       #topRight{ min-width:0; }
-      #hintText{ max-width: 100%; }
-      .tfTabs{ max-width: 100%; justify-content:flex-start; }
+      #tfQuick{ justify-content:flex-start; }
     }
   </style>
 </head>
@@ -631,10 +679,11 @@
       <div class="panelHeader">
         <div class="h">Market Pulse · 市场情绪 <span class="tag" id="pulseTag">LIVE</span></div>
       </div>
-      <div class="panelBody" id="leftBody">
+      <div class="panelBody">
         <div class="card">
           <div class="gaugeWrap">
             <div class="gauge" id="pulseGauge">
+              <div class="gaugeMask" id="pulseGaugeMask"></div>
               <div class="gaugeCenter">
                 <div class="num" id="pulseScore">—</div>
                 <div class="lbl">Sentiment</div>
@@ -648,7 +697,7 @@
                 <span>Net Inflow</span><b id="netInflow" style="color:var(--brand1)">—</b>
               </div>
               <div class="small" style="margin-top:10px">
-                说明：情绪模块可作为可选过滤项（如与你的 B/S 信号做一致性过滤）。目前演示版以图表动量模拟。
+                说明：Market Pulse 为演示版动量模型。未来接入真实情绪/资金流/新闻因子后，可作为“可选过滤项”增强信号可靠性。
               </div>
             </div>
           </div>
@@ -663,42 +712,46 @@
             <span>Confidence · 强度</span><b id="riskConf">—</b>
             <span>Backtest WinRate · 回测胜率</span><b id="riskWR">—</b>
           </div>
+          <div class="small" style="margin-top:10px">
+            注：当前 Demo 数据可展示计算结构；接入实盘数据源后将自动以实盘 OHLC 计算风控参数。
+          </div>
         </div>
 
         <div class="signalBox">
           <div class="signal neutral" id="signalRow">
             <div>
               <div class="side" id="signalSide">Waiting…</div>
-              <div class="meta" id="signalMeta">等待数据…</div>
+              <div class="meta" id="signalMeta">等待数据/或等待拐点确认…</div>
             </div>
             <div style="text-align:right">
-              <div class="bsBig wait" id="signalPx">—</div>
+              <div style="font-weight:950" id="signalPx">—</div>
               <div class="meta" id="signalTf">TF: —</div>
             </div>
           </div>
         </div>
 
-        <!-- ✅ Affiliate moved to LEFT bottom -->
-        <div class="card" id="affiliateCard" style="margin-top:12px;">
-          <div class="cardTitle"><b>Affiliate · 推荐人</b><span class="small">预留入口</span></div>
-          <button class="btnGhost" id="affiliateBtnLeft">Affiliate / 推荐人入口</button>
+        <!-- Affiliate (no commission leakage) -->
+        <div class="card" id="affiliateCard" style="margin-top:12px">
+          <div class="cardTitle"><b>Affiliate · 推荐人</b><span class="small">入口</span></div>
+          <button class="btnGhost" id="affiliateBtn">Affiliate / 推荐入口</button>
           <div class="note" style="margin-top:10px">
-            预留：未来推荐人（个人/机构、美国/非美）可在此注册并签署电子协议（W-9 / W-8 + 合作条款），
-            并进入后台查看推荐客户与返佣结算（如 20%）。
+            说明：推荐计划将支持个人/机构、美国/非美身份。
+            后续注册时完成电子签署（W-9/1099 或 W-8 系列）与合作协议；返佣比例与结算规则仅在后台与合同中呈现，不在前端公开展示。
           </div>
         </div>
 
-        <!-- Disclaimer moved to left bottom -->
+        <!-- Compliance Disclaimer -->
         <div id="leftDisclaimer">
-          <div><b>English:</b> For educational and informational purposes only. Not investment advice. Trading involves risk.</div>
-          <div style="margin-top:6px"><b>中文：</b> 本系统仅用于教学与信息展示，不构成投资建议。金融市场有风险，请独立决策。</div>
-          <div style="margin-top:6px; opacity:.9">
+          <div><b>English:</b> Educational & informational use only. Not investment advice. No offer or solicitation to buy/sell any security, futures, FX, crypto, or other financial instrument. Signals are algorithmic estimates and may be inaccurate, delayed, or incomplete. Past performance is not indicative of future results. You are solely responsible for your trading decisions and risk.</div>
+          <div style="margin-top:8px"><b>中文：</b> 本系统仅用于教学与信息展示，不构成任何投资建议、要约或招揽。算法信号可能存在误差、延迟或不完整；历史表现不代表未来收益。任何交易决策与风险均由用户自行承担。</div>
+          <div class="mut" style="margin-top:8px">
             Links: <a href="https://darrius.ai" target="_blank" rel="noreferrer">darrius.ai</a> ·
             <a href="#" onclick="alert('后续可接：Terms / Privacy / Contact');return false;">Terms</a> ·
-            <a href="#" onclick="alert('后续可接：Terms / Privacy / Contact');return false;">Privacy</a> ·
-            <a href="#" onclick="alert('后续可接：support@darrius.ai');return false;">Support</a>
+            <a href="#" onclick="alert('后续可接：Privacy Policy');return false;">Privacy</a> ·
+            <a href="#" onclick="alert('support@darrius.ai');return false;">Support</a>
           </div>
         </div>
+
       </div>
     </div>
 
@@ -709,23 +762,23 @@
           <span class="sym" id="symText">—</span>
           <span id="priceText">—</span>
         </div>
-
         <div id="hintText">Loading…</div>
-
-        <!-- ✅ Timeframes (full set) -->
-        <div class="tfTabs" id="tfTabs">
+        <div id="tfQuick">
           <button class="tfBtn" data-tf="5m">5m</button>
           <button class="tfBtn" data-tf="15m">15m</button>
           <button class="tfBtn" data-tf="30m">30m</button>
           <button class="tfBtn" data-tf="1h">1h</button>
           <button class="tfBtn" data-tf="4h">4h</button>
-          <button class="tfBtn active" data-tf="1d">1D</button>
+          <button class="tfBtn" data-tf="1d">1D</button>
           <button class="tfBtn" data-tf="1w">1W</button>
-          <button class="tfBtn" data-tf="1m">1M</button>
+          <button class="tfBtn" data-tf="1M">1M</button>
         </div>
       </div>
       <div class="panelBody">
-        <div id="chart"></div>
+        <div id="chartWrap">
+          <div id="chart"></div>
+          <div id="sigOverlay"></div>
+        </div>
       </div>
     </div>
 
@@ -740,14 +793,14 @@
         <div class="card">
           <div class="cardTitle"><b>Data Source · 数据源</b><span class="small">预留接口</span></div>
           <div class="field">
-            <div class="label"><span>Source · 来源</span><span class="small">未来可接第三方</span></div>
+            <div class="label"><span>Source · 来源</span><span class="small">未来接第三方实盘</span></div>
             <select id="dataSource">
               <option value="demo">Demo (Local)</option>
-              <option value="provider">Provider (Reserved)</option>
+              <option value="provider">3rd-Party Provider (Reserved)</option>
             </select>
           </div>
           <div class="note">
-            <b>说明：</b>此处为预留配置位；生产版可按合规要求隐藏具体供应商信息，仅展示“已连接/未连接”状态。
+            <b>说明：</b>未来接入实盘数据时，前端不暴露实现细节；仅通过后端安全代理或签名请求获取 OHLC 数据，确保数据合规与接口安全。
           </div>
         </div>
 
@@ -761,7 +814,7 @@
           </div>
 
           <div class="field">
-            <div class="label"><span>Timeframe · 周期</span><span class="small">与上方同步</span></div>
+            <div class="label"><span>Timeframe · 周期</span></div>
             <select id="tf">
               <option value="5m">5m · 5分钟</option>
               <option value="15m">15m · 15分钟</option>
@@ -770,7 +823,7 @@
               <option value="4h">4h · 4小时</option>
               <option value="1d" selected>1d · 日线</option>
               <option value="1w">1w · 周线</option>
-              <option value="1m">1m · 月线</option>
+              <option value="1M">1M · 月线</option>
             </select>
           </div>
 
@@ -787,37 +840,37 @@
             </label>
           </div>
 
-          <!-- ✅ Admin-only: show internal periods -->
-          <div class="row2 hidden" id="periodRow">
+          <!-- Admin-only internal params (hidden to customers) -->
+          <div class="row2 hidden" id="paramRow">
             <div class="field" style="margin:0">
-              <div class="label"><span>EMA Period</span><span class="small" id="emaShow">—</span></div>
-              <input id="emaPeriod" type="number" min="3" max="60" value="10"/>
+              <div class="label"><span>EMA (internal)</span><span class="small" id="emaShow">—</span></div>
+              <input id="emaPeriod" type="number" min="3" max="80" value="10"/>
             </div>
             <div class="field" style="margin:0">
-              <div class="label"><span>AUX Period</span><span class="small" id="auxShow">—</span></div>
-              <input id="auxPeriod" type="number" min="5" max="120" value="21"/>
+              <div class="label"><span>AUX (internal)</span><span class="small" id="auxShow">—</span></div>
+              <input id="auxPeriod" type="number" min="5" max="180" value="21"/>
             </div>
           </div>
 
           <div class="note" style="margin-top:8px">
-            <b>说明：</b>EMA/AUX 参数属于系统核心策略信息，默认不对外展示（管理员模式可见）。
+            <b>说明：</b>EMA/AUX 参数为内部核心策略要素，对客户隐藏；系统会按周期自动适配，以提高拐点敏感度与一致性。
           </div>
         </div>
 
-        <!-- Subscription -->
+        <!-- Subscription (compact + portal) -->
         <div class="subHero">
           <div class="subHeroTop">
             <div>
               <div class="subHeroTitle"><span class="accent">Subscription</span> · 订阅开通</div>
               <div class="subHeroMeta">
-                套餐从后端 <code>/api/plans</code> 拉取（唯一真相、永不为空）。已订阅用户可通过 Customer Portal 完成升级/取消/恢复/换卡/发票下载。
+                套餐从后端 <code>/api/plans</code> 拉取（唯一真相），订阅由 Stripe 托管，支持升级/取消/恢复/更新卡/发票。
               </div>
             </div>
             <div class="badge secure">Stripe Secure</div>
           </div>
 
           <div class="subHintRow">
-            <div>试用需绑定信用卡；到期未付费会自动取消权限。</div>
+            <div id="subHintText">试用需绑定信用卡；到期未付费会自动取消权限。</div>
             <div class="trial" id="trialHint">Trial</div>
           </div>
         </div>
@@ -840,25 +893,19 @@
             </select>
           </div>
 
-          <!-- ✅ Admin-only override -->
+          <!-- hidden override (admin only) -->
           <div class="field hidden" id="priceOverrideRow">
-            <div class="label"><span>Price ID Override</span><span class="small">（兜底/管理员）</span></div>
-            <input id="priceOverride" placeholder="如：price_xxx（通常无需填）"/>
-          </div>
-
-          <!-- ✅ Status + Portal -->
-          <div class="card" style="margin:10px 0 10px 0;">
-            <div class="cardTitle"><b>Subscription Status · 状态</b><span class="small" id="subStatusBadge">—</span></div>
-            <div class="small" id="subscriptionStatus">Not loaded</div>
+            <div class="label"><span>Price ID Override</span><span class="small">（兜底）</span></div>
+            <input id="priceOverride" placeholder="price_xxx（通常无需填）"/>
           </div>
 
           <div class="row2" style="margin-top:0">
             <button class="btn" id="subscribeBtn" disabled>Start · 开通</button>
-            <button class="btnGhost" id="manageBtn" style="display:none;">Manage · 管理订阅</button>
+            <button class="btnGhost" id="manageBtn" disabled>Manage · 管理</button>
           </div>
 
           <div class="note" style="margin-top:10px">
-            <b>说明：</b>已订阅/升级/取消/恢复/更新卡/下载发票 → 请使用 <b>Manage</b>（Stripe Customer Portal）。
+            <b>Subscription Status：</b><span id="subStatusText" style="margin-left:6px;color:rgba(234,240,247,.88)">Unknown</span>
           </div>
         </div>
 
@@ -868,6 +915,9 @@
           <button class="btnGhost" id="copyLinkBtn">Copy Share Link · 复制分享链接</button>
           <div style="height:10px"></div>
           <button class="btnGhost" id="exportBtn">Export PNG · 导出图片（含图表）</button>
+          <div class="note" style="margin-top:10px">
+            注：导出依赖浏览器对 canvas 截图支持；若受限，可改为后端渲染导出（更稳定）。
+          </div>
         </div>
 
         <!-- Diagnostics (Admin only) -->
@@ -901,7 +951,7 @@
 
     function log(msg){
       const card = $("diagCard");
-      if(card.classList.contains("hidden")) return; // only log in admin mode
+      if(card.classList.contains("hidden")) return;
       const box = $("logBox");
       const t = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
       const old = (box.textContent || "").split("\n");
@@ -920,65 +970,51 @@
     }
 
     /***************
-     * API helper
-     ***************/
-    async function apiGet(path){
-      const resp = await fetch(`${API_BASE}${path}`, { method:"GET" });
-      const txt = await resp.text();
-      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,180)}`);
-      try{ return JSON.parse(txt); }catch(_){ return txt; }
-    }
-
-    async function apiPost(path, body){
-      const resp = await fetch(`${API_BASE}${path}`, {
-        method:"POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify(body || {})
-      });
-      const txt = await resp.text();
-      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,220)}`);
-      try{ return JSON.parse(txt); }catch(_){ return { raw: txt }; }
-    }
-
-    /***************
      * Chart + Indicators
      ***************/
     let chart=null, candle=null, ema=null, aux=null;
+    let CURRENT_BARS = [];
+    let CURRENT_SIGS = []; // [{time, price, side:'B'|'S'}]
 
-    const INTERNAL = {
-      EMA: 10,      // ✅ 默认对外隐藏（管理员可调）
-      AUX: 21,
-      COOLDOWN: 12,
-      USE_PULSE_FILTER: false, // Market Pulse 作为可选过滤项
+    // Timeframe -> internal default params (more sensitive, but not too noisy)
+    const TF_PARAMS = {
+      "5m":  { ema: 8,  aux: 20, cooldown: 10 },
+      "15m": { ema: 9,  aux: 21, cooldown: 12 },
+      "30m": { ema: 10, aux: 24, cooldown: 14 },
+      "1h":  { ema: 10, aux: 26, cooldown: 16 },
+      "4h":  { ema: 12, aux: 30, cooldown: 18 },
+      "1d":  { ema: 10, aux: 21, cooldown: 14 },
+      "1w":  { ema: 8,  aux: 18, cooldown: 10 },
+      "1M":  { ema: 6,  aux: 14, cooldown: 8  },
     };
 
     function genDemoCandles(n=220, tf="1d"){
-      const now = Math.floor(Date.now()/1000);
-
-      // rough step mapping for demo
+      // Demo candle step (seconds)
       const stepMap = {
-        "5m": 60*5,
-        "15m": 60*15,
-        "30m": 60*30,
-        "1h": 60*60,
-        "4h": 60*60*4,
-        "1d": 60*60*24,
-        "1w": 60*60*24*7,
-        "1m": 60*60*24*30,
+        "5m": 300, "15m": 900, "30m": 1800,
+        "1h": 3600, "4h": 14400, "1d": 86400,
+        "1w": 604800, "1M": 2592000
       };
-      const step = stepMap[tf] || (60*60*24);
+      const step = stepMap[tf] || 86400;
 
+      const now = Math.floor(Date.now()/1000);
       let t = now - n*step;
+
       let price = 67000;
       const arr = [];
       for(let i=0;i<n;i++){
-        const wave = Math.sin(i/18)*160;
-        const noise = (Math.random()-0.5)*300;
+        // Multi-wave trend + noise
+        const wave1 = Math.sin(i/18)*160;
+        const wave2 = Math.sin(i/46)*320;
+        const noise = (Math.random()-0.5)*260;
+        const drift = Math.sin(i/120)*120;
+
         const open = price;
-        const close = open + wave + noise;
-        const high = Math.max(open, close) + Math.random()*250;
-        const low  = Math.min(open, close) - Math.random()*250;
+        const close = open + wave1 + wave2 + drift + noise;
+        const high = Math.max(open, close) + Math.random()*220;
+        const low  = Math.min(open, close) - Math.random()*220;
         price = close;
+
         arr.push({ time:t, open:+open.toFixed(2), high:+high.toFixed(2), low:+low.toFixed(2), close:+close.toFixed(2) });
         t += step;
       }
@@ -998,90 +1034,127 @@
       return out;
     }
 
+    function applyToggles(){
+      if(ema) ema.applyOptions({ visible: !!$("tgEMA").checked });
+      if(aux) aux.applyOptions({ visible: !!$("tgAux").checked });
+      // overlay always visible (core capability)
+      repaintOverlay();
+    }
+
     /***************
-     * ✅ B/S: Cross + EMA slope flip + cooldown
-     * - Mark on confirmation bar (not cross bar)
-     * - Market Pulse as optional filter
+     * Core Signal Engine
+     * B/S: cross + (EMA slope flip) + cooldown
+     * Mark on the CONFIRM candle (not the cross candle)
      ***************/
-    function generateBSSignals(emaSeries, auxSeries, bars, opts={}){
-      const cooldownBars = Number(opts.cooldownBars ?? 12);
-      const usePulseFilter = !!opts.usePulseFilter;
-      const pulseBias = (opts.pulseBias || "NEUTRAL").toUpperCase();
-      const keepN = Number(opts.keepN ?? 18);
+    function detectCrossSlopeSignals(bars, emaFast, auxSlow, cooldownBars){
+      const sigs = [];
+      let pending = null; // {side:'B'|'S', idxCross:number}
+      let lastSigIdx = -1e9;
 
-      const n = Math.min(emaSeries.length, auxSeries.length, bars.length);
-      if(n < 3) return { markers: [], last: null };
+      // helper
+      const sign = (x)=> (x>0?1:(x<0?-1:0));
 
-      let pending = null; // {side:"B"/"S"}
-      let lastSignalIndex = -1e9;
-      const markers = [];
-      let last = null;
+      for(let i=2; i<bars.length; i++){
+        const diffPrev = (emaFast[i-1]?.value ?? bars[i-1].close) - (auxSlow[i-1]?.value ?? bars[i-1].close);
+        const diffNow  = (emaFast[i]?.value ?? bars[i].close) - (auxSlow[i]?.value ?? bars[i].close);
 
-      function slope(i){
-        return emaSeries[i].value - emaSeries[i-1].value;
-      }
+        // slopes for EMA fast
+        const slopePrev = (emaFast[i-1]?.value ?? bars[i-1].close) - (emaFast[i-2]?.value ?? bars[i-2].close);
+        const slopeNow  = (emaFast[i]?.value ?? bars[i].close) - (emaFast[i-1]?.value ?? bars[i-1].close);
 
-      for(let t=1; t<n; t++){
-        const emaPrev = emaSeries[t-1].value, emaNow = emaSeries[t].value;
-        const auxPrev = auxSeries[t-1].value, auxNow = auxSeries[t].value;
-
-        const crossUp = (auxPrev <= emaPrev) && (auxNow > emaNow);
-        const crossDn = (auxPrev >= emaPrev) && (auxNow < emaNow);
-
-        if(crossUp) pending = { side:"B" };
-        else if(crossDn) pending = { side:"S" };
-
-        if(!pending) continue;
-        if(t - lastSignalIndex < cooldownBars) continue;
-
-        const sNow = slope(t);
-        const sPrev = slope(t-1);
-
-        if(pending.side === "B"){
-          let confirmed = (sNow > 0) && (sPrev <= 0); // ✅ EMA slope flip up
-          if(usePulseFilter && pulseBias === "BEAR") confirmed = false;
-
-          if(confirmed){
-            markers.push({
-              time: bars[t].time,
-              position: "belowBar",
-              color: "#29ff7a",
-              shape: "text",
-              text: "B",
-            });
-            lastSignalIndex = t;
-            pending = null;
-            last = { side:"B", time: bars[t].time, price: bars[t].close, index: t };
+        // 1) detect cross => set pending
+        if(!pending){
+          const crossUp = (diffPrev <= 0 && diffNow > 0);
+          const crossDn = (diffPrev >= 0 && diffNow < 0);
+          if(crossUp){
+            pending = { side:'B', idxCross:i };
+          }else if(crossDn){
+            pending = { side:'S', idxCross:i };
           }
         }else{
-          let confirmed = (sNow < 0) && (sPrev >= 0); // ✅ EMA slope flip down
-          if(usePulseFilter && pulseBias === "BULL") confirmed = false;
-
-          if(confirmed){
-            markers.push({
-              time: bars[t].time,
-              position: "aboveBar",
-              color: "#ff3b3b",
-              shape: "text",
-              text: "S",
-            });
-            lastSignalIndex = t;
+          // 2) confirm on slope flip after cross
+          const sinceCross = i - pending.idxCross;
+          if(sinceCross >= 0){
+            if(pending.side==='B'){
+              const flipUp = (slopePrev <= 0 && slopeNow > 0);
+              if(flipUp){
+                // cooldown
+                if(i - lastSigIdx >= cooldownBars){
+                  sigs.push({ time: bars[i].time, price: bars[i].low, side:'B' });
+                  lastSigIdx = i;
+                }
+                pending = null;
+              }
+            }else{
+              const flipDn = (slopePrev >= 0 && slopeNow < 0);
+              if(flipDn){
+                if(i - lastSigIdx >= cooldownBars){
+                  sigs.push({ time: bars[i].time, price: bars[i].high, side:'S' });
+                  lastSigIdx = i;
+                }
+                pending = null;
+              }
+            }
+          }
+          // safety: if too long pending without confirm, drop it (avoid "stuck")
+          if(pending && (i - pending.idxCross) > 80){
             pending = null;
-            last = { side:"S", time: bars[t].time, price: bars[t].close, index: t };
           }
         }
       }
-
-      return { markers: markers.slice(-keepN), last };
+      // keep last N for readability
+      return sigs.slice(-24);
     }
 
-    function applyToggles(){
-      ema.applyOptions({ visible: !!$("tgEMA").checked });
-      aux.applyOptions({ visible: !!$("tgAux").checked });
+    function setChartMarkersFromSignals(sigs){
+      // lightweight-charts markers are kept minimal; BIG B/S is drawn in overlay
+      const markers = sigs.map(s => ({
+        time: s.time,
+        position: s.side==='B' ? "belowBar" : "aboveBar",
+        color: s.side==='B' ? "#2BE2A6" : "#FF5A5A",
+        shape: s.side==='B' ? "arrowUp" : "arrowDown",
+        text: s.side
+      }));
+      candle.setMarkers(markers);
     }
 
     /***************
-     * Market Pulse & Signal (consistent logic)
+     * Overlay: BIG glowing B/S on chart
+     ***************/
+    function repaintOverlay(){
+      const ov = $("sigOverlay");
+      if(!ov || !chart || !candle) return;
+      ov.innerHTML = "";
+
+      if(!CURRENT_SIGS || CURRENT_SIGS.length===0) return;
+
+      // for time->x and price->y coordinate
+      const ts = chart.timeScale();
+
+      for(const s of CURRENT_SIGS){
+        const x = ts.timeToCoordinate(s.time);
+        if(x===null || x===undefined) continue;
+
+        const y = candle.priceToCoordinate(s.side==='B' ? (s.price ?? 0) : (s.price ?? 0));
+        if(y===null || y===undefined) continue;
+
+        const d = document.createElement("div");
+        d.className = "sigMark " + (s.side==='B' ? "buy" : "sell");
+        d.style.left = `${x}px`;
+        d.style.top = `${y + (s.side==='B' ? 14 : -14)}px`;
+        d.textContent = s.side;
+        ov.appendChild(d);
+      }
+    }
+
+    function bindOverlayRepaint(){
+      if(!chart) return;
+      chart.timeScale().subscribeVisibleTimeRangeChange(repaintOverlay);
+      chart.timeScale().subscribeVisibleLogicalRangeChange(repaintOverlay);
+    }
+
+    /***************
+     * Market Pulse & Signal
      ***************/
     function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
 
@@ -1090,12 +1163,13 @@
       const last = bars[n-1];
       const e = emaSeries[emaSeries.length-1]?.value ?? last.close;
 
-      const prevE = emaSeries[emaSeries.length-10]?.value ?? emaSeries[0]?.value ?? e;
+      const prevE = emaSeries[Math.max(0, emaSeries.length-10)]?.value ?? emaSeries[0]?.value ?? e;
       const slope = (e - prevE) / Math.max(1, Math.abs(prevE)) * 100; // %
       const dist = (last.close - e) / Math.max(1, Math.abs(e)) * 100; // %
 
-      let score = 50 + (dist*480) + (slope*900);
-      score = clamp(score, 0, 100);
+      let score = 50 + (dist*460) + (slope*860);
+      // soft clip to avoid always hitting 100 in demo
+      score = clamp(score, 3, 97);
 
       const bull = clamp(score, 0, 100);
       const bear = clamp(100 - score, 0, 100);
@@ -1116,31 +1190,17 @@
       };
     }
 
-    /* ✅ 3-segment gauge: bull/ bear / neutral */
     function setPulseUI(s){
       $("pulseScore").textContent = String(s.score);
 
-      const bull = clamp(s.bullPct, 0, 100);
-      const bear = clamp(s.bearPct, 0, 100);
-      const neu  = clamp(s.neuPct, 0, 100);
+      const deg = Math.round(s.score/100*360);
+      // show 90 => 10% red remainder (clear)
+      $("pulseGaugeMask").style.background =
+        `conic-gradient(var(--brand1) 0deg, var(--brand1) ${deg}deg, rgba(255,90,90,.92) ${deg}deg, rgba(255,90,90,.92) 360deg)`;
 
-      const bullDeg = bull/100*360;
-      const bearDeg = bear/100*360;
-      const neuDeg  = Math.max(0, 360 - bullDeg - bearDeg);
-
-      const d1 = bullDeg;
-      const d2 = bullDeg + bearDeg;
-
-      $("pulseGauge").style.background =
-        `conic-gradient(
-          var(--brand1) 0deg, var(--brand1) ${d1}deg,
-          var(--danger) ${d1}deg, var(--danger) ${d2}deg,
-          rgba(255,255,255,.12) ${d2}deg, rgba(255,255,255,.12) ${d2+neuDeg}deg
-        )`;
-
-      $("bullPct").textContent = bull.toFixed(2) + "%";
-      $("bearPct").textContent = bear.toFixed(2) + "%";
-      $("neuPct").textContent  = neu.toFixed(2) + "%";
+      $("bullPct").textContent = s.bullPct.toFixed(2) + "%";
+      $("bearPct").textContent = s.bearPct.toFixed(2) + "%";
+      $("neuPct").textContent  = s.neuPct.toFixed(2) + "%";
       $("netInflow").textContent = (s.netInflow>=0?"+":"") + s.netInflow.toFixed(2);
 
       const tag = $("pulseTag");
@@ -1159,52 +1219,39 @@
       }
     }
 
-    /* ✅ Signal uses last confirmed B/S if exists, else fallback to sentiment */
-    function setSignalFromBS(lastBS, lastPrice, tf, sentimentBias){
+    function setSignalFromEngine(lastSig, lastPrice, tf, pulseBias){
       const row = $("signalRow");
       row.classList.remove("buy","sell","neutral");
-
       $("signalTf").textContent = "TF: " + tf.toUpperCase();
 
-      if(lastBS && lastBS.side==="B"){
-        row.classList.add("buy");
-        $("signalSide").textContent = "BUY · 看多 / 买入";
-        $("signalMeta").textContent = "B/S confirmed: Cross + EMA slope flip + cooldown (marked on confirmation bar).";
-        $("signalPx").textContent = "@ " + lastBS.price.toFixed(2);
-        $("signalPx").className = "bsBig buy";
-        return;
-      }
-      if(lastBS && lastBS.side==="S"){
-        row.classList.add("sell");
-        $("signalSide").textContent = "SELL · 看空 / 卖出";
-        $("signalMeta").textContent = "B/S confirmed: Cross + EMA slope flip + cooldown (marked on confirmation bar).";
-        $("signalPx").textContent = "@ " + lastBS.price.toFixed(2);
-        $("signalPx").className = "bsBig sell";
+      if(!lastSig){
+        row.classList.add("neutral");
+        $("signalSide").textContent = "WAIT · 观望";
+        $("signalMeta").textContent = "等待拐点确认（交叉 + EMA斜率翻转 + cooldown）。";
+        $("signalPx").textContent = "@ " + lastPrice;
         return;
       }
 
-      // fallback
-      $("signalPx").className = "bsBig wait";
-      if(sentimentBias==="BULL"){
+      if(lastSig.side==="B"){
         row.classList.add("buy");
-        $("signalSide").textContent = "WATCH BUY · 偏多";
-        $("signalMeta").textContent = "No confirmed B/S yet. Market Pulse is bullish.";
-        $("signalPx").textContent = "@ " + lastPrice;
-      }else if(sentimentBias==="BEAR"){
-        row.classList.add("sell");
-        $("signalSide").textContent = "WATCH SELL · 偏空";
-        $("signalMeta").textContent = "No confirmed B/S yet. Market Pulse is bearish.";
+        $("signalSide").textContent = "BUY · 看多 / 买入";
+        $("signalMeta").textContent = pulseBias==="BEAR"
+          ? "BUY 已确认，但 Market Pulse 偏空（过滤项：可谨慎）。"
+          : "BUY 已确认（交叉 + EMA斜率翻转）。";
         $("signalPx").textContent = "@ " + lastPrice;
       }else{
-        row.classList.add("neutral");
-        $("signalSide").textContent = "WAIT · 观望";
-        $("signalMeta").textContent = "Neutral market. Wait for clearer inflection confirmation.";
+        row.classList.add("sell");
+        $("signalSide").textContent = "SELL · 看空 / 卖出";
+        $("signalMeta").textContent = pulseBias==="BULL"
+          ? "SELL 已确认，但 Market Pulse 偏多（过滤项：可谨慎）。"
+          : "SELL 已确认（交叉 + EMA斜率翻转）。";
         $("signalPx").textContent = "@ " + lastPrice;
       }
     }
 
     function updateRisk(bars){
       const last = bars[bars.length-1];
+      // Demo: turn into visible values immediately
       const entry = last.close * 0.992;
       const stop  = last.close * 0.978;
       const t1    = last.close * 1.008;
@@ -1215,9 +1262,12 @@
       $("riskStop").textContent  = stop.toFixed(2);
       $("riskTargets").textContent = [t1,t2,t3].map(x=>x.toFixed(2)).join(", ");
 
-      const vol = Math.abs(bars[bars.length-1].close - bars[bars.length-12].close) / bars[bars.length-12].close * 100;
-      const conf = clamp(92 - vol*2.0, 55, 95);
+      const base = bars[Math.max(0, bars.length-20)].close;
+      const vol = Math.abs(last.close - base) / Math.max(1, base) * 100;
+      const conf = clamp(92 - vol*1.6, 55, 95);
       $("riskConf").textContent = Math.round(conf) + "%";
+
+      // Demo win rate placeholder (future: backtest engine)
       $("riskWR").textContent = "72%";
     }
 
@@ -1227,6 +1277,7 @@
         alert("lightweight-charts 未加载。");
         return;
       }
+
       const el = $("chart");
       chart = LightweightCharts.createChart(el, {
         layout: { background: { color: "transparent" }, textColor: "#EAF0F7" },
@@ -1247,16 +1298,19 @@
         borderVisible:false,
       });
 
-      ema = chart.addLineSeries({ lineWidth: 2, color: "rgba(76,194,255,.90)" });
-      aux = chart.addLineSeries({ lineWidth: 2, color: "rgba(255,184,108,.80)" });
+      ema = chart.addLineSeries({ lineWidth: 2, color: "rgba(76,194,255,.92)" });
+      aux = chart.addLineSeries({ lineWidth: 2, color: "rgba(255,184,108,.82)" });
 
       function fit(){
         const r = el.getBoundingClientRect();
         chart.applyOptions({ width: Math.max(1, Math.floor(r.width)), height: Math.max(1, Math.floor(r.height)) });
         chart.timeScale().fitContent();
+        repaintOverlay();
       }
       new ResizeObserver(() => fit()).observe(el);
       window.addEventListener("resize", fit);
+
+      bindOverlayRepaint();
 
       // first load
       load();
@@ -1267,21 +1321,8 @@
      * Data fetch placeholder
      ***************/
     async function fetchMarketData(symbol, tf){
-      // reserved for future provider
-      // for now: demo local
-      return genDemoCandles(240, tf);
-    }
-
-    /***************
-     * Timeframe sync (tabs <-> select)
-     ***************/
-    function setActiveTF(tf){
-      const tfNorm = (tf || "1d").toLowerCase();
-      $("tf").value = tfNorm;
-
-      document.querySelectorAll("#tfTabs .tfBtn").forEach(btn=>{
-        btn.classList.toggle("active", (btn.dataset.tf || "").toLowerCase() === tfNorm);
-      });
+      // future: if dataSource === provider -> call backend
+      return genDemoCandles(260, tf);
     }
 
     /***************
@@ -1289,63 +1330,87 @@
      ***************/
     async function load(){
       const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
-      const tf = ($("tf").value || "1d").toLowerCase();
-
-      setActiveTF(tf);
+      const tf = $("tf").value;
 
       $("symText").textContent = sym;
       $("hintText").textContent = "Loading… / 加载中";
 
       const bars = await fetchMarketData(sym, tf);
+      CURRENT_BARS = bars;
 
-      // Admin can tune, public uses internal fixed values
-      if(isAdmin()){
-        INTERNAL.EMA = Math.max(3, Number($("emaPeriod").value)||INTERNAL.EMA);
-        INTERNAL.AUX = Math.max(5, Number($("auxPeriod").value)||INTERNAL.AUX);
-        $("emaShow").textContent = String(INTERNAL.EMA);
-        $("auxShow").textContent = String(INTERNAL.AUX);
-      }
+      // auto params by timeframe (internal)
+      const prm = TF_PARAMS[tf] || TF_PARAMS["1d"];
+      const emaP = prm.ema;
+      const auxP = prm.aux;
+      const cooldownBars = prm.cooldown;
 
-      const emaSeries = calcEMA(bars, INTERNAL.EMA);
-      const auxSeries = calcEMA(bars, INTERNAL.AUX);
+      // show internal only in admin
+      $("emaShow").textContent = String(emaP);
+      $("auxShow").textContent = String(auxP);
+      $("emaPeriod").value = String(emaP);
+      $("auxPeriod").value = String(auxP);
+
+      const emaSeries = calcEMA(bars, emaP);
+      const auxSeries = calcEMA(bars, auxP);
 
       candle.setData(bars);
       ema.setData(emaSeries);
       aux.setData(auxSeries);
       applyToggles();
 
+      // Core signals
+      const sigs = detectCrossSlopeSignals(bars, emaSeries, auxSeries, cooldownBars);
+      CURRENT_SIGS = sigs;
+      setChartMarkersFromSignals(sigs);
+      repaintOverlay();
+
       const last = bars[bars.length-1];
       $("priceText").textContent = last.close.toFixed(2);
 
-      // sentiment
+      // sentiment + pulse
       const s = computeSentiment(bars, emaSeries);
       setPulseUI(s);
 
-      // ✅ B/S confirmed on confirmation bar
-      const bs = generateBSSignals(emaSeries, auxSeries, bars, {
-        cooldownBars: INTERNAL.COOLDOWN,
-        usePulseFilter: INTERNAL.USE_PULSE_FILTER,
-        pulseBias: s.bias,
-        keepN: 18,
-      });
-      candle.setMarkers(bs.markers);
-
-      // left signal uses B/S preferentially
-      setSignalFromBS(bs.last, last.close.toFixed(2), tf, s.bias);
+      // left signal uses engine output (pulse is optional filter)
+      const lastSig = sigs.length ? sigs[sigs.length-1] : null;
+      setSignalFromEngine(lastSig, last.close.toFixed(2), tf, s.bias);
 
       updateRisk(bars);
 
-      $("hintText").textContent = "Loaded · 已加载（B/S=交叉+斜率翻转+cooldown，标确认K线）";
+      $("hintText").textContent = `Loaded · 已加载（B/S=交叉+斜率翻转+cooldown；TF=${tf}）`;
       setStatus("API OK", true);
 
-      log(`✅ load: ${sym} ${tf} bias=${s.bias} score=${s.score} bs=${bs.last?bs.last.side:"-"}`);
+      log(`✅ load: ${sym} ${tf} ema=${emaP} aux=${auxP} cooldown=${cooldownBars} sigs=${sigs.length} bias=${s.bias} score=${s.score}`);
+
+      // keep quick buttons in sync
+      syncTfQuick(tf);
     }
 
     /***************
-     * Billing: Plans & Subscription Status (Stable)
+     * API helper
+     ***************/
+    async function apiGet(path){
+      const resp = await fetch(`${API_BASE}${path}`, { method:"GET" });
+      const txt = await resp.text();
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,220)}`);
+      try{ return JSON.parse(txt); }catch(_){ return txt; }
+    }
+
+    async function apiPost(path, payload){
+      const resp = await fetch(`${API_BASE}${path}`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(payload || {})
+      });
+      const txt = await resp.text();
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,220)}`);
+      try{ return JSON.parse(txt); }catch(_){ return { raw: txt }; }
+    }
+
+    /***************
+     * Billing / Plans: /api/plans as source of truth
      ***************/
     let PLANS = []; // {key,label,price_id,trial_days}
-
     function setPlanStatus(t){ $("planStatus").textContent = t; }
 
     function updateTrialHint(){
@@ -1370,84 +1435,131 @@
       updateTrialHint();
     }
 
+    function getLocalFallbackPlans(){
+      // absolute fallback (never empty)
+      return [
+        { key:"weekly",    label:"Weekly · $4.90",     price_id:"price_1SpJMmR84UMUVSTg0T7xfm6r", trial_days:0 },
+        { key:"monthly",   label:"Monthly · $19.90",   price_id:"price_1SpbvRR84UMUVSTggbg0SFzi", trial_days:1 },
+        { key:"quarterly", label:"Quarterly · $49.90", price_id:"price_1SpbwYR84UMUVSTgMQpUrE42", trial_days:3 },
+        { key:"yearly",    label:"Yearly · $189",      price_id:"price_1SpbpxR84UMUVSTgapaJDjMX", trial_days:5 },
+      ];
+    }
+
     async function initPlans(){
       try{
-        setPlanStatus("从后端 /api/plans 拉取…");
-        const data = await apiGet("/api/plans"); // ✅ 唯一真相
-
-        // Expect: { ok:true, plans:[{key,label,price_id,trial_days}, ...] }
-        if(!data || !data.ok || !Array.isArray(data.plans) || data.plans.length===0){
+        setPlanStatus("从后端拉取…");
+        // Source of truth:
+        // expected: { ok:true, plans:[{key,label,price_id,trial_days}, ...] }
+        const data = await apiGet("/api/plans");
+        if(!data || data.ok!==true || !Array.isArray(data.plans) || data.plans.length===0){
           throw new Error("Invalid /api/plans response");
         }
-
         const plans = data.plans.map(x=>({
           key: x.key,
           label: x.label || x.key,
           price_id: x.price_id,
-          trial_days: x.trial_days || 0
+          trial_days: Number(x.trial_days||0)
         })).filter(x=>x.key && x.price_id);
 
-        if(plans.length===0) throw new Error("No valid plans returned");
-
+        if(plans.length===0) throw new Error("No valid plans with price_id");
         populatePlans(plans);
+
         setStatus("API OK", true);
         log("✅ plans loaded from /api/plans");
       }catch(e){
-        setPlanStatus("拉取失败（联系管理员/检查后端）");
-        $("planSelect").innerHTML = `<option value="">(Plans not loaded)</option>`;
-        $("subscribeBtn").disabled = true;
-        setStatus("API Not Ready", false);
-        if(isAdmin()) log("❌ initPlans: " + e.message);
+        // fallback to /billing/prices (legacy) then local fallback
+        try{
+          const legacy = await apiGet("/billing/prices");
+          if(legacy && legacy.ok===true && Array.isArray(legacy.prices) && legacy.prices.length>0){
+            // legacy format in your app.py: {ok:true, prices:[{price_id,trial_days}], plan_to_price:{...}}
+            const planToPrice = legacy.plan_to_price || {};
+            const priceToTrial = {};
+            for(const it of legacy.prices) priceToTrial[it.price_id] = Number(it.trial_days||0);
+
+            const candidates = [
+              { key:"weekly",    label:"Weekly · $4.90",     price_id: planToPrice.weekly    || "", trial_days: priceToTrial[planToPrice.weekly]    || 0 },
+              { key:"monthly",   label:"Monthly · $19.90",   price_id: planToPrice.monthly   || "", trial_days: priceToTrial[planToPrice.monthly]   || 1 },
+              { key:"quarterly", label:"Quarterly · $49.90", price_id: planToPrice.quarterly || "", trial_days: priceToTrial[planToPrice.quarterly] || 3 },
+              { key:"yearly",    label:"Yearly · $189",      price_id: planToPrice.yearly    || "", trial_days: priceToTrial[planToPrice.yearly]    || 5 },
+            ].filter(x=>x.price_id);
+
+            if(candidates.length===4){
+              populatePlans(candidates);
+              setPlanStatus("已加载 4 个计划（legacy fallback）");
+              log("⚠️ plans loaded from /billing/prices fallback");
+              return;
+            }
+          }
+          throw new Error("Legacy fallback invalid");
+        }catch(_){
+          const fallback = getLocalFallbackPlans();
+          populatePlans(fallback);
+          setPlanStatus("已加载 4 个计划（local fallback）");
+          setStatus("API Degraded", false);
+          if(isAdmin()) log("❌ initPlans: " + e.message + " -> using local fallback");
+        }
       }
     }
 
-    function renderSubscriptionStatus(sub){
-      const box = $("subscriptionStatus");
-      const badge = $("subStatusBadge");
-      const btnManage = $("manageBtn");
-      const btnStart = $("subscribeBtn");
-
-      if(!sub){
-        badge.textContent = "None";
-        box.textContent = "Not subscribed";
-        btnManage.style.display = "none";
-        btnStart.disabled = false; // allow
+    /***************
+     * Subscription status + portal
+     ***************/
+    async function refreshSubscriptionStatus(){
+      const user_id = ($("userId").value || "").trim();
+      if(!user_id){
+        $("subStatusText").textContent = "Unknown";
+        $("manageBtn").disabled = true;
         return;
       }
 
-      const end = sub.current_period_end ? new Date(sub.current_period_end).toLocaleString() : "-";
-      badge.textContent = (sub.status || "-").toUpperCase();
+      try{
+        // Expected: { ok:true, status:'active'|'trialing'|'canceled'|..., has_access:true/false, customer_portal:true/false }
+        const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
+        const status = data?.status || "unknown";
+        const has = !!data?.has_access;
 
-      box.textContent = `Status: ${sub.status || "-"} | Price: ${sub.price_id || "-"} | Period End: ${end}`;
-
-      // show manage for any existing subscription record
-      btnManage.style.display = "inline-block";
-      btnStart.disabled = true;
+        $("subStatusText").textContent = `${status}${has ? " · Access ON" : " · Access OFF"}`;
+        $("manageBtn").disabled = !data?.customer_portal; // if backend supports portal
+        if(data?.customer_portal){
+          $("manageBtn").textContent = "Manage · 管理";
+        }else{
+          $("manageBtn").textContent = "Manage · (pending)";
+        }
+        log(`✅ subscription status: ${JSON.stringify(data).slice(0,220)}`);
+      }catch(e){
+        // Not implemented yet is acceptable; keep UI stable
+        $("subStatusText").textContent = "Not implemented";
+        $("manageBtn").disabled = true;
+        if(isAdmin()) log("⚠️ status endpoint missing: " + e.message);
+      }
     }
 
-    async function refreshSubscription(){
+    async function openCustomerPortal(){
       const user_id = ($("userId").value || "").trim();
       if(!user_id){
-        renderSubscriptionStatus(null);
+        alert("请先填写 User ID，再打开订阅管理。");
         return;
       }
       try{
-        const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
-        // Expect: { ok:true, subscription: null|{status,price_id,current_period_end,...} }
-        renderSubscriptionStatus(data.subscription || null);
+        // Expected: { ok:true, url:"https://billing.stripe.com/..." }
+        const data = await apiPost("/api/billing/portal", { user_id });
+        if(!data || !data.url) throw new Error("No portal url");
+        window.location.href = data.url;
       }catch(e){
-        // don't block UI; just show unknown
-        $("subStatusBadge").textContent = "Unknown";
-        $("subscriptionStatus").textContent = "Unable to load subscription status.";
-        if(isAdmin()) log("❌ subscription/status: " + e.message);
+        alert(
+          "订阅管理（Customer Portal）暂未开通或接口未部署。\n\n" +
+          "后端需要提供：POST /api/billing/portal -> 返回 {url}\n\n" +
+          "错误：\n" + e.message
+        );
+        if(isAdmin()) log("❌ open portal: " + e.message);
       }
     }
 
     async function subscribe(){
       const user_id = ($("userId").value || "").trim();
       const email = ($("email").value || "").trim();
-      const plan = ($("planSelect").value || "").trim();
-      const override = ($("priceOverride").value || "").trim();
+      const key = $("planSelect").value;
+      const override = ($("priceOverride")?.value || "").trim();
 
       if(!user_id){
         alert("User ID 必填（用于绑定 Stripe 订阅到你的系统用户）。");
@@ -1455,51 +1567,48 @@
         return;
       }
 
-      if(!plan && !override){
-        alert("Plan 未选择或未加载成功。");
-        return;
+      // prefer plan key (clean & stable)
+      const plan = key || "";
+      let payload = { user_id, email: email || undefined };
+
+      // admin override only
+      if(override){
+        payload.price_id = override;
+      }else{
+        payload.plan = plan;
+        // if backend doesn't support plan, it still supports price_id; keep price_id as fallback
+        const p = PLANS.find(x=>x.key===plan);
+        if(p && p.price_id) payload.price_id = p.price_id;
       }
 
       try{
         setStatus("Creating checkout…", true);
-        if(isAdmin()) log(`➡️ POST /billing/checkout user_id=${user_id} plan=${plan} override=${override?1:0}`);
+        if(isAdmin()) log(`➡️ POST /billing/checkout ${JSON.stringify(payload)}`);
 
-        // ✅ Standard: send plan only; admin can override price_id if needed
-        const payload = { user_id, email: email || undefined, plan: plan || undefined };
-        if(override) payload.price_id = override;
+        const resp = await fetch(`${API_BASE}/billing/checkout`, {
+          method:"POST",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify(payload)
+        });
 
-        const data = await apiPost("/billing/checkout", payload);
+        const txt = await resp.text();
+        if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,260)}`);
+
+        let data = null;
+        try{ data = JSON.parse(txt); }catch(_){ data = { raw: txt }; }
 
         if(!data || !data.checkout_url){
           throw new Error("No checkout_url returned");
         }
 
         setStatus("Redirecting to Stripe…", true);
+        if(isAdmin()) log("✅ checkout_url received. Redirecting...");
         window.location.href = data.checkout_url;
 
       }catch(e){
         setStatus("Network/API error", false);
         if(isAdmin()) log(`❌ subscribe failed: ${e.message}`);
         alert("订阅失败：网络错误/后端未联通或接口报错。\n\n错误：\n" + e.message);
-      }
-    }
-
-    async function openPortal(){
-      const user_id = ($("userId").value || "").trim();
-      if(!user_id){
-        alert("请先填写 User ID。");
-        $("userId").focus();
-        return;
-      }
-      try{
-        setStatus("Opening portal…", true);
-        const data = await apiPost("/billing/portal", { user_id, return_url: window.location.href });
-        if(!data || !data.portal_url) throw new Error("No portal_url returned");
-        window.location.href = data.portal_url;
-      }catch(e){
-        setStatus("Portal error", false);
-        if(isAdmin()) log(`❌ portal failed: ${e.message}`);
-        alert("打开订阅管理失败：\n" + e.message);
       }
     }
 
@@ -1537,7 +1646,7 @@
      ***************/
     async function copyShareLink(){
       const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
-      const tf = ($("tf").value || "1d").toLowerCase();
+      const tf = $("tf").value;
       const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
       try{
         await navigator.clipboard.writeText(url);
@@ -1557,7 +1666,7 @@
         const a = document.createElement("a");
         a.href = canvas.toDataURL("image/png");
         const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
-        const tf = ($("tf").value || "1d").toLowerCase();
+        const tf = $("tf").value;
         a.download = `DarriusAI_${sym}_${tf}.png`;
         a.click();
       }catch(e){
@@ -1569,7 +1678,34 @@
      * Affiliate reserved
      ***************/
     function openAffiliate(){
-      alert("Affiliate 入口已预留：\n\n下一步建议：\n1) 做 /affiliate 注册/登录\n2) 做 /affiliate/dashboard（推荐数、返佣、链接/代码）\n3) 注册时电子签署：W-9 / W-8 + 合作协议\n4) 月度结算（按实际到账金额 * 20%）");
+      alert(
+        "Affiliate 入口（合规版）：\n\n" +
+        "下一步建议：\n" +
+        "1) /affiliate/register（选择 US / non-US 身份）\n" +
+        "2) 电子签署：W-9/1099 或 W-8 系列 + 合作协议\n" +
+        "3) /affiliate/dashboard（推荐数、结算、发票/对账）\n\n" +
+        "注：返佣比例与结算规则不在前端公开展示（商业机密）。"
+      );
+    }
+
+    /***************
+     * TF Quick Buttons
+     ***************/
+    function syncTfQuick(tf){
+      document.querySelectorAll(".tfBtn").forEach(btn=>{
+        btn.classList.toggle("active", btn.dataset.tf===tf);
+      });
+    }
+
+    function bindTfQuick(){
+      document.querySelectorAll(".tfBtn").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const tf = btn.dataset.tf;
+          $("tf").value = tf;
+          syncTfQuick(tf);
+          load();
+        });
+      });
     }
 
     /***************
@@ -1578,10 +1714,10 @@
     (function boot(){
       $("yearNow").textContent = String(new Date().getFullYear());
 
-      // Admin diagnostics visibility
+      // Admin visibility
       if(isAdmin()){
         $("diagCard").classList.remove("hidden");
-        $("periodRow").classList.remove("hidden");
+        $("paramRow").classList.remove("hidden");
         $("priceOverrideRow").classList.remove("hidden");
         log("Admin mode enabled (?admin=1)");
       }
@@ -1591,58 +1727,43 @@
       const qsSym = p.get("symbol");
       const qsTf  = p.get("tf");
       if(qsSym) $("symbol").value = qsSym.toUpperCase();
-      if(qsTf) setActiveTF(qsTf.toLowerCase());
-      else setActiveTF("1d");
+      if(qsTf) $("tf").value = qsTf;
 
-      // timeframe tabs events
-      document.querySelectorAll("#tfTabs .tfBtn").forEach(btn=>{
-        btn.addEventListener("click", ()=>{
-          const tf = (btn.dataset.tf || "1d").toLowerCase();
-          setActiveTF(tf);
-          load();
-        });
-      });
-
-      // sync select -> tabs
-      $("tf").addEventListener("change", ()=>{
-        setActiveTF($("tf").value);
-      });
+      // quick TF
+      bindTfQuick();
+      syncTfQuick($("tf").value);
 
       // events
       $("tgEMA").addEventListener("change", applyToggles);
       $("tgAux").addEventListener("change", applyToggles);
 
-      if(isAdmin()){
-        $("emaPeriod").addEventListener("change", ()=>{ $("emaShow").textContent = $("emaPeriod").value; });
-        $("auxPeriod").addEventListener("change", ()=>{ $("auxShow").textContent = $("auxPeriod").value; });
-      }
-
       $("loadBtn").addEventListener("click", load);
-
       $("subscribeBtn").addEventListener("click", subscribe);
-      $("manageBtn").addEventListener("click", openPortal);
+      $("manageBtn").addEventListener("click", openCustomerPortal);
 
       $("planSelect").addEventListener("change", updateTrialHint);
 
       $("copyLinkBtn").addEventListener("click", copyShareLink);
       $("exportBtn").addEventListener("click", exportPNG);
 
-      $("affiliateBtnLeft").addEventListener("click", openAffiliate);
+      $("affiliateBtn").addEventListener("click", openAffiliate);
+
+      // refresh status when user types userId
+      $("userId").addEventListener("input", ()=>{
+        // debounce-ish
+        window.clearTimeout(window.__subT);
+        window.__subT = window.setTimeout(refreshSubscriptionStatus, 400);
+      });
 
       if(isAdmin()){
         $("healthBtn").addEventListener("click", testHealth);
         $("routesBtn").addEventListener("click", showRoutes);
       }
 
-      // When user id changes, refresh subscription status
-      $("userId").addEventListener("blur", refreshSubscription);
-      $("userId").addEventListener("change", refreshSubscription);
-
       setStatus("Ready · 前端已就绪", true);
-
       initChart();
-      initPlans();       // ✅ stable plans: /api/plans
-      refreshSubscription();
+      initPlans();
+      refreshSubscriptionStatus();
     })();
   </script>
 </body>
