@@ -8,258 +8,525 @@
 
   <style>
     :root{
-      --bg:#070b12; --txt:#e7eefc; --muted:#9cb0d6;
-      --good:#2ee59d; --bad:#ff5c6c; --warn:#ffcc66;
-      --radius:14px; --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --bg:#070b12;
+      --panel:#0b1220;
+      --panel2:#0a1527;
+      --txt:#e7eefc;
+      --muted:#9cb0d6;
+      --good:#2ee59d;
+      --bad:#ff5c6c;
+      --warn:#ffcc66;
+      --aqua:#20d6a7;
+      --blue:#5aa7ff;
+      --radius:16px;
+      --shadow: 0 14px 38px rgba(0,0,0,.42);
+      --shadow2: 0 10px 22px rgba(0,0,0,.32);
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial;
     }
     *{ box-sizing:border-box; }
+    html,body{ height:100%; }
     body{
-      margin:0; font-family:var(--sans); color:var(--txt);
-      background: radial-gradient(1200px 600px at 35% 20%, rgba(32,214,167,.10), transparent 60%),
-                  radial-gradient(1000px 500px at 70% 10%, rgba(99,155,255,.10), transparent 60%),
-                  var(--bg);
+      margin:0;
+      font-family:var(--sans);
+      color:var(--txt);
+      background:
+        radial-gradient(1200px 650px at 35% 18%, rgba(32,214,167,.12), transparent 60%),
+        radial-gradient(1100px 520px at 75% 10%, rgba(99,155,255,.12), transparent 60%),
+        radial-gradient(900px 520px at 70% 85%, rgba(255,204,102,.08), transparent 62%),
+        var(--bg);
     }
-    .app{height:100vh;display:grid;grid-template-columns:360px 1fr 360px;gap:14px;padding:14px;}
+
+    .app{
+      height:100vh;
+      display:grid;
+      grid-template-columns: 360px 1fr 360px;
+      gap:14px;
+      padding:14px;
+    }
+
+    /* Cards */
     .card{
-      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
-      border:1px solid rgba(255,255,255,.06); border-radius:var(--radius);
-      box-shadow:var(--shadow); overflow:hidden; display:flex; flex-direction:column; min-height:0;
+      background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015));
+      border:1px solid rgba(255,255,255,.07);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height:0;
     }
     .cardHeader{
-      padding:14px 14px 10px; border-bottom:1px solid rgba(255,255,255,.06);
-      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:14px 14px 10px;
+      border-bottom:1px solid rgba(255,255,255,.07);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.0));
     }
-    .brand{display:flex;flex-direction:column;gap:2px;line-height:1.1;}
-    .brand .title{font-weight:800;letter-spacing:.2px;}
-    .brand .sub{font-size:12px;color:var(--muted);}
-    .badge{
-      font-size:12px; border:1px solid rgba(255,255,255,.10); background:rgba(255,255,255,.04);
-      padding:4px 8px; border-radius:999px; color:var(--muted); white-space:nowrap;
+    .brand{
+      display:flex; flex-direction:column; gap:2px;
+      line-height:1.1;
     }
-    .badge.ok{color:var(--good);border-color:rgba(46,229,157,.35);background:rgba(46,229,157,.08);}
-    .badge.warn{color:var(--warn);border-color:rgba(255,204,102,.35);background:rgba(255,204,102,.08);}
-    .badge.bad{color:var(--bad);border-color:rgba(255,92,108,.35);background:rgba(255,92,108,.08);}
+    .brand .title{
+      font-weight:900; letter-spacing:.2px;
+      display:flex; align-items:center; gap:10px;
+    }
+    .logoDot{
+      width:22px;height:22px;border-radius:7px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.26), rgba(255,255,255,0) 55%),
+                  linear-gradient(180deg, rgba(32,214,167,1), rgba(90,167,255,1));
+      box-shadow: 0 10px 18px rgba(32,214,167,.18);
+    }
+    .brand .sub{ font-size:12px; color:var(--muted); }
 
-    .cardBody{padding:14px; overflow:auto; min-height:0;}
+    .badge{
+      font-size:12px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      padding:4px 8px;
+      border-radius:999px;
+      color:var(--muted);
+      white-space:nowrap;
+      display:inline-flex; align-items:center; gap:6px;
+    }
+    .dot{
+      width:7px;height:7px;border-radius:999px;
+      background: rgba(255,255,255,.35);
+    }
+    .badge.ok{ color:var(--good); border-color: rgba(46,229,157,.35); background: rgba(46,229,157,.08); }
+    .badge.ok .dot{ background: rgba(46,229,157,.9); }
+    .badge.bad{ color:var(--bad); border-color: rgba(255,92,108,.35); background: rgba(255,92,108,.08); }
+    .badge.bad .dot{ background: rgba(255,92,108,.9); }
+    .badge.warn{ color:var(--warn); border-color: rgba(255,204,102,.35); background: rgba(255,204,102,.08); }
+    .badge.warn .dot{ background: rgba(255,204,102,.9); }
+
+    .cardBody{
+      padding:14px;
+      overflow:auto;
+      min-height:0;
+    }
+
     .section{
-      border:1px solid rgba(255,255,255,.06); background:rgba(0,0,0,.14);
-      border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:10px;
+      border:1px solid rgba(255,255,255,.07);
+      background: rgba(0,0,0,.18);
+      border-radius: 16px;
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      box-shadow: var(--shadow2);
     }
-    .sectionTitle{font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
-    .mini{font-size:12px;color:var(--muted);line-height:1.35;}
-    .mono{font-family:var(--mono);font-size:12px;color:rgba(231,238,252,.92);}
-    .row{display:flex;gap:10px;align-items:center;}
-    label{font-size:12px;color:var(--muted);}
-    input,select{
-      width:100%; border-radius:12px; background:rgba(0,0,0,.18);
-      border:1px solid rgba(255,255,255,.08); color:var(--txt);
-      padding:10px 12px; outline:none;
+    .sectionTitle{
+      font-weight:900;
+      font-size:13px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
     }
+    .mini{ font-size:12px; color:var(--muted); line-height:1.35; }
+    .mono{ font-family: var(--mono); font-size:12px; color: rgba(231,238,252,.92); }
+
+    /* Inputs */
+    label{ font-size:12px; color: var(--muted); }
+    input{
+      width:100%;
+      border-radius:14px;
+      background: rgba(0,0,0,.22);
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--txt);
+      padding:10px 12px;
+      outline:none;
+    }
+    input::placeholder{ color: rgba(156,176,214,.55); }
+
+    .row{ display:flex; gap:10px; align-items:center; }
     .btn{
-      width:100%; border:none; border-radius:12px; padding:11px 12px; cursor:pointer;
-      font-weight:900; color:#022016;
-      background:linear-gradient(180deg, rgba(32,214,167,1), rgba(20,190,150,1));
-      box-shadow:0 10px 18px rgba(32,214,167,.18);
+      width:100%;
+      border:none;
+      border-radius:14px;
+      padding:11px 12px;
+      cursor:pointer;
+      font-weight:900;
+      color:#022016;
+      background: linear-gradient(180deg, rgba(32,214,167,1), rgba(20,190,150,1));
+      box-shadow: 0 14px 22px rgba(32,214,167,.18);
     }
     .btn.secondary{
-      background:rgba(255,255,255,.06); color:var(--txt);
-      border:1px solid rgba(255,255,255,.10); box-shadow:none; font-weight:700;
+      background: rgba(255,255,255,.06);
+      color: var(--txt);
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow:none;
+      font-weight:800;
     }
-    .btn:disabled{opacity:.55;cursor:not-allowed;}
+    .btn:disabled{ opacity:.55; cursor:not-allowed; }
 
-    #chartWrap{padding:0;}
+    /* Chart top */
+    #chartWrap{ padding:0; }
     #chartTop{
-      padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.06);
-      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.07);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
     }
-    #chartTitle{font-weight:900;letter-spacing:.2px;}
-    #tfPills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+    #chartTitle{ font-weight:900; letter-spacing:.2px; }
+    #tfPills{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
     .pill{
-      border:1px solid rgba(255,255,255,.10); background:rgba(255,255,255,.04);
-      color:var(--muted); padding:6px 10px; border-radius:999px; font-size:12px; cursor:pointer;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+      transition: transform .06s ease;
+    }
+    .pill:hover{ transform: translateY(-1px); }
+    .pill.active{
+      color: var(--txt);
+      border-color: rgba(32,214,167,.40);
+      background: rgba(32,214,167,.10);
+    }
+    #chart{
+      width:100%;
+      height: calc(100vh - 14px*2 - 44px - 2px);
+      min-height:520px;
+    }
+
+    /* Custom Select (Fix white-on-white) */
+    .selectWrap{ position:relative; }
+    .selectBtn{
+      width:100%;
+      border-radius:14px;
+      background: rgba(0,0,0,.22);
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--txt);
+      padding:10px 12px;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .selectBtn .subtxt{ color: var(--muted); font-size:12px; }
+    .caret{
+      width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;
+      border-top:8px solid rgba(231,238,252,.7);
+      opacity:.9;
+    }
+    .dropdown{
+      position:absolute;
+      top: calc(100% + 8px);
+      left:0; right:0;
+      background: rgba(7,11,18,.98);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      display:none;
+      z-index: 50;
+    }
+    .dropdown.open{ display:block; }
+    .opt{
+      padding:10px 12px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      cursor:pointer;
+      border-top:1px solid rgba(255,255,255,.06);
+    }
+    .opt:first-child{ border-top:none; }
+    .opt:hover{ background: rgba(255,255,255,.06); }
+    .opt .left{ display:flex; flex-direction:column; gap:2px; }
+    .opt .name{ font-weight:900; }
+    .opt .desc{ font-size:12px; color: var(--muted); }
+    .opt .tag{
+      font-size:12px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid rgba(32,214,167,.35);
+      background: rgba(32,214,167,.10);
+      color: var(--good);
+      white-space:nowrap;
+    }
+
+    /* Toast */
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:18px;
+      transform:translateX(-50%);
+      background: rgba(0,0,0,.78);
+      border:1px solid rgba(255,255,255,.12);
+      color: var(--txt);
+      padding:10px 12px;
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      font-size:13px;
+      display:none;
+      max-width: min(920px, 92vw);
+      z-index:9999;
+    }
+    .toast.show{ display:block; }
+    .toast strong{ color: var(--warn); }
+
+    /* Small debug (collapsible) */
+    .debugRow{
+      display:flex; justify-content:space-between; align-items:center; gap:10px;
+      padding:10px 12px;
+      border-top:1px solid rgba(255,255,255,.06);
+      font-size:12px;
+      color: var(--muted);
+    }
+    .debugRow .mono{ color: rgba(231,238,252,.92); }
+    .debugToggle{
+      cursor:pointer;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-weight:800;
+      font-size:12px;
       user-select:none;
     }
-    .pill.active{color:var(--txt);border-color:rgba(32,214,167,.38);background:rgba(32,214,167,.10);}
-    #chart{width:100%; height: calc(100vh - 14px*2 - 44px - 2px); min-height:520px;}
-
-    .toast{
-      position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
-      background:rgba(0,0,0,.75); border:1px solid rgba(255,255,255,.12);
-      color:var(--txt); padding:10px 12px; border-radius:12px; box-shadow:var(--shadow);
-      font-size:13px; display:none; max-width:min(860px, 92vw); z-index:9999;
-    }
-    .toast.show{display:block;}
-    .toast strong{color:var(--warn);}
-    .divider{height:1px;background:rgba(255,255,255,.06);margin:6px 0;}
   </style>
 </head>
 
 <body>
-<div class="app">
+  <div class="app">
 
-  <!-- LEFT -->
-  <div class="card">
-    <div class="cardHeader">
-      <div class="brand">
-        <div class="title">DarriusAI • Inflection Hunter</div>
-        <div class="sub">AI 拐点猎手系统</div>
-      </div>
-      <div id="apiBadge" class="badge">API …</div>
-    </div>
-
-    <div class="cardBody">
-      <div class="section">
-        <div class="sectionTitle">System Debug</div>
-        <div class="mini">API_BASE: <span id="dbgApiBase" class="mono">—</span></div>
-        <div class="mini">Last Error: <span id="dbgErr" class="mono">—</span></div>
-        <button class="btn secondary" id="btnSelfTest">Self Test</button>
+    <!-- LEFT -->
+    <div class="card">
+      <div class="cardHeader">
+        <div class="brand">
+          <div class="title"><span class="logoDot"></span> DarriusAI • Inflection Hunter</div>
+          <div class="sub">AI 拐点猎手系统</div>
+        </div>
+        <div id="apiBadge" class="badge"><span class="dot"></span> API …</div>
       </div>
 
-      <div style="height:10px"></div>
+      <div class="cardBody">
+        <div class="section">
+          <div class="sectionTitle">
+            Market Pulse • 市场情绪
+            <span class="badge ok">BULL</span>
+          </div>
 
-      <div class="section">
-        <div class="sectionTitle">Signal Summary</div>
-        <div class="mini" id="signalText">Signals Ready</div>
-        <div class="mini">Proprietary rules. UI shows confirmation status only.</div>
-      </div>
+          <!-- Simple gauge placeholder (kept professional) -->
+          <div class="row" style="align-items:flex-start; gap:14px;">
+            <div style="width:90px;height:90px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+                        border:10px solid rgba(32,214,167,.22); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);">
+              <div style="text-align:center;">
+                <div style="font-size:30px;font-weight:900;line-height:1;color:var(--good);" id="sentimentScore">97</div>
+                <div class="mini" style="margin-top:2px;">Sentiment</div>
+              </div>
+            </div>
 
-      <div style="height:10px"></div>
-
-      <div class="section">
-        <div class="sectionTitle">Signals Count</div>
-        <div class="mini">Buy: <span class="mono" id="buyCount">0</span> · Sell: <span class="mono" id="sellCount">0</span></div>
-        <div class="mini" id="sigHint">Market API pending.</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- CENTER -->
-  <div class="card" id="chartWrap">
-    <div id="chartTop">
-      <div class="row" style="gap:10px;">
-        <div id="chartTitle">BTCUSDT</div>
-        <div class="badge" id="lastPrice">—</div>
-        <div class="badge" id="loadedText">Loaded · Demo</div>
-      </div>
-      <div id="tfPills"></div>
-    </div>
-    <div id="chart"></div>
-  </div>
-
-  <!-- RIGHT -->
-  <div class="card">
-    <div class="cardHeader">
-      <div class="brand">
-        <div class="title">Control Center • 控制台</div>
-        <div class="sub">Market / Timeframe / Subscription</div>
-      </div>
-      <div class="badge">© 2026</div>
-    </div>
-
-    <div class="cardBody" style="display:flex; flex-direction:column; gap:12px;">
-
-      <div class="section">
-        <div class="sectionTitle">Market</div>
-
-        <div class="row">
-          <div style="flex:1">
-            <label for="symbolInput">Symbol</label>
-            <input id="symbolInput" value="BTCUSDT" />
+            <div style="flex:1;">
+              <div class="mini">Bullish <span class="mono" style="float:right;color:var(--good);">91.5%</span></div>
+              <div class="mini">Bearish <span class="mono" style="float:right;color:var(--bad);">2.8%</span></div>
+              <div class="mini">Neutral <span class="mono" style="float:right;">5.7%</span></div>
+              <div style="height:8px"></div>
+              <div class="mini" id="pulseDesc">Demo mode (Market API pending). Interface fully online.</div>
+            </div>
           </div>
         </div>
 
-        <div class="row">
-          <div style="flex:1">
-            <label for="tfSelect">Timeframe</label>
-            <select id="tfSelect"></select>
-          </div>
+        <div style="height:12px"></div>
+
+        <div class="section">
+          <div class="sectionTitle">Signal Summary</div>
+          <div class="mini" id="signalText">Signals Ready (demo) • Proprietary rules (UI shows status only)</div>
         </div>
 
-        <div class="row">
-          <button class="btn" id="loadBtn">Load • 加载</button>
+        <div style="height:12px"></div>
+
+        <div class="section">
+          <div class="sectionTitle">Signals Count</div>
+          <div class="mini">Buy: <span class="mono" id="buyCount">0</span> · Sell: <span class="mono" id="sellCount">0</span></div>
+          <div class="mini" id="sigHint">Market endpoint not enabled yet.</div>
         </div>
 
-        <div class="mini" style="color:var(--warn);">
-          注意：你当前 app.py 还没实现 <span class="mono">/api/market</span>，所以图表先展示 Demo（不空白）。
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="sectionTitle">
-          Subscription
-          <span class="badge ok">Stripe Secure</span>
-        </div>
-
-        <div class="row">
-          <div style="flex:1">
-            <label for="userIdInput">User ID</label>
-            <input id="userIdInput" value="darrius888"/>
-          </div>
-        </div>
-
-        <div class="row">
-          <div style="flex:1">
-            <label for="emailInput">Email (optional)</label>
-            <input id="emailInput" value="perrywu666@outlook.com"/>
-          </div>
-        </div>
-
-        <div class="row">
-          <div style="flex:1">
-            <label for="planSelect">Plan</label>
-            <select id="planSelect"></select>
-            <div class="mini" id="planSelfCheck"></div>
-          </div>
-        </div>
-
-        <div class="divider"></div>
+        <div style="height:12px"></div>
 
         <div class="mini">
-          <div>Status: <span id="subStatusText" class="mono">unknown</span></div>
-          <div>Plan: <span id="subPlanText" class="mono">—</span></div>
-        </div>
-
-        <div class="row">
-          <button class="btn" id="subActionBtn" disabled>Subscribe & Start</button>
-        </div>
-
-        <button class="btn secondary" id="refreshSubBtn">Refresh Status</button>
-      </div>
-
-      <div class="section">
-        <div class="sectionTitle">Utilities</div>
-        <div class="row">
-          <button class="btn secondary" id="copyLinkBtn">Copy Share Link</button>
-          <button class="btn secondary" id="exportPngBtn">Export PNG</button>
+          Educational use only. Not investment advice. Past performance is not indicative of future results.
         </div>
       </div>
 
+      <!-- Collapsible debug (kept but not ugly) -->
+      <div class="debugRow">
+        <span>API_BASE: <span id="dbgApiBase" class="mono">—</span></span>
+        <span class="debugToggle" id="dbgToggle">Debug</span>
+      </div>
+      <div class="debugRow" id="dbgRow2" style="display:none;">
+        <span>Last Error: <span id="dbgErr" class="mono">—</span></span>
+        <button class="debugToggle" id="btnSelfTest">Self Test</button>
+      </div>
     </div>
+
+    <!-- CENTER -->
+    <div class="card" id="chartWrap">
+      <div id="chartTop">
+        <div class="row" style="gap:10px;">
+          <div id="chartTitle">BTCUSDT</div>
+          <div class="badge" id="lastPrice">—</div>
+          <div class="badge" id="loadedText">Loaded · Demo</div>
+        </div>
+        <div id="tfPills"></div>
+      </div>
+      <div id="chart"></div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="card">
+      <div class="cardHeader">
+        <div class="brand">
+          <div class="title">Control Center • 控制台</div>
+          <div class="sub">Market / Timeframe / Subscription</div>
+        </div>
+        <div class="badge">© 2026</div>
+      </div>
+
+      <div class="cardBody" style="display:flex; flex-direction:column; gap:12px;">
+
+        <!-- Market -->
+        <div class="section">
+          <div class="sectionTitle">Market • 品种与周期</div>
+
+          <div class="row">
+            <div style="flex:1">
+              <label for="symbolInput">Symbol</label>
+              <input id="symbolInput" placeholder="e.g. BTCUSDT" value="BTCUSDT" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div style="flex:1">
+              <label for="tfSelect">Timeframe</label>
+              <select id="tfSelect" style="border-radius:14px;background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.10);color:var(--txt);padding:10px 12px;">
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <button class="btn" id="loadBtn">Load • 加载</button>
+          </div>
+
+          <div class="mini" style="color:var(--warn);">
+            当前后端尚未实现 <span class="mono">/api/market</span>，所以图表展示 Demo（不影响订阅与接口联通）。
+          </div>
+        </div>
+
+        <!-- Indicators -->
+        <div class="section">
+          <div class="sectionTitle">Indicators</div>
+          <div class="row">
+            <label class="mini" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="toggleEMA" checked /> EMA
+            </label>
+            <label class="mini" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="toggleAUX" checked /> AUX
+            </label>
+            <label class="mini" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="toggleSignals" checked /> B/S
+            </label>
+          </div>
+          <div class="mini">B/S overlays will appear once market API returns signals.</div>
+        </div>
+
+        <!-- Subscription -->
+        <div class="section">
+          <div class="sectionTitle">
+            Subscription • 订阅
+            <span class="badge ok"><span class="dot"></span> Stripe Secure</span>
+          </div>
+
+          <div class="row">
+            <div style="flex:1">
+              <label for="userIdInput">User ID</label>
+              <input id="userIdInput" placeholder="e.g. user_123" value="darrius888"/>
+            </div>
+          </div>
+
+          <div class="row">
+            <div style="flex:1">
+              <label for="emailInput">Email (optional)</label>
+              <input id="emailInput" placeholder="name@domain.com" value="perrywu666@outlook.com"/>
+            </div>
+          </div>
+
+          <!-- Custom plan dropdown -->
+          <div class="row">
+            <div style="flex:1">
+              <label>Plan</label>
+              <div class="selectWrap" id="planWrap">
+                <div class="selectBtn" id="planBtn">
+                  <div>
+                    <div style="font-weight:900;" id="planBtnTitle">—</div>
+                    <div class="subtxt" id="planBtnSub">Loading plans…</div>
+                  </div>
+                  <div class="caret"></div>
+                </div>
+                <div class="dropdown" id="planDropdown"></div>
+              </div>
+              <div class="mini" id="planSelfCheck"></div>
+            </div>
+          </div>
+
+          <div style="height:4px"></div>
+
+          <div class="mini">
+            Status: <span id="subStatusText" class="mono">unknown</span><br/>
+            Plan: <span id="subPlanText" class="mono">—</span>
+          </div>
+
+          <div class="row">
+            <button class="btn" id="subActionBtn" disabled>Subscribe & Start</button>
+          </div>
+
+          <button class="btn secondary" id="refreshSubBtn">Refresh Status</button>
+        </div>
+
+        <!-- Utilities -->
+        <div class="section">
+          <div class="sectionTitle">Utilities</div>
+          <div class="row">
+            <button class="btn secondary" id="copyLinkBtn">Copy Share Link</button>
+            <button class="btn secondary" id="exportPngBtn">Export PNG</button>
+          </div>
+          <div class="mini">Share link stores symbol/tf in URL.</div>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 
-</div>
-
-<div id="toast" class="toast"></div>
+  <div id="toast" class="toast"></div>
 
 <script>
 /** =========================
- *  CONFIG (HARD-STABLE)
+ *  CONFIG (locked to your Render backend)
  *  ========================= */
-
-// ✅ 自动锁定到 Render；也支持 ?api=https://xxx 覆盖调试
 const qs = new URLSearchParams(location.search);
 const API_BASE = (qs.get("api") || "https://darrius-api.onrender.com").trim();
 
-// ✅ routes aligned to your current app.py
 const ENDPOINTS = {
   health:   "/health",
-  home:     "/", // 你的 app.py 有 home(): "darrius-api is running"
+  home:     "/",
   prices:   "/billing/prices",
   checkout: "/billing/checkout",          // returns checkout_url
-  subStatus:"/api/subscription/status",   // GET ?user_id=
-  portal:   "/api/billing/portal"         // POST {user_id} returns portal_url
+  subStatus:"/api/subscription/status",   // GET ?user_id
+  portal:   "/api/billing/portal",        // POST {user_id} returns portal_url
+  // market: "/api/market"                 // not enabled today
 };
 
 const TIMEFRAMES = [
@@ -275,26 +542,42 @@ const TIMEFRAMES = [
 const FALLBACK_TF = '1d';
 
 const PLAN_CATALOG_FALLBACK = [
-  { price_id:"price_1SpJMmR84UMUVSTg0T7xfm6r", interval:"weekly",    amount:4.90,   currency:"USD" },
-  { price_id:"price_1SpbvRR84UMUVSTggbg0SFzi", interval:"monthly",   amount:19.90,  currency:"USD" },
-  { price_id:"price_1SpbwYR84UMUVSTgMQpUrE42", interval:"quarterly", amount:49.90,  currency:"USD" },
-  { price_id:"price_1SpbpxR84UMUVSTgapaJDjMX", interval:"yearly",    amount:189.00, currency:"USD" },
+  { price_id:"price_1SpJMmR84UMUVSTg0T7xfm6r", interval:"weekly",    amount:4.90,   currency:"USD", trial_days:0 },
+  { price_id:"price_1SpbvRR84UMUVSTggbg0SFzi", interval:"monthly",   amount:19.90,  currency:"USD", trial_days:1 },
+  { price_id:"price_1SpbwYR84UMUVSTgMQpUrE42", interval:"quarterly", amount:49.90,  currency:"USD", trial_days:3 },
+  { price_id:"price_1SpbpxR84UMUVSTgapaJDjMX", interval:"yearly",    amount:189.00, currency:"USD", trial_days:5 },
 ];
 const PLAN_ORDER = { weekly:1, monthly:2, quarterly:3, yearly:4 };
 
-let state = { symbol:"BTCUSDT", tf:"1d", plans:[], selectedPriceId:null, subscription:{status:"unknown"} };
+let state = {
+  symbol:"BTCUSDT",
+  tf:"1d",
+  plans:[],
+  selectedPriceId:null,
+  subscription:{ status:"unknown", price_id:null }
+};
 
 function $(id){ return document.getElementById(id); }
+
 function toast(msg, ms=2600){
   const el = $("toast");
-  el.innerHTML = msg; el.classList.add("show");
-  clearTimeout(el._t); el._t = setTimeout(()=> el.classList.remove("show"), ms);
+  el.innerHTML = msg;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(()=> el.classList.remove("show"), ms);
 }
-function setApiBadge(kind, text){
+
+function setApiBadge(kind){
   const b = $("apiBadge");
-  b.textContent = text;
-  b.className = "badge " + kind;
+  if(kind === "ok"){
+    b.className = "badge ok";
+    b.innerHTML = '<span class="dot"></span> API OK';
+  }else{
+    b.className = "badge bad";
+    b.innerHTML = '<span class="dot"></span> API ERR';
+  }
 }
+
 function setErr(msg){
   $("dbgErr").textContent = msg || "—";
 }
@@ -332,6 +615,7 @@ function setActiveTfPill(tf){
   });
 }
 
+/** ========= Timeframes UI ========= */
 function initTimeframesUI(){
   const sel = $("tfSelect");
   sel.innerHTML = TIMEFRAMES.map(t => `<option value="${t.key}">${t.label}</option>`).join("");
@@ -343,28 +627,37 @@ function initTimeframesUI(){
   wrap.addEventListener("click", (e)=>{
     const p = e.target.closest(".pill"); if(!p) return;
     state.tf = normalizeTf(p.getAttribute("data-tf"));
-    sel.value = state.tf; setActiveTfPill(state.tf);
+    sel.value = state.tf;
+    setActiveTfPill(state.tf);
   });
-  sel.addEventListener("change", ()=>{ state.tf = normalizeTf(sel.value); setActiveTfPill(state.tf); });
+  sel.addEventListener("change", ()=>{
+    state.tf = normalizeTf(sel.value);
+    setActiveTfPill(state.tf);
+  });
 
   setActiveTfPill(state.tf);
 }
 
-/** 关键：永远不空白 —— 页面启动立刻画 Demo */
+/** ========= Chart (demo until /api/market exists) ========= */
 function renderDemoChart(){
-  const N=140; const x=[]; const y=[];
-  for(let i=0;i<N;i++){ x.push(i); y.push(2 + Math.sin(i/12)*0.8 + Math.sin(i/30)*0.4); }
+  const N=180;
+  const x=[]; const y=[];
+  for(let i=0;i<N;i++){
+    x.push(i);
+    const base = 2 + Math.sin(i/14)*0.65 + Math.sin(i/40)*0.35;
+    y.push(base);
+  }
   const trace = {type:"scatter", mode:"lines", x, y, name:"Demo"};
   const layout = {
     paper_bgcolor:"rgba(0,0,0,0)",
     plot_bgcolor:"rgba(0,0,0,0)",
-    margin:{l:60,r:20,t:18,b:40},
-    xaxis:{gridcolor:"rgba(255,255,255,.06)", tickfont:{color:"rgba(231,238,252,.7)"}},
-    yaxis:{gridcolor:"rgba(255,255,255,.06)", tickfont:{color:"rgba(231,238,252,.7)"}},
+    margin:{l:62,r:18,t:18,b:40},
+    xaxis:{ gridcolor:"rgba(255,255,255,.07)", tickfont:{color:"rgba(231,238,252,.72)"}, zeroline:false },
+    yaxis:{ gridcolor:"rgba(255,255,255,.07)", tickfont:{color:"rgba(231,238,252,.72)"}, zeroline:false },
     annotations:[{
-      text:"Demo Chart (你的 app.py 尚未实现 /api/market) — 绝不允许空白。",
+      text:"Demo Mode • Market API (/api/market) pending",
       xref:"paper", yref:"paper", x:0.5, y:0.5, showarrow:false,
-      font:{color:"rgba(255,204,102,.95)", size:14}
+      font:{color:"rgba(255,204,102,.92)", size:14}
     }]
   };
   Plotly.react("chart", [trace], layout, {displayModeBar:false, responsive:true});
@@ -372,40 +665,129 @@ function renderDemoChart(){
   $("lastPrice").textContent = "—";
 }
 
-/** 关键：Health 双保险，/health 失败再试 / */
+/** ========= Health (double fallback) ========= */
 async function checkHealth(){
   try{
     await apiFetch(ENDPOINTS.health, {method:"GET"});
-    setApiBadge("ok","API OK");
+    setApiBadge("ok");
     setErr("—");
     return true;
   }catch(e1){
     try{
-      // / returns plain text, still should be 200
       await apiFetch(ENDPOINTS.home, {method:"GET"});
-      setApiBadge("warn","API OK (fallback)");
-      setErr("/health failed, but / is reachable");
+      setApiBadge("ok");
+      setErr("/health failed, but / reachable");
       return true;
     }catch(e2){
-      setApiBadge("bad","API ERR");
+      setApiBadge("bad");
       setErr(`health:${e1.message} | home:${e2.message}`);
       return false;
     }
   }
 }
 
-/** Plans: 必须 4 个，不够就 fallback */
+/** ========= Plans (must be 4) + Custom Dropdown ========= */
+function intervalName(iv){
+  const s = (iv||"").toLowerCase();
+  if(s==="weekly"||s==="week") return "Weekly";
+  if(s==="monthly"||s==="month") return "Monthly";
+  if(s==="quarterly"||s==="quarter") return "Quarterly";
+  if(s==="yearly"||s==="year"||s==="annual") return "Yearly";
+  return iv || "Plan";
+}
+function money(n){
+  const x = Number(n||0);
+  return x.toFixed(2);
+}
+function buildPlanLabel(p){
+  const n = intervalName(p.interval);
+  return `${n} — $${money(p.amount)}`;
+}
+
+function pickDefaultPlan(plans){
+  // default to monthly if exists, else first
+  const m = plans.find(p => (p.interval||"").toLowerCase().includes("month"));
+  return (m || plans[0] || null);
+}
+
+function closePlanDropdown(){
+  $("planDropdown").classList.remove("open");
+}
+
+function setPlanButtonFromPriceId(pid){
+  const p = state.plans.find(x=>x.price_id===pid);
+  if(!p) return;
+
+  $("planBtnTitle").textContent = buildPlanLabel(p);
+  const td = (p.trial_days ?? 0);
+  $("planBtnSub").textContent = td > 0 ? `Trial: ${td} day(s) • Price ID: ${p.price_id}` : `No trial • Price ID: ${p.price_id}`;
+  $("subPlanText").textContent = buildPlanLabel(p);
+}
+
+function renderPlanDropdown(){
+  const dd = $("planDropdown");
+  dd.innerHTML = "";
+
+  state.plans.forEach(p=>{
+    const div = document.createElement("div");
+    div.className = "opt";
+    div.dataset.priceId = p.price_id;
+
+    const left = document.createElement("div");
+    left.className = "left";
+
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = buildPlanLabel(p);
+
+    const desc = document.createElement("div");
+    desc.className = "desc";
+    desc.textContent = `Price ID: ${p.price_id}`;
+
+    left.appendChild(name);
+    left.appendChild(desc);
+
+    const tag = document.createElement("div");
+    tag.className = "tag";
+    const td = (p.trial_days ?? 0);
+    tag.textContent = td > 0 ? `Trial ${td}d` : "No Trial";
+
+    div.appendChild(left);
+    div.appendChild(tag);
+
+    div.addEventListener("click", ()=>{
+      state.selectedPriceId = p.price_id;
+      setPlanButtonFromPriceId(p.price_id);
+      updateSubActionEnabled();
+      closePlanDropdown();
+    });
+
+    dd.appendChild(div);
+  });
+}
+
+function parseAmountFromLabel(label){
+  try{
+    const m = (label||"").match(/\$([0-9]+(?:\.[0-9]+)?)/);
+    if(m) return Number(m[1]);
+  }catch(e){}
+  return 0;
+}
+
 async function loadPlans(){
   let plans = [];
   let fromBackend = false;
 
   try{
     const data = await apiFetch(ENDPOINTS.prices, {method:"GET"});
+    // app.py returns array of {plan,label,price_id,trial_days}
     if(Array.isArray(data)){
       plans = data.map(p=>({
         price_id: p.price_id,
         interval: (p.plan||"").toLowerCase(),
-        amount: (p.label||"").includes("$") ? Number((p.label.match(/\$([0-9]+(?:\.[0-9]+)?)/)||[])[1]||0) : 0
+        amount: parseAmountFromLabel(p.label),
+        currency: "USD",
+        trial_days: Number(p.trial_days||0)
       })).filter(x=>x.price_id);
       fromBackend = (plans.length === 4);
     }
@@ -414,36 +796,26 @@ async function loadPlans(){
   }
 
   if(plans.length !== 4){
-    plans = PLAN_CATALOG_FALLBACK.map(x=>({price_id:x.price_id, interval:x.interval, amount:x.amount}));
+    plans = PLAN_CATALOG_FALLBACK.map(x=>({...x}));
     fromBackend = false;
   }
 
   plans.sort((a,b)=>(PLAN_ORDER[a.interval]||99)-(PLAN_ORDER[b.interval]||99));
   state.plans = plans;
 
-  const sel = $("planSelect");
-  sel.innerHTML = plans.map(p=>`<option value="${p.price_id}">${p.interval} — $${(p.amount||0).toFixed(2)}</option>`).join("");
-  state.selectedPriceId = plans[0]?.price_id || null;
-  sel.value = state.selectedPriceId;
+  const def = pickDefaultPlan(plans);
+  state.selectedPriceId = def ? def.price_id : (plans[0]?.price_id || null);
 
-  $("planSelfCheck").textContent = fromBackend ? "Plans OK: 4 loaded (backend)." : "Plans OK: forced 4-plan fallback.";
+  renderPlanDropdown();
+  setPlanButtonFromPriceId(state.selectedPriceId);
+
+  $("planSelfCheck").textContent = fromBackend ? "Plans OK: loaded 4 from backend." : "Plans OK: forced 4-plan fallback.";
   $("planSelfCheck").style.color = fromBackend ? "var(--good)" : "var(--warn)";
 
-  updateSubPlanTextFromSelection();
   updateSubActionEnabled();
-
-  sel.onchange = ()=>{
-    state.selectedPriceId = sel.value;
-    updateSubPlanTextFromSelection();
-    updateSubActionEnabled();
-  };
 }
 
-function updateSubPlanTextFromSelection(){
-  const p = state.plans.find(x=>x.price_id===state.selectedPriceId);
-  $("subPlanText").textContent = p ? `${p.interval} — $${(p.amount||0).toFixed(2)}` : "—";
-}
-
+/** ========= Subscription ========= */
 function updateSubActionEnabled(){
   const uid = ($("userIdInput").value||"").trim();
   $("subActionBtn").disabled = !(uid && state.selectedPriceId);
@@ -460,19 +832,30 @@ function updateSubActionButtonText(){
 async function refreshSubscriptionStatus(){
   const uid = ($("userIdInput").value||"").trim();
   if(!uid){ toast("<strong>User ID required.</strong>"); return; }
-  $("refreshSubBtn").disabled = true; $("refreshSubBtn").textContent = "Refreshing…";
+  $("refreshSubBtn").disabled = true;
+  $("refreshSubBtn").textContent = "Refreshing…";
+
   try{
-    const q = new URLSearchParams({user_id:uid});
+    const q = new URLSearchParams({ user_id: uid });
     const data = await apiFetch(`${ENDPOINTS.subStatus}?${q.toString()}`, {method:"GET"});
     state.subscription.status = (data.status || "unknown");
+    state.subscription.price_id = (data.price_id || null);
     $("subStatusText").textContent = String(state.subscription.status);
+
+    // show current plan if backend returns price_id
+    if(state.subscription.price_id){
+      const p = state.plans.find(x=>x.price_id===state.subscription.price_id);
+      if(p) $("subPlanText").textContent = buildPlanLabel(p);
+    }
+
     updateSubActionButtonText();
   }catch(e){
     state.subscription.status = "unknown";
     $("subStatusText").textContent = "unknown";
     updateSubActionButtonText();
   }finally{
-    $("refreshSubBtn").disabled = false; $("refreshSubBtn").textContent = "Refresh Status";
+    $("refreshSubBtn").disabled = false;
+    $("refreshSubBtn").textContent = "Refresh Status";
     updateSubActionEnabled();
   }
 }
@@ -483,13 +866,15 @@ async function handleSubscriptionAction(){
   if(!uid){ toast("<strong>User ID required.</strong>"); return; }
 
   const btn = $("subActionBtn");
+  const old = btn.textContent;
   btn.disabled = true;
-  const old = btn.textContent; btn.textContent = "Working…";
+  btn.textContent = "Working…";
 
   try{
     const st = (state.subscription.status||"unknown").toLowerCase();
+
     if(st==="active" || st==="trialing"){
-      const data = await apiFetch(ENDPOINTS.portal, {method:"POST", body:JSON.stringify({user_id:uid})});
+      const data = await apiFetch(ENDPOINTS.portal, { method:"POST", body: JSON.stringify({ user_id: uid }) });
       if(data && data.portal_url){ location.href = data.portal_url; return; }
       toast("<strong>Portal not available.</strong>");
       return;
@@ -499,37 +884,57 @@ async function handleSubscriptionAction(){
       method:"POST",
       body: JSON.stringify({ user_id: uid, price_id: state.selectedPriceId, email })
     });
-    if(data && data.checkout_url){ location.href = data.checkout_url; return; }
+
+    if(data && data.checkout_url){
+      location.href = data.checkout_url;
+      return;
+    }
     toast("<strong>Checkout failed:</strong> missing checkout_url");
   }catch(e){
     toast(`<strong>Action failed:</strong> ${e.message}`);
     setErr(e.message);
   }finally{
-    btn.disabled = false; btn.textContent = old;
+    btn.disabled = false;
+    btn.textContent = old;
   }
 }
 
+/** ========= Controls ========= */
 function initControls(){
-  $("symbolInput").addEventListener("change", e=>{
-    state.symbol = (e.target.value||"BTCUSDT").trim().toUpperCase();
+  // debug collapse
+  $("dbgToggle").addEventListener("click", ()=>{
+    const r = $("dbgRow2");
+    r.style.display = (r.style.display === "none") ? "flex" : "none";
+  });
+  $("btnSelfTest").addEventListener("click", async ()=>{
+    const ok = await checkHealth();
+    toast(ok ? "Self test: backend reachable." : "<strong>Self test failed:</strong> backend unreachable.");
+  });
+
+  $("symbolInput").addEventListener("change", (e)=>{
+    state.symbol = (e.target.value || "BTCUSDT").trim().toUpperCase();
     $("chartTitle").textContent = state.symbol;
   });
 
   $("loadBtn").addEventListener("click", ()=>{
-    // 你后端还没 /api/market：这里不装作“已加载”，直接给 Demo + 提示
+    // market API not enabled today: demo only
     renderDemoChart();
     toast("<strong>Market API pending:</strong> /api/market not enabled in app.py yet.");
+  });
+
+  // plan dropdown
+  $("planBtn").addEventListener("click", (e)=>{
+    e.stopPropagation();
+    $("planDropdown").classList.toggle("open");
+  });
+  document.addEventListener("click", (e)=>{
+    const wrap = $("planWrap");
+    if(!wrap.contains(e.target)) closePlanDropdown();
   });
 
   $("refreshSubBtn").addEventListener("click", refreshSubscriptionStatus);
   $("subActionBtn").addEventListener("click", handleSubscriptionAction);
   $("userIdInput").addEventListener("input", updateSubActionEnabled);
-
-  $("btnSelfTest").addEventListener("click", async ()=>{
-    const ok = await checkHealth();
-    if(ok) toast("Self test: backend reachable.");
-    else toast("<strong>Self test failed:</strong> backend unreachable (CORS/URL/cache).");
-  });
 
   $("copyLinkBtn").addEventListener("click", async ()=>{
     const u = new URL(location.href);
@@ -545,19 +950,29 @@ function initControls(){
   });
 }
 
+/** ========= Boot ========= */
 async function boot(){
-  // 永远先画 Demo，保证不会空白
-  renderDemoChart();
+  // init state from URL
+  const urlSymbol = (qs.get("symbol")||"").trim();
+  const urlTf = normalizeTf(qs.get("tf")||"");
+  if(urlSymbol) state.symbol = urlSymbol.toUpperCase();
+  if(urlTf) state.tf = urlTf;
+
+  $("symbolInput").value = state.symbol;
+  $("chartTitle").textContent = state.symbol;
 
   initTimeframesUI();
   initControls();
+
+  // always render demo first (no blank)
+  renderDemoChart();
 
   await checkHealth();
   await loadPlans();
   await refreshSubscriptionStatus();
   updateSubActionButtonText();
+  updateSubActionEnabled();
 }
-
 boot();
 </script>
 </body>
