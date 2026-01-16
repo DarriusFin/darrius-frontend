@@ -5,12 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>DarriusAI • Inflection Hunter</title>
 
+  <!-- Plotly -->
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
   <style>
     :root{
       --bg:#070b12;
       --panel:#0b1220;
+      --line:#1a2a44;
       --txt:#e7eefc;
       --muted:#9cb0d6;
       --good:#2ee59d;
@@ -56,9 +58,8 @@
       gap:10px;
     }
     .brand{ display:flex; flex-direction:column; gap:2px; line-height:1.1; }
-    .brand .title{ font-weight:900; letter-spacing:.2px; }
+    .brand .title{ font-weight:800; letter-spacing:.2px; }
     .brand .sub{ font-size:12px; color:var(--muted); }
-
     .badge{
       font-size:12px;
       border:1px solid rgba(255,255,255,.10);
@@ -71,8 +72,8 @@
     .badge.ok{ color:var(--good); border-color: rgba(46,229,157,.35); background: rgba(46,229,157,.08); }
     .badge.warn{ color:var(--warn); border-color: rgba(255,204,102,.35); background: rgba(255,204,102,.08); }
     .badge.bad{ color:var(--bad); border-color: rgba(255,92,108,.35); background: rgba(255,92,108,.08); }
-
     .cardBody{ padding:14px; overflow:auto; min-height:0; }
+
     .section{
       border:1px solid rgba(255,255,255,.06);
       background: rgba(0,0,0,.14);
@@ -83,7 +84,7 @@
       gap:10px;
     }
     .sectionTitle{
-      font-weight:900;
+      font-weight:800;
       font-size:13px;
       display:flex;
       justify-content:space-between;
@@ -92,6 +93,7 @@
     }
     .mini{ font-size:12px; color:var(--muted); line-height:1.35; }
     .mono{ font-family: var(--mono); font-size:12px; color:rgba(231,238,252,.92); }
+    .row{ display:flex; gap:10px; align-items:center; }
 
     label{ font-size:12px; color:var(--muted); }
     input, select{
@@ -105,7 +107,6 @@
     }
     input::placeholder{ color:rgba(156,176,214,.55); }
 
-    .row{ display:flex; gap:10px; align-items:center; }
     .btn{
       width:100%;
       border:none;
@@ -122,7 +123,7 @@
       color:var(--txt);
       border:1px solid rgba(255,255,255,.10);
       box-shadow:none;
-      font-weight:800;
+      font-weight:700;
     }
     .btn:disabled{ opacity:.55; cursor:not-allowed; }
 
@@ -137,7 +138,12 @@
       gap:10px;
     }
     #chartTitle{ font-weight:900; letter-spacing:.2px; }
-    #tfPills{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    #tfPills{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
     .pill{
       border:1px solid rgba(255,255,255,.10);
       background: rgba(255,255,255,.04);
@@ -159,7 +165,6 @@
       min-height:520px;
     }
 
-    /* Toast */
     .toast{
       position:fixed;
       left:50%;
@@ -178,15 +183,8 @@
     }
     .toast.show{ display:block; }
     .toast strong{ color: var(--warn); }
-
     .divider{ height:1px; background: rgba(255,255,255,.06); margin:6px 0; }
-
-    @media (max-width: 1180px){
-      .app{ grid-template-columns: 1fr; height:auto; }
-      #chart{ height: 62vh; min-height: 420px; }
-    }
   </style>
-Fio
 </head>
 
 <body>
@@ -214,18 +212,18 @@ Fio
               <div style="font-size:42px;font-weight:900;line-height:1; color:var(--good);" id="sentimentScore">—</div>
             </div>
             <div style="flex:2">
-              <div class="mini" id="pulseDesc">Loading…</div>
+              <div class="mini" id="pulseDesc">Ready.</div>
             </div>
           </div>
         </div>
 
         <div style="height:10px"></div>
 
-        <!-- SAFE Signal Summary: no algorithm leakage -->
+        <!-- Signal Summary (NO algorithm leakage) -->
         <div class="section">
           <div class="sectionTitle">Signal Summary</div>
-          <div class="mini" id="signalText">—</div>
-          <div class="mini">Proprietary rules. UI shows status only.</div>
+          <div class="mini" id="signalText">Signals Ready</div>
+          <div class="mini">Proprietary rules. UI shows confirmation status only.</div>
         </div>
 
         <div style="height:10px"></div>
@@ -239,7 +237,7 @@ Fio
         <div style="height:10px"></div>
 
         <div class="mini">
-          Educational use only. No solicitation. Past performance is not indicative of future results.
+          Educational use only. No solicitation to buy/sell. Past performance is not indicative of future results.
         </div>
       </div>
     </div>
@@ -250,7 +248,6 @@ Fio
         <div class="row" style="gap:10px;">
           <div id="chartTitle">BTCUSDT</div>
           <div class="badge" id="lastPrice">—</div>
-          <!-- SAFE: no rule wording -->
           <div class="badge" id="loadedText">Loaded · —</div>
         </div>
         <div id="tfPills"></div>
@@ -292,6 +289,10 @@ Fio
             <button class="btn" id="loadBtn">Load • 加载</button>
           </div>
 
+          <div class="mini" id="marketModeHint">
+            Data Mode: <span class="mono" id="dataMode">DEMO</span>
+          </div>
+
           <div class="mini" id="tfSupportHint" style="display:none; color: var(--warn);">
             <strong>Notice:</strong> timeframe not supported. Fallback to 1D.
           </div>
@@ -311,10 +312,10 @@ Fio
               <input type="checkbox" id="toggleSignals" checked /> B/S
             </label>
           </div>
-          <div class="mini">B/S are drawn as independent overlays and persist across redraws.</div>
+          <div class="mini">B/S are independent overlays and persist across redraws.</div>
         </div>
 
-        <!-- Subscription (CORE) -->
+        <!-- Subscription (SINGLE BUTTON) -->
         <div class="section">
           <div class="sectionTitle">
             Subscription
@@ -345,22 +346,17 @@ Fio
 
           <div class="divider"></div>
 
-          <!-- 2 lines status -->
+          <!-- only 2 lines status -->
           <div class="mini">
             <div>Status: <span id="subStatusText" class="mono">unknown</span></div>
             <div>Plan: <span id="subPlanText" class="mono">—</span></div>
           </div>
 
-          <!-- SINGLE BUTTON -->
           <div class="row">
             <button class="btn" id="subActionBtn" disabled>Subscribe & Start</button>
           </div>
 
-          <div class="row">
-            <button class="btn secondary" id="refreshSubBtn">Refresh Status</button>
-          </div>
-
-          <div class="mini">Plans are core. UI enforces 4 plans and self-checks.</div>
+          <button class="btn secondary" id="refreshSubBtn">Refresh Status</button>
         </div>
 
         <!-- Utilities -->
@@ -370,6 +366,7 @@ Fio
             <button class="btn secondary" id="copyLinkBtn">Copy Share Link</button>
             <button class="btn secondary" id="exportPngBtn">Export PNG</button>
           </div>
+          <div class="mini">Share link stores symbol/tf in URL.</div>
         </div>
 
       </div>
@@ -380,21 +377,21 @@ Fio
   <div id="toast" class="toast"></div>
 
 <script>
-/** =========================
- *  CONFIG
- *  ========================= */
-const API_BASE = ""; // same origin recommended. If API is different, put e.g. "https://darrius-api.onrender.com"
+/** =========================================================
+ *  ✅ CONFIG — aligned to your current app.py (Render)
+ *  ========================================================= */
+const API_BASE = "https://darrius-api.onrender.com";
 
 const ENDPOINTS = {
-  prices:   "/billing/prices",                 // GET -> array of 4 plans
-  checkout: "/billing/checkout",               // POST -> {checkout_url}
-  subStatus:"/api/subscription/status",        // GET -> {subscribed,status,price_id}
-  portal:  "/api/billing/portal",              // POST -> {portal_url}
-  market:  "/api/market",                      // GET -> ?symbol&tf
-  health:  "/health"                           // GET -> ok
+  health:   "/health",
+  prices:   "/billing/prices",
+  checkout: "/billing/checkout",
+  subStatus:"/api/subscription/status",
+  portal:   "/api/billing/portal",
+  // market endpoint NOT required today; we will auto-switch if exists later
+  market:   "/api/market"
 };
 
-// 8 required timeframes (never depend on backend)
 const TIMEFRAMES = [
   {key:'5m', label:'5m'},
   {key:'15m', label:'15m'},
@@ -407,15 +404,15 @@ const TIMEFRAMES = [
 ];
 const FALLBACK_TF = '1d';
 
-// YOUR 4 core Stripe price IDs (absolute truth)
-const PLAN_CATALOG_FALLBACK = [
-  { price_id:"price_1SpJMmR84UMUVSTg0T7xfm6r", interval:"weekly",    amount:4.90,  currency:"USD", label:"Weekly · $4.90" },
-  { price_id:"price_1SpbvRR84UMUVSTggbg0SFzi", interval:"monthly",   amount:19.90, currency:"USD", label:"Monthly · $19.90" },
-  { price_id:"price_1SpbwYR84UMUVSTgMQpUrE42", interval:"quarterly", amount:49.90, currency:"USD", label:"Quarterly · $49.90" },
-  { price_id:"price_1SpbpxR84UMUVSTgapaJDjMX", interval:"yearly",    amount:189.0, currency:"USD", label:"Yearly · $189" },
-];
-
 const PLAN_ORDER = { weekly:1, week:1, monthly:2, month:2, quarterly:3, quarter:3, yearly:4, year:4, annual:4 };
+
+// ✅ Your 4 Stripe Price IDs (hard fallback)
+const PLAN_CATALOG_FALLBACK = [
+  { price_id:"price_1SpJMmR84UMUVSTg0T7xfm6r", interval:"weekly",    amount:4.90,   currency:"USD" },
+  { price_id:"price_1SpbvRR84UMUVSTggbg0SFzi", interval:"monthly",   amount:19.90,  currency:"USD" },
+  { price_id:"price_1SpbwYR84UMUVSTgMQpUrE42", interval:"quarterly", amount:49.90,  currency:"USD" },
+  { price_id:"price_1SpbpxR84UMUVSTgapaJDjMX", interval:"yearly",    amount:189.00, currency:"USD" },
+];
 
 /** =========================
  *  STATE
@@ -425,8 +422,9 @@ let state = {
   tf: "1d",
   plans: [],
   selectedPriceId: null,
+  subscription: { status: "unknown", plan: "" },
   chartData: null,
-  subscription: { subscribed:false, status:"unknown", price_id:null }
+  marketMode: "DEMO" // DEMO until /api/market exists
 };
 
 function $(id){ return document.getElementById(id); }
@@ -437,6 +435,12 @@ function toast(msg, ms=2600){
   el.classList.add("show");
   clearTimeout(el._t);
   el._t = setTimeout(()=> el.classList.remove("show"), ms);
+}
+
+function setApiBadge(kind, text){
+  const b = $("apiBadge");
+  b.textContent = text;
+  b.className = "badge " + kind;
 }
 
 async function apiFetch(path, options={}){
@@ -451,7 +455,7 @@ async function apiFetch(path, options={}){
   else data = { raw: await res.text().catch(()=> "") };
 
   if(!res.ok){
-    const msg = (data && (data.error || data.detail || data.message)) ? (data.error || data.detail || data.message) : `HTTP ${res.status}`;
+    const msg = (data && (data.error || data.message)) ? (data.error || data.message) : `HTTP ${res.status}`;
     throw new Error(msg);
   }
   return data;
@@ -459,29 +463,41 @@ async function apiFetch(path, options={}){
 
 function normalizeTf(tf){
   tf = (tf||"").toLowerCase().trim();
-  return TIMEFRAMES.some(x=>x.key===tf) ? tf : FALLBACK_TF;
+  const ok = TIMEFRAMES.some(x=>x.key===tf);
+  return ok ? tf : FALLBACK_TF;
 }
 
-function setApiBadge(ok){
-  const b = $("apiBadge");
-  if(ok){
-    b.textContent = "API OK";
-    b.className = "badge ok";
-  }else{
-    b.textContent = "API ERR";
-    b.className = "badge bad";
-  }
+function planNameByInterval(interval){
+  interval = (interval||"").toLowerCase();
+  if(interval === "week" || interval === "weekly") return "Weekly";
+  if(interval === "month" || interval === "monthly") return "Monthly";
+  if(interval === "quarter" || interval === "quarterly") return "Quarterly";
+  if(interval === "year" || interval === "yearly" || interval === "annual") return "Yearly";
+  return interval || "Plan";
 }
 
-function setActiveTfPill(tf){
-  tf = normalizeTf(tf);
-  document.querySelectorAll(".pill").forEach(p=>{
-    p.classList.toggle("active", normalizeTf(p.getAttribute("data-tf")) === tf);
-  });
+function centsToUSD(amount){
+  if(typeof amount !== "number") amount = Number(amount||0);
+  if(Number.isFinite(amount) && !Number.isInteger(amount) && amount < 100) return amount.toFixed(2);
+  if(Number.isInteger(amount) && amount >= 50) return (amount/100).toFixed(2);
+  return Number(amount||0).toFixed(2);
+}
+
+function planLabel(p){
+  const name = planNameByInterval(p.interval);
+  const price = `$${centsToUSD(p.amount)}`;
+  return `${name} — ${price}`;
+}
+
+function buildShareLink(symbol, tf){
+  const u = new URL(location.href);
+  u.searchParams.set("symbol", symbol);
+  u.searchParams.set("tf", tf);
+  return u.toString();
 }
 
 /** =========================
- *  TIMEFRAMES (always 8)
+ *  TIMEFRAMES UI
  *  ========================= */
 function initTimeframesUI(){
   const sel = $("tfSelect");
@@ -502,82 +518,125 @@ function initTimeframesUI(){
     state.tf = normalizeTf(tf);
     $("tfSelect").value = state.tf;
     setActiveTfPill(state.tf);
-    // auto-load on pill click:
-    loadMarketAndRender();
   });
 
   setActiveTfPill(state.tf);
 }
 
-/** =========================
- *  PLANS (core: must be 4)
- *  ========================= */
-function planLabel(p){
-  // prefer backend label if exists
-  if(p.label) return p.label;
-  const name =
-    (p.plan || p.interval || "").toLowerCase().includes("week") ? "Weekly" :
-    (p.plan || p.interval || "").toLowerCase().includes("month") ? "Monthly" :
-    (p.plan || p.interval || "").toLowerCase().includes("quarter") ? "Quarterly" :
-    (p.plan || p.interval || "").toLowerCase().includes("year") ? "Yearly" : "Plan";
-  return `${name}`;
+function setActiveTfPill(tf){
+  tf = normalizeTf(tf);
+  document.querySelectorAll(".pill").forEach(p=>{
+    p.classList.toggle("active", normalizeTf(p.getAttribute("data-tf")) === tf);
+  });
 }
 
+/** =========================
+ *  CONTROLS
+ *  ========================= */
+function initControls(){
+  $("symbolInput").addEventListener("change", (e)=>{
+    state.symbol = (e.target.value || "BTCUSDT").trim().toUpperCase();
+    $("chartTitle").textContent = state.symbol;
+  });
+
+  $("loadBtn").addEventListener("click", ()=> loadAndRender());
+
+  $("toggleEMA").addEventListener("change", ()=> renderChart(state.chartData));
+  $("toggleAUX").addEventListener("change", ()=> renderChart(state.chartData));
+  $("toggleSignals").addEventListener("change", ()=> renderChart(state.chartData));
+
+  $("copyLinkBtn").addEventListener("click", async ()=>{
+    const link = buildShareLink(state.symbol, state.tf);
+    await navigator.clipboard.writeText(link);
+    toast("Share link copied.");
+  });
+
+  $("exportPngBtn").addEventListener("click", async ()=>{
+    try{
+      await Plotly.downloadImage("chart", {format:"png", filename:`${state.symbol}_${state.tf}`});
+    }catch(err){
+      toast(`<strong>Export failed:</strong> ${err.message}`);
+    }
+  });
+
+  $("refreshSubBtn").addEventListener("click", ()=> refreshSubscriptionStatus());
+  $("subActionBtn").addEventListener("click", ()=> handleSubscriptionAction());
+
+  $("userIdInput").addEventListener("input", ()=> updateSubActionEnabled());
+}
+
+/** =========================
+ *  ✅ PLANS: always 4
+ *  ========================= */
 async function loadPlans(){
   let plans = [];
+  let fromBackend = false;
+
   try{
     const data = await apiFetch(ENDPOINTS.prices, { method:"GET" });
-    const raw = Array.isArray(data) ? data : (data.plans || data.data || []);
-    plans = (raw||[]).map(p=>{
+    // your backend returns array
+    const raw = Array.isArray(data) ? data : (data.prices || data.data || []);
+    plans = raw.map(p=>{
       const price_id = p.price_id || p.id || p.priceId || p.price;
-      const interval = (p.plan || p.interval || "").toString().toLowerCase();
-      const label = p.label || null;
-      return { price_id, interval, label, raw:p };
+      const interval = (p.plan || p.interval || p.nickname || "").toString().toLowerCase();
+      // your backend doesn't provide amount; we accept missing and still keep
+      return { price_id, interval, amount: 0, currency:"USD", raw:p };
     }).filter(x=>x.price_id);
+
+    // if backend returns 4 ids, merge amount info from fallback
+    if(plans.length === 4){
+      plans = plans.map(p=>{
+        const f = PLAN_CATALOG_FALLBACK.find(x=>x.price_id===p.price_id);
+        return f ? {...p, interval: f.interval, amount:f.amount, currency:f.currency} : p;
+      });
+      fromBackend = true;
+    }
   }catch(e){
-    // ignore and fallback
+    fromBackend = false;
   }
 
-  // enforce fallback if not exactly 4
   if(plans.length !== 4){
-    plans = PLAN_CATALOG_FALLBACK.map(x=>({ ...x }));
+    plans = PLAN_CATALOG_FALLBACK.map(x=>({ ...x, raw:x }));
+    fromBackend = false;
   }
 
   plans.sort((a,b)=>{
     const ia = PLAN_ORDER[a.interval] ?? 99;
     const ib = PLAN_ORDER[b.interval] ?? 99;
-    return ia - ib;
+    if(ia !== ib) return ia - ib;
+    return Number(a.amount||0) - Number(b.amount||0);
   });
 
   state.plans = plans;
-  const sel = $("planSelect");
-  sel.innerHTML = plans.map(p => `<option value="${p.price_id}">${p.label || planLabel(p)}</option>`).join("");
 
-  state.selectedPriceId = plans[0]?.price_id || null;
-  sel.value = state.selectedPriceId;
+  const sel = $("planSelect");
+  sel.innerHTML = plans.map(p => `<option value="${p.price_id}">${planLabel(p)}</option>`).join("");
 
   sel.onchange = ()=>{
     state.selectedPriceId = sel.value;
-    syncPlanText();
+    updateSubPlanTextFromSelection();
     updateSubActionEnabled();
   };
 
-  // self-check
-  if(state.plans.length === 4){
-    $("planSelfCheck").textContent = "Plans OK: 4 loaded.";
-    $("planSelfCheck").style.color = "var(--good)";
-  }else{
-    $("planSelfCheck").textContent = `Plans ERROR: ${state.plans.length} (expected 4).`;
-    $("planSelfCheck").style.color = "var(--bad)";
-  }
+  state.selectedPriceId = plans[0]?.price_id || null;
+  if(state.selectedPriceId) sel.value = state.selectedPriceId;
 
-  syncPlanText();
+  updateSubPlanTextFromSelection();
   updateSubActionEnabled();
+
+  const el = $("planSelfCheck");
+  if(fromBackend){
+    el.textContent = "Plans OK: loaded 4 from backend.";
+    el.style.color = "var(--good)";
+  }else{
+    el.textContent = "Plans OK: forced 4-plan fallback (safe).";
+    el.style.color = "var(--warn)";
+  }
 }
 
-function syncPlanText(){
+function updateSubPlanTextFromSelection(){
   const p = state.plans.find(x=>x.price_id === state.selectedPriceId);
-  $("subPlanText").textContent = p ? (p.label || planLabel(p)) : "—";
+  $("subPlanText").textContent = p ? planLabel(p) : "—";
 }
 
 function updateSubActionEnabled(){
@@ -586,7 +645,7 @@ function updateSubActionEnabled(){
 }
 
 /** =========================
- *  SUBSCRIPTION (single button)
+ *  SUBSCRIPTION (single button) — aligned to your app.py
  *  ========================= */
 async function refreshSubscriptionStatus(){
   const userId = ($("userIdInput").value||"").trim();
@@ -602,26 +661,20 @@ async function refreshSubscriptionStatus(){
     const qs = new URLSearchParams({ user_id: userId });
     const data = await apiFetch(`${ENDPOINTS.subStatus}?${qs.toString()}`, { method:"GET" });
 
-    state.subscription.subscribed = !!data.subscribed;
-    state.subscription.status = (data.status || "unknown").toString().toLowerCase();
-    state.subscription.price_id = data.price_id || null;
+    const status = (data.status || "unknown").toString().toLowerCase();
+    const priceId = data.price_id || "";
+    const plan = priceId ? (state.plans.find(p=>p.price_id===priceId)?.interval || priceId) : "";
 
-    $("subStatusText").textContent = state.subscription.status;
+    state.subscription = { status, plan };
+    $("subStatusText").textContent = status;
+    if(plan) $("subPlanText").textContent = plan;
 
-    // if backend returns price_id, map to plan label
-    if(state.subscription.price_id){
-      const p = state.plans.find(x=>x.price_id === state.subscription.price_id) || PLAN_CATALOG_FALLBACK.find(x=>x.price_id===state.subscription.price_id);
-      if(p) $("subPlanText").textContent = p.label || planLabel(p);
-    }else{
-      syncPlanText();
-    }
+    updateSubActionButtonText();
 
-    updateSubActionText();
-
-  }catch(e){
-    // keep unknown, but still usable
+  }catch(err){
+    state.subscription = { status:"unknown", plan:"" };
     $("subStatusText").textContent = "unknown";
-    updateSubActionText();
+    updateSubActionButtonText();
   }finally{
     $("refreshSubBtn").disabled = false;
     $("refreshSubBtn").textContent = "Refresh Status";
@@ -629,11 +682,13 @@ async function refreshSubscriptionStatus(){
   }
 }
 
-function updateSubActionText(){
+function updateSubActionButtonText(){
   const st = state.subscription.status;
   const btn = $("subActionBtn");
   if(st === "active" || st === "trialing"){
     btn.textContent = "Manage Subscription";
+  }else if(st === "incomplete" || st === "past_due" || st === "pending"){
+    btn.textContent = "Complete Checkout";
   }else{
     btn.textContent = "Subscribe & Start";
   }
@@ -642,30 +697,32 @@ function updateSubActionText(){
 async function handleSubscriptionAction(){
   const userId = ($("userIdInput").value||"").trim();
   const email = ($("emailInput").value||"").trim();
+
   if(!userId){
     toast("<strong>User ID required.</strong>");
     return;
   }
 
+  const st = state.subscription.status;
   const btn = $("subActionBtn");
   btn.disabled = true;
-  const old = btn.textContent;
+  const oldText = btn.textContent;
   btn.textContent = "Working…";
 
   try{
-    // active -> portal
-    if(state.subscription.status === "active" || state.subscription.status === "trialing"){
+    if(st === "active" || st === "trialing"){
       const data = await apiFetch(ENDPOINTS.portal, {
         method:"POST",
         body: JSON.stringify({ user_id: userId })
       });
-      const url = data.portal_url || data.url;
-      if(url){ window.location.href = url; return; }
+      if(data && data.portal_url){
+        window.location.href = data.portal_url;
+        return;
+      }
       toast("<strong>Portal not available.</strong>");
       return;
     }
 
-    // else -> checkout
     if(!state.selectedPriceId){
       toast("<strong>Please select a plan.</strong>");
       return;
@@ -676,63 +733,156 @@ async function handleSubscriptionAction(){
       body: JSON.stringify({ user_id: userId, price_id: state.selectedPriceId, email })
     });
 
-    const url = data.checkout_url || data.url;
-    if(url){ window.location.href = url; return; }
+    if(data && data.checkout_url){
+      window.location.href = data.checkout_url;
+      return;
+    }
 
-    toast("<strong>Checkout error:</strong> no redirect url.");
-  }catch(e){
-    toast(`<strong>Action failed:</strong> ${e.message}`);
+    toast("<strong>Checkout error:</strong> missing checkout_url.");
+
+  }catch(err){
+    toast(`<strong>Action failed:</strong> ${err.message}`);
   }finally{
     btn.disabled = false;
-    btn.textContent = old;
+    btn.textContent = oldText;
   }
 }
 
 /** =========================
- *  MARKET + CHART (B/S overlay persists)
+ *  MARKET: today no /api/market — use DEMO data always
+ *  Later, when you add /api/market, this will auto-switch to LIVE.
  *  ========================= */
-function baseLayout(){
+async function detectMarketEndpoint(){
+  try{
+    // quick probe (HEAD may be blocked by CORS/proxy; use GET with short query)
+    const qs = new URLSearchParams({ symbol:"BTCUSDT", tf:"1d" });
+    await apiFetch(`${ENDPOINTS.market}?${qs.toString()}`, { method:"GET" });
+    state.marketMode = "LIVE";
+  }catch(_){
+    state.marketMode = "DEMO";
+  }
+  $("dataMode").textContent = state.marketMode;
+}
+
+async function loadAndRender(){
+  state.symbol = ($("symbolInput").value || "BTCUSDT").trim().toUpperCase();
+  state.tf = normalizeTf($("tfSelect").value || state.tf || FALLBACK_TF);
+  $("chartTitle").textContent = state.symbol;
+  setActiveTfPill(state.tf);
+
+  $("loadBtn").disabled = true;
+  $("loadBtn").textContent = "Loading…";
+
+  try{
+    let payload = null;
+
+    if(state.marketMode === "LIVE"){
+      const qs = new URLSearchParams({ symbol: state.symbol, tf: state.tf });
+      payload = await apiFetch(`${ENDPOINTS.market}?${qs.toString()}`, { method:"GET" });
+      $("loadedText").textContent = `Loaded · TF=${state.tf.toUpperCase()} · Live`;
+    }else{
+      payload = buildDemoPayload(state.symbol, state.tf);
+      $("loadedText").textContent = `Loaded · TF=${state.tf.toUpperCase()} · Demo`;
+    }
+
+    state.chartData = payload;
+    renderChart(payload);
+    updateLeftPanelsFromPayload(payload);
+
+  }catch(err){
+    toast(`<strong>Load failed:</strong> ${err.message}`);
+  }finally{
+    $("loadBtn").disabled = false;
+    $("loadBtn").textContent = "Load • 加载";
+  }
+}
+
+/** =========================
+ *  DEMO payload generator (stable and nice-looking)
+ *  ========================= */
+function buildDemoPayload(symbol, tf){
+  const N = 140;
+  const now = new Date();
+  const stepMs = tfToStepMs(tf);
+
+  let candles = [];
+  let base = 90000;
+  for(let i=0;i<N;i++){
+    const t = new Date(now.getTime() - (N-1-i)*stepMs).toISOString();
+    const wave1 = Math.sin(i/12) * 520;
+    const wave2 = Math.sin(i/28) * 980;
+    const trend = (i < 92) ? i*210 : (92*210 - (i-92)*360);
+    const c = base + trend + wave1 + wave2;
+
+    const o = c + Math.sin(i/6) * 120;
+    const h = Math.max(o,c) + 220 + (i%4)*25;
+    const l = Math.min(o,c) - 220 - (i%3)*35;
+
+    candles.push({ t, o:round2(o), h:round2(h), l:round2(l), c:round2(c) });
+  }
+
+  // EMA(20)
+  const k = 2/(20+1);
+  let emaVal = candles[0].c;
+  let ema = candles.map((d)=>{
+    emaVal = d.c*k + emaVal*(1-k);
+    return { t:d.t, v: round2(emaVal) };
+  });
+
+  // AUX as slight offset of EMA (placeholder)
+  const aux = ema.map((d)=>({ t:d.t, v: round2(d.v * 0.998) }));
+
+  // Signals: B near early low, S near peak
+  const buyIdx = 10;
+  const sellIdx = 86;
+  const signals = [
+    { type:"B", t:candles[buyIdx].t, price:candles[buyIdx].c },
+    { type:"S", t:candles[sellIdx].t, price:candles[sellIdx].c },
+  ];
+
   return {
-    paper_bgcolor:"rgba(0,0,0,0)",
-    plot_bgcolor:"rgba(0,0,0,0)",
-    margin:{l:60,r:20,t:18,b:40},
-    xaxis:{ gridcolor:"rgba(255,255,255,.06)", tickfont:{color:"rgba(231,238,252,.7)"}, rangeslider:{visible:false}, zeroline:false },
-    yaxis:{ gridcolor:"rgba(255,255,255,.06)", tickfont:{color:"rgba(231,238,252,.7)"}, zeroline:false },
+    symbol, tf,
+    candles, ema, aux, signals,
+    sentiment_score: 91,
+    pulse: "BULL",
+    pulse_desc: "Demo mode. Market API will be enabled soon.",
+    current_signal: "Signals Ready"
   };
 }
 
-function toLineSeries(series, candles){
-  if(!series) return {ex:[], ey:[]};
-  if(Array.isArray(series) && series.length && typeof series[0] === "number"){
-    const ex = (candles||[]).map(d=> d.t ?? d.time ?? d.ts ?? d[0]);
-    const ey = series.map(v=> Number(v));
-    return {ex, ey};
-  }
-  if(Array.isArray(series) && series.length && typeof series[0] === "object"){
-    const ex = series.map(d=> d.t ?? d.time ?? d.ts ?? d.x).filter(Boolean);
-    const ey = series.map(d=> d.v ?? d.value ?? d.y).filter(v=>v!==undefined && v!==null);
-    return {ex, ey};
-  }
-  if(series.x && series.y) return {ex: series.x, ey: series.y};
-  return {ex:[], ey:[]};
+function tfToStepMs(tf){
+  if(tf==="5m") return 5*60*1000;
+  if(tf==="15m") return 15*60*1000;
+  if(tf==="30m") return 30*60*1000;
+  if(tf==="1h") return 60*60*1000;
+  if(tf==="4h") return 4*60*60*1000;
+  if(tf==="1d") return 24*60*60*1000;
+  if(tf==="1w") return 7*24*60*60*1000;
+  if(tf==="1m") return 30*24*60*60*1000;
+  return 24*60*60*1000;
 }
 
+function round2(x){ return Math.round(Number(x)*100)/100; }
+
+/** =========================
+ *  CHART (B/S overlay stable)
+ *  ========================= */
 function renderChart(payload){
   if(!payload){
     Plotly.newPlot("chart", [], baseLayout(), {displayModeBar:false, responsive:true});
     return;
   }
 
-  const candles = payload.candles || payload.ohlc || [];
-  const ema = payload.ema || payload.EMA || [];
-  const aux = payload.aux || payload.AUX || [];
-  const signals = payload.signals || payload.SIGNALS || payload.bs || payload.BS || [];
+  const candles = payload.candles || [];
+  const ema = payload.ema || [];
+  const aux = payload.aux || [];
+  const signals = payload.signals || [];
 
-  const x = candles.map(d => d.t ?? d.time ?? d.ts ?? d[0]);
-  const open = candles.map(d => d.o ?? d.open ?? d[1]);
-  const high = candles.map(d => d.h ?? d.high ?? d[2]);
-  const low  = candles.map(d => d.l ?? d.low  ?? d[3]);
-  const close= candles.map(d => d.c ?? d.close?? d[4]);
+  const x = candles.map(d => d.t);
+  const open = candles.map(d => d.o);
+  const high = candles.map(d => d.h);
+  const low  = candles.map(d => d.l);
+  const close= candles.map(d => d.c);
 
   const last = close.length ? close[close.length-1] : null;
   $("lastPrice").textContent = last ? `Last: ${Number(last).toFixed(2)}` : "—";
@@ -747,185 +897,102 @@ function renderChart(payload){
     name:"Price",
     increasing: {line:{color:"#2ee59d"}},
     decreasing: {line:{color:"#ff5c6c"}},
+    hoverlabel:{ bgcolor:"rgba(0,0,0,.75)" }
   }];
 
   if(showEMA){
-    const {ex, ey} = toLineSeries(ema, candles);
-    if(ex.length) traces.push({ type:"scatter", mode:"lines", x:ex, y:ey, name:"EMA", line:{width:2, color:"rgba(255,255,255,.65)"}, hoverinfo:"skip" });
+    traces.push({ type:"scatter", mode:"lines",
+      x: ema.map(d=>d.t), y: ema.map(d=>d.v),
+      name:"EMA", line:{width:2, color:"rgba(255,255,255,.65)"},
+      hoverinfo:"skip"
+    });
   }
   if(showAUX){
-    const {ex, ey} = toLineSeries(aux, candles);
-    if(ex.length) traces.push({ type:"scatter", mode:"lines", x:ex, y:ey, name:"AUX", line:{width:2, color:"rgba(99,155,255,.75)"}, hoverinfo:"skip" });
+    traces.push({ type:"scatter", mode:"lines",
+      x: aux.map(d=>d.t), y: aux.map(d=>d.v),
+      name:"AUX", line:{width:2, color:"rgba(99,155,255,.75)"},
+      hoverinfo:"skip"
+    });
   }
 
   const normSide = (s)=>{
-    const t = (s.type ?? s.signal ?? s.side ?? s.action ?? "").toString().trim().toUpperCase();
-    if(["B","BUY","LONG","ENTRY","OPEN_LONG"].includes(t)) return "B";
-    if(["S","SELL","SHORT","EXIT","CLOSE_LONG","OPEN_SHORT"].includes(t)) return "S";
-    const tl = t.toLowerCase();
-    if(tl === "buy") return "B";
-    if(tl === "sell") return "S";
+    const t = (s.type ?? s.side ?? s.signal ?? "").toString().trim().toUpperCase();
+    if(["B","BUY","LONG","ENTRY"].includes(t)) return "B";
+    if(["S","SELL","SHORT","EXIT"].includes(t)) return "S";
     return "";
   };
-  const normTime = (s)=> (s.t ?? s.time ?? s.ts ?? s.date);
-  const normPrice = (s)=> (s.price ?? s.p ?? s.value ?? s.y);
 
-  const buys = Array.isArray(signals) ? signals.filter(s=> normSide(s)==="B") : [];
-  const sells= Array.isArray(signals) ? signals.filter(s=> normSide(s)==="S") : [];
-
+  const buys = signals.filter(s=>normSide(s)==="B");
+  const sells = signals.filter(s=>normSide(s)==="S");
   $("buyCount").textContent = String(buys.length);
   $("sellCount").textContent = String(sells.length);
 
-  $("sigHint").textContent =
-    (sells.length===0 && buys.length>0) ? "Sell=0: backend may not have emitted S (rule not met / cooldown / window)."
-    : (buys.length===0 && sells.length===0) ? "No signals returned by backend."
-    : "Signals rendered.";
-
   if(showSig){
-    const bx = buys.map(normTime).filter(Boolean);
-    const by = buys.map(normPrice).filter(v=>v!==undefined && v!==null);
-    const sx = sells.map(normTime).filter(Boolean);
-    const sy = sells.map(normPrice).filter(v=>v!==undefined && v!==null);
-
-    if(bx.length && by.length){
+    if(buys.length){
       traces.push({
         type:"scatter", mode:"markers+text", name:"Buy",
-        x:bx, y:by, text:bx.map(()=> "B"), textposition:"top center",
+        x: buys.map(s=>s.t), y: buys.map(s=>s.price),
+        text: buys.map(()=> "B"), textposition:"top center",
         marker:{size:10, color:"#2ee59d", line:{width:1, color:"rgba(0,0,0,.45)"}},
         hovertemplate:"<b>B</b><br>%{x}<br>%{y}<extra></extra>"
       });
     }
-    if(sx.length && sy.length){
+    if(sells.length){
       traces.push({
         type:"scatter", mode:"markers+text", name:"Sell",
-        x:sx, y:sy, text:sx.map(()=> "S"), textposition:"bottom center",
+        x: sells.map(s=>s.t), y: sells.map(s=>s.price),
+        text: sells.map(()=> "S"), textposition:"bottom center",
         marker:{size:10, color:"#ff5c6c", line:{width:1, color:"rgba(0,0,0,.45)"}},
         hovertemplate:"<b>S</b><br>%{x}<br>%{y}<extra></extra>"
       });
     }
   }
 
+  $("sigHint").textContent = (state.marketMode==="DEMO")
+    ? "Demo signals shown. Live market signals will appear when /api/market is enabled."
+    : "Live signals ready.";
+
   Plotly.react("chart", traces, baseLayout(), {displayModeBar:false, responsive:true});
 }
 
-function updateLeftPanelsFromPayload(payload){
-  const sentiment = payload.sentiment_score ?? payload.sentiment ?? payload.market_pulse?.sentiment ?? null;
-  $("sentimentScore").textContent = (sentiment!==null && sentiment!==undefined) ? Math.round(Number(sentiment)) : "—";
-
-  const pulse = (payload.pulse ?? payload.market_pulse?.label ?? "BULL").toString().toUpperCase();
-  $("pulseBadge").textContent = pulse;
-  $("pulseBadge").className = pulse.includes("BEAR") ? "badge bad" : "badge ok";
-
-  $("pulseDesc").textContent = payload.pulse_desc ?? payload.market_pulse?.desc ?? "Market pulse loaded.";
-
-  // SAFE summary: no rule words
-  let summary = payload.current_signal || payload.signal_status || "";
-  if(!summary){
-    const sig = payload.signals || payload.bs || [];
-    if(Array.isArray(sig) && sig.length){
-      const last = sig[sig.length-1];
-      const t = (last.type ?? last.side ?? last.signal ?? "").toString().toUpperCase();
-      if(["B","BUY","LONG"].includes(t)) summary = "BUY · Confirmed";
-      else if(["S","SELL","SHORT","EXIT"].includes(t)) summary = "SELL · Confirmed";
-      else summary = "Signal · Ready";
-    }else{
-      summary = "Signal · Ready";
-    }
-  }
-  $("signalText").textContent = summary;
-}
-
-async function loadMarketAndRender(){
-  const symbol = ($("symbolInput").value || "BTCUSDT").trim().toUpperCase();
-  let tf = normalizeTf($("tfSelect").value || state.tf || FALLBACK_TF);
-
-  state.symbol = symbol;
-  state.tf = tf;
-  $("chartTitle").textContent = symbol;
-  setActiveTfPill(tf);
-
-  $("loadBtn").disabled = true;
-  $("loadBtn").textContent = "Loading…";
-
-  try{
-    const qs = new URLSearchParams({ symbol, tf });
-    const data = await apiFetch(`${ENDPOINTS.market}?${qs.toString()}`, { method:"GET" });
-
-    let supported = (data.supported !== undefined) ? !!data.supported : true;
-    let payload = data.data ? data.data : data;
-
-    if(!supported){
-      $("tfSupportHint").style.display = "block";
-      toast(`<strong>Timeframe not supported</strong> (${tf}). Fallback to 1D.`);
-      tf = FALLBACK_TF;
-      state.tf = tf;
-      $("tfSelect").value = tf;
-      setActiveTfPill(tf);
-
-      const qs2 = new URLSearchParams({ symbol, tf });
-      const data2 = await apiFetch(`${ENDPOINTS.market}?${qs2.toString()}`, { method:"GET" });
-      payload = data2.data ? data2.data : data2;
-    }else{
-      $("tfSupportHint").style.display = "none";
-    }
-
-    state.chartData = payload;
-    renderChart(payload);
-    updateLeftPanelsFromPayload(payload);
-    setApiBadge(true);
-
-    // SAFE loaded text
-    $("loadedText").textContent = `Loaded · TF=${state.tf.toUpperCase()} · Signals Ready`;
-
-  }catch(e){
-    setApiBadge(false);
-    toast(`<strong>Load failed:</strong> ${e.message}`);
-  }finally{
-    $("loadBtn").disabled = false;
-    $("loadBtn").textContent = "Load • 加载";
-  }
+function baseLayout(){
+  return {
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    margin:{l:60,r:20,t:18,b:40},
+    xaxis:{ gridcolor:"rgba(255,255,255,.06)", tickfont:{color:"rgba(231,238,252,.7)"}, rangeslider:{visible:false}, zeroline:false },
+    yaxis:{ gridcolor:"rgba(255,255,255,.06)", tickfont:{color:"rgba(231,238,252,.7)"}, zeroline:false },
+    legend:{ orientation:"h", y:1.02, x:0, font:{color:"rgba(231,238,252,.65)"} }
+  };
 }
 
 /** =========================
- *  CONTROLS + UTILITIES
+ *  LEFT PANEL (NO algorithm leakage)
  *  ========================= */
-function initControls(){
-  $("symbolInput").addEventListener("change", (e)=>{
-    state.symbol = (e.target.value || "BTCUSDT").trim().toUpperCase();
-    $("chartTitle").textContent = state.symbol;
-  });
-  $("loadBtn").addEventListener("click", ()=> loadMarketAndRender());
-  $("toggleEMA").addEventListener("change", ()=> renderChart(state.chartData));
-  $("toggleAUX").addEventListener("change", ()=> renderChart(state.chartData));
-  $("toggleSignals").addEventListener("change", ()=> renderChart(state.chartData));
+function updateLeftPanelsFromPayload(payload){
+  const sentiment = payload.sentiment_score ?? payload.sentiment ?? null;
+  $("sentimentScore").textContent = (sentiment!==null && sentiment!==undefined) ? Math.round(Number(sentiment)) : "—";
 
-  $("userIdInput").addEventListener("input", ()=> updateSubActionEnabled());
-  $("subActionBtn").addEventListener("click", ()=> handleSubscriptionAction());
-  $("refreshSubBtn").addEventListener("click", ()=> refreshSubscriptionStatus());
+  const pulse = (payload.pulse ?? "BULL").toString().toUpperCase();
+  $("pulseBadge").textContent = pulse;
+  $("pulseBadge").className = pulse.includes("BEAR") ? "badge bad" : "badge ok";
+  $("pulseDesc").textContent = payload.pulse_desc ?? "Ready.";
 
-  $("copyLinkBtn").addEventListener("click", async ()=>{
-    const u = new URL(location.href);
-    u.searchParams.set("symbol", state.symbol);
-    u.searchParams.set("tf", state.tf);
-    await navigator.clipboard.writeText(u.toString());
-    toast("Share link copied.");
-  });
-
-  $("exportPngBtn").addEventListener("click", async ()=>{
-    try{
-      await Plotly.downloadImage("chart", {format:"png", filename:`${state.symbol}_${state.tf}`});
-    }catch(e){
-      toast(`<strong>Export failed:</strong> ${e.message}`);
-    }
-  });
+  // Important: never show algorithm internals
+  $("signalText").textContent = payload.current_signal || "Signals Ready";
 }
 
+/** =========================
+ *  HEALTH + BOOT
+ *  ========================= */
 async function checkHealth(){
   try{
     await apiFetch(ENDPOINTS.health, { method:"GET" });
-    setApiBadge(true);
+    setApiBadge("ok", "API OK");
+    return true;
   }catch(e){
-    setApiBadge(false);
+    setApiBadge("bad", "API ERR");
+    return false;
   }
 }
 
@@ -934,6 +1001,7 @@ async function boot(){
   const params = new URLSearchParams(location.search);
   const urlSymbol = (params.get("symbol")||"").trim();
   const urlTf = normalizeTf(params.get("tf")||"");
+
   if(urlSymbol) state.symbol = urlSymbol.toUpperCase();
   if(urlTf) state.tf = urlTf;
 
@@ -942,17 +1010,28 @@ async function boot(){
 
   initTimeframesUI();
   initControls();
+
   renderChart(null);
 
   await checkHealth();
-  await loadPlans();
-  await refreshSubscriptionStatus();
+  await loadPlans();                 // ✅ always 4 plans
+  await refreshSubscriptionStatus(); // optional
 
   $("tfSelect").value = state.tf;
   setActiveTfPill(state.tf);
 
-  await loadMarketAndRender();
-  updateSubActionText();
+  state.selectedPriceId = $("planSelect").value || state.plans[0]?.price_id || null;
+  updateSubPlanTextFromSelection();
+  updateSubActionEnabled();
+  updateSubActionButtonText();
+
+  // Detect if /api/market exists; if not, stay DEMO
+  await detectMarketEndpoint();
+
+  await loadAndRender();
+
+  // Update URL
+  history.replaceState({}, "", buildShareLink(state.symbol, state.tf));
 }
 
 boot();
