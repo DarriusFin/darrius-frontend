@@ -22,10 +22,10 @@
       --text:#EAF0F7;
       --muted:#A2B0C2;
 
-      --brand1:#2BE2A6; /* teal */
+      --brand1:#2BE2A6; /* green */
       --brand2:#4CC2FF; /* blue */
       --warn:#FFB86C;
-      --danger:#FF5A5A;
+      --danger:#FF5A5A; /* red */
 
       --shadow: 0 18px 45px rgba(0,0,0,.40);
       --shadow2: 0 10px 25px rgba(0,0,0,.28);
@@ -76,7 +76,7 @@
     }
 
     .logo{
-      width:44px;height:44px;border-radius:16px;
+      width:48px;height:48px;border-radius:16px;
       background: var(--gradBrandSoft);
       border:1px solid rgba(255,255,255,.10);
       box-shadow: 0 14px 30px rgba(0,0,0,.30);
@@ -84,41 +84,46 @@
       overflow:hidden;
       flex:0 0 auto;
     }
+    /* ✅ 旋转图形：加入绿↔红↔蓝的渐变，贴合涨跌视觉 */
     .logo::after{
       content:"";
       position:absolute; inset:-55%;
       background: conic-gradient(from 180deg,
         rgba(43,226,166,0),
-        rgba(43,226,166,.65),
-        rgba(76,194,255,.65),
+        rgba(43,226,166,.70),
+        rgba(76,194,255,.70),
+        rgba(255,90,90,.65),
         rgba(43,226,166,0));
-      animation: spin 7s linear infinite;
+      animation: spin 6s linear infinite;
+      filter: drop-shadow(0 0 12px rgba(76,194,255,.25));
     }
     @keyframes spin{ to{ transform: rotate(360deg);} }
 
     #brandText{ line-height:1.08; }
+    /* ✅ 左上角更醒目：DarriusAI + Inflection Hunter 放大 */
     #brandLine1{
       font-weight:950;
       letter-spacing:.3px;
-      font-size:22px;              /* 放大：更醒目 */
+      font-size:26px;
     }
     #brandLine1 .accent{
       background: var(--gradBrand);
       -webkit-background-clip:text;
       -webkit-text-fill-color:transparent;
+      text-shadow: 0 0 22px rgba(76,194,255,.10);
     }
     #brandLine2{
-      margin-top:7px;
+      margin-top:8px;
       color:var(--muted);
-      font-size:13px;              /* 放大：更清晰 */
+      font-size:14px;
       display:flex;
       gap:10px;
       align-items:center;
       flex-wrap:wrap;
     }
     .chip{
-      font-size:12px;
-      padding:5px 10px;
+      font-size:13px;
+      padding:6px 11px;
       border-radius:999px;
       border:1px solid rgba(255,255,255,.10);
       background: rgba(255,255,255,.05);
@@ -274,7 +279,7 @@
     }
     .gauge{
       width:160px;height:160px;border-radius:50%;
-      background: conic-gradient(var(--brand1) 0deg, var(--brand1) 270deg, rgba(255,255,255,.10) 270deg, rgba(255,255,255,.10) 360deg);
+      background: conic-gradient(rgba(255,255,255,.10) 0deg, rgba(255,255,255,.10) 360deg);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
       position:relative;
       flex:0 0 auto;
@@ -323,10 +328,18 @@
     .signal.buy{ border-left-color: var(--brand1); }
     .signal.sell{ border-left-color: var(--danger); }
     .signal.neutral{ border-left-color: rgba(255,255,255,.14); }
-    .signal .side{ font-weight:950; letter-spacing:.4px; }
+    /* ✅ 信号更权威、更亮 */
+    .signal .side{
+      font-weight:950;
+      letter-spacing:.4px;
+      font-size:16px;
+      text-shadow: 0 0 14px rgba(255,255,255,.10);
+    }
+    .signal.buy .side{ text-shadow: 0 0 16px rgba(43,226,166,.22); }
+    .signal.sell .side{ text-shadow: 0 0 16px rgba(255,90,90,.22); }
     .signal .meta{ margin-top:6px; font-size:12px; color:var(--muted); line-height:1.35; }
 
-    /* ===== Left footer disclaimer (moved here) ===== */
+    /* ===== Left footer disclaimer ===== */
     #leftDisclaimer{
       margin-top:12px;
       padding-top:12px;
@@ -342,10 +355,16 @@
     #chartTop{
       padding:12px 14px;
       display:flex;
-      align-items:center;
-      justify-content:space-between;
+      flex-direction:column;
+      gap:10px;
       border-bottom:1px solid rgba(255,255,255,.06);
       background: rgba(0,0,0,.14);
+    }
+    #chartTopRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
     }
     #priceLine{
       display:flex;
@@ -353,11 +372,18 @@
       gap:10px;
       font-weight:950;
     }
+    /* ✅ 核心图左上角 Symbol 字体加大 */
     #priceLine .sym{
-      font-size:12px;
-      color: var(--muted);
-      font-weight:900;
+      font-size:18px;
+      color: rgba(234,240,247,.90);
+      font-weight:950;
+      letter-spacing:.4px;
     }
+    #priceText{
+      font-size:16px;
+      color: rgba(234,240,247,.95);
+    }
+
     #hintText{
       font-size:12px;
       color: var(--muted);
@@ -367,8 +393,33 @@
       white-space:nowrap;
     }
 
+    /* ✅ Timeframe Tabs（补齐 5m/15m/30m/1h/4h/1D/1W/1M） */
+    #tfTabs{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    #tfTabs button{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.14);
+      color: rgba(234,240,247,.90);
+      padding:7px 10px;
+      border-radius:999px;
+      cursor:pointer;
+      font-weight:900;
+      font-size:12px;
+      transition: filter .12s ease, transform .06s ease;
+    }
+    #tfTabs button:hover{ filter: brightness(1.06); }
+    #tfTabs button:active{ transform: translateY(1px); }
+    #tfTabs button.active{
+      border-color: rgba(76,194,255,.38);
+      background: rgba(76,194,255,.12);
+      box-shadow: 0 0 0 4px rgba(76,194,255,.10);
+    }
+
     #chart{
-      height: calc(100vh - 78px - 16px - 16px - 54px);
+      height: calc(100vh - 78px - 16px - 16px - 86px);
       min-height:420px;
       width:100%;
     }
@@ -514,6 +565,18 @@
       color: rgba(234,240,247,.90);
     }
 
+    /* ===== Subscription status pill ===== */
+    #subscriptionStatus{
+      margin-top:10px;
+      padding:10px 10px;
+      border-radius: var(--r12);
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.14);
+      font-size:12px;
+      color: rgba(234,240,247,.86);
+      line-height:1.35;
+    }
+
     /* ===== Diagnostics hidden by default (Admin only) ===== */
     .hidden{ display:none !important; }
 
@@ -575,6 +638,7 @@
         <div class="h">Market Pulse · 市场情绪 <span class="tag" id="pulseTag">LIVE</span></div>
       </div>
       <div class="panelBody">
+
         <div class="card">
           <div class="gaugeWrap">
             <div class="gauge" id="pulseGauge">
@@ -621,12 +685,21 @@
           </div>
         </div>
 
-        <!-- Disclaimer moved to left bottom -->
+        <!-- ✅ Affiliate moved to LEFT bottom -->
+        <div class="card" id="affiliateCard" style="margin-top:12px">
+          <div class="cardTitle"><b>Affiliate · 推荐人</b><span class="small">预留入口</span></div>
+          <button class="btnGhost" id="affiliateBtn">Affiliate / 推荐人入口</button>
+          <div class="note" style="margin-top:10px">
+            预留：未来推荐人可在此获取专属链接/代码，并进入后台查看推荐客户数与返佣金额（例如 20%）。
+          </div>
+        </div>
+
+        <!-- Disclaimer -->
         <div id="leftDisclaimer">
           <div><b>English:</b> For educational and informational purposes only. Not investment advice. Trading involves risk.</div>
           <div style="margin-top:6px"><b>中文：</b> 本系统仅用于教学与信息展示，不构成投资建议。金融市场有风险，请独立决策。</div>
           <div style="margin-top:6px; opacity:.9">
-            Links: <a href="https://darrius.ai" target="_blank" rel="noreferrer">darrius.ai</a> ·
+            Links: <a href=" " target="_blank" rel="noreferrer">darrius.ai</a> ·
             <a href="#" onclick="alert('后续可接：Terms / Privacy / Contact');return false;">Terms</a> ·
             <a href="#" onclick="alert('后续可接：Terms / Privacy / Contact');return false;">Privacy</a> ·
             <a href="#" onclick="alert('后续可接：support@darrius.ai');return false;">Support</a>
@@ -639,12 +712,27 @@
     <!-- CENTER -->
     <div class="panel" id="chartPanel">
       <div id="chartTop">
-        <div id="priceLine">
-          <span class="sym" id="symText">—</span>
-          <span id="priceText">—</span>
+        <div id="chartTopRow">
+          <div id="priceLine">
+            <span class="sym" id="symText">—</span>
+            <span id="priceText">—</span>
+          </div>
+          <div id="hintText">Loading…</div>
         </div>
-        <div id="hintText">Loading…</div>
+
+        <!-- ✅ Timeframe Tabs -->
+        <div id="tfTabs">
+          <button data-tf="5m">5m</button>
+          <button data-tf="15m">15m</button>
+          <button data-tf="30m">30m</button>
+          <button data-tf="1h">1h</button>
+          <button data-tf="4h">4h</button>
+          <button data-tf="1d" class="active">1D</button>
+          <button data-tf="1w">1W</button>
+          <button data-tf="1m">1M</button>
+        </div>
       </div>
+
       <div class="panelBody">
         <div id="chart"></div>
       </div>
@@ -681,13 +769,18 @@
             <input id="symbol" value="BTCUSDT"/>
           </div>
 
+          <!-- ✅ TF 下拉补齐，且与顶部 Tabs 同步 -->
           <div class="field">
             <div class="label"><span>Timeframe · 周期</span></div>
             <select id="tf">
-              <option value="1d">1d · 日线</option>
-              <option value="4h">4h · 4小时</option>
-              <option value="1h">1h · 1小时</option>
+              <option value="5m">5m · 5分钟</option>
               <option value="15m">15m · 15分钟</option>
+              <option value="30m">30m · 30分钟</option>
+              <option value="1h">1h · 1小时</option>
+              <option value="4h">4h · 4小时</option>
+              <option value="1d" selected>1d · 日线</option>
+              <option value="1w">1w · 周线</option>
+              <option value="1m">1m · 月线</option>
             </select>
           </div>
 
@@ -704,20 +797,9 @@
             </label>
           </div>
 
-          <!-- New: periods -->
-          <div class="row2">
-            <div class="field" style="margin:0">
-              <div class="label"><span>EMA Period</span><span class="small" id="emaShow">10</span></div>
-              <input id="emaPeriod" type="number" min="3" max="60" value="10"/>
-            </div>
-            <div class="field" style="margin:0">
-              <div class="label"><span>AUX Period</span><span class="small" id="auxShow">21</span></div>
-              <input id="auxPeriod" type="number" min="5" max="120" value="21"/>
-            </div>
-          </div>
-
+          <!-- ✅ 商业机密：不展示 EMA/AUX period（已移除 UI 输入） -->
           <div class="note" style="margin-top:8px">
-            <b>建议：</b>周期越短越敏感（更快捕捉拐点），越长越平滑（更稳但更慢）。
+            <b>提示：</b>EMA/AUX 的内部参数为商业机密，对用户侧隐藏。系统会自动适配不同周期下的敏感性与平滑度。
           </div>
         </div>
 
@@ -727,7 +809,7 @@
             <div>
               <div class="subHeroTitle"><span class="accent">Subscription</span> · 订阅开通</div>
               <div class="subHeroMeta">
-                前端提交 <code>user_id</code> + <code>price_id</code>（可带 email），后端统一创建 Stripe Checkout Session。
+                ✅ 后端 <code>/api/plans</code> 作为唯一真相；已订阅用户使用 Customer Portal 管理（升级/取消/恢复/换卡/发票）。
               </div>
             </div>
             <div class="badge secure">Stripe Secure</div>
@@ -737,6 +819,8 @@
             <div>试用需绑定信用卡；到期未付费会自动取消权限。</div>
             <div class="trial" id="trialHint">Trial</div>
           </div>
+
+          <div id="subscriptionStatus">Status: —</div>
         </div>
 
         <div class="card" style="margin-top:-2px">
@@ -757,25 +841,19 @@
             </select>
           </div>
 
-          <!-- Optional override (fallback) -->
+          <!-- ✅ 可保留 Override 作为兜底，但默认不使用（不会影响 plans 稳定性） -->
           <div class="field">
             <div class="label"><span>Price ID Override</span><span class="small">（兜底）</span></div>
             <input id="priceOverride" placeholder="如：price_xxx（通常无需填）"/>
           </div>
 
-          <button class="btn" id="subscribeBtn" disabled>Start Subscription · 开通订阅</button>
+          <!-- ✅ Start / Manage 两个按钮配套齐全 -->
+          <button class="btn" id="btnStartSub" disabled>Start Subscription · 开通订阅</button>
+          <div style="height:10px"></div>
+          <button class="btnGhost" id="btnManageSub" style="display:none">Manage Subscription · 管理订阅（升级/取消/恢复/换卡/发票）</button>
 
           <div class="note" style="margin-top:10px">
-            <b>说明：</b>本页会自动调用后端 <code>/billing/prices</code> 来显示 Weekly/Monthly/Quarterly/Yearly 四个计划。
-          </div>
-        </div>
-
-        <!-- Affiliate reserved -->
-        <div class="card">
-          <div class="cardTitle"><b>Affiliate · 推荐人</b><span class="small">预留入口</span></div>
-          <button class="btnGhost" id="affiliateBtn">Affiliate / 推荐人入口</button>
-          <div class="note" style="margin-top:10px">
-            预留：未来推荐人可在此获取专属链接/代码，并进入后台查看推荐客户数与返佣金额（例如 20%）。
+            <b>说明：</b>套餐永不为空：前端只拉 <code>/api/plans</code>，并通过 <code>/api/subscription/status</code> 判断权限状态。
           </div>
         </div>
 
@@ -807,7 +885,6 @@
      * Config
      ***************/
     const API_BASE = "https://darrius-api.onrender.com";
-
     function $(id){ return document.getElementById(id); }
 
     function setStatus(text, ok=true){
@@ -818,7 +895,7 @@
 
     function log(msg){
       const card = $("diagCard");
-      if(card.classList.contains("hidden")) return; // only log in admin mode
+      if(card.classList.contains("hidden")) return;
       const box = $("logBox");
       const t = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
       const old = (box.textContent || "").split("\n");
@@ -837,13 +914,34 @@
     }
 
     /***************
+     * API helpers
+     ***************/
+    async function apiGet(path){
+      const resp = await fetch(`${API_BASE}${path}`, { method:"GET" });
+      const txt = await resp.text();
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,180)}`);
+      try{ return JSON.parse(txt); }catch(_){ return txt; }
+    }
+    async function apiPost(path, body){
+      const resp = await fetch(`${API_BASE}${path}`, {
+        method:"POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify(body || {})
+      });
+      const txt = await resp.text();
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,240)}`);
+      try{ return JSON.parse(txt); }catch(_){ return { raw: txt }; }
+    }
+
+    /***************
      * Chart + Indicators
      ***************/
     let chart=null, candle=null, ema=null, aux=null;
 
-    function genDemoCandles(n=220){
+    function genDemoCandles(n=220, tf="1d"){
       const now = Math.floor(Date.now()/1000);
-      const step = 60*60;
+      const tfMap = { "5m":300, "15m":900, "30m":1800, "1h":3600, "4h":14400, "1d":86400, "1w":604800, "1m":2592000 };
+      const step = tfMap[tf] || 3600;
       let t = now - n*step;
       let price = 67000;
       const arr = [];
@@ -874,42 +972,83 @@
       return out;
     }
 
-    // Simple local pivot detection -> markers B/S
-    function detectPivots(bars, lookback=2){
-      const m = [];
-      for(let i=lookback; i<bars.length-lookback; i++){
-        const c = bars[i].close;
-        let isTop = true, isBot = true;
-        for(let k=1;k<=lookback;k++){
-          if(bars[i-k].close >= c || bars[i+k].close >= c) isTop = false;
-          if(bars[i-k].close <= c || bars[i+k].close <= c) isBot = false;
-        }
-        if(isTop){
-          m.push({
-            time: bars[i].time,
-            position: "aboveBar",
-            color: "#FF5A5A",
-            shape: "text",
-            text: "S",
-          });
-        }
-        if(isBot){
-          m.push({
-            time: bars[i].time,
-            position: "belowBar",
-            color: "#2BE2A6",
-            shape: "text",
-            text: "B",
-          });
-        }
-      }
-      // reduce density: keep last N markers
-      return m.slice(-18);
-    }
-
     function applyToggles(){
       ema.applyOptions({ visible: !!$("tgEMA").checked });
       aux.applyOptions({ visible: !!$("tgAux").checked });
+    }
+
+    /***************
+     * ✅ B/S: Cross + EMA slope flip + cooldown
+     * - Mark on confirmation bar (not cross bar)
+     * - Market Pulse filter optional (default off)
+     ***************/
+    function generateBSSignals(emaSeries, auxSeries, bars, opts={}){
+      const cooldownBars = Number(opts.cooldownBars ?? 12);
+      const usePulseFilter = !!opts.usePulseFilter;
+      const pulseBias = (opts.pulseBias || "NEUTRAL").toUpperCase(); // "BULL"/"BEAR"/"NEUTRAL"
+
+      const n = Math.min(emaSeries.length, auxSeries.length, bars.length);
+      if(n < 3) return [];
+
+      let pending = null; // {side:"B"/"S", crossIndex:number}
+      let lastSignalIndex = -1e9;
+      const markers = [];
+
+      function slope(i){
+        return emaSeries[i].value - emaSeries[i-1].value;
+      }
+
+      for(let t=1; t<n; t++){
+        const emaPrev = emaSeries[t-1].value, emaNow = emaSeries[t].value;
+        const auxPrev = auxSeries[t-1].value, auxNow = auxSeries[t].value;
+
+        const crossUp = (auxPrev <= emaPrev) && (auxNow > emaNow);
+        const crossDn = (auxPrev >= emaPrev) && (auxNow < emaNow);
+
+        if(crossUp) pending = { side:"B", crossIndex:t };
+        else if(crossDn) pending = { side:"S", crossIndex:t };
+
+        if(!pending) continue;
+
+        if(t - lastSignalIndex < cooldownBars) continue;
+
+        const sNow = slope(t);
+        const sPrev = slope(t-1);
+
+        if(pending.side==="B"){
+          let confirmed = (sNow > 0) && (sPrev <= 0);
+          if(usePulseFilter && pulseBias==="BEAR") confirmed = false;
+          if(confirmed){
+            markers.push({
+              time: bars[t].time,
+              position: "belowBar",
+              color: "#29ff7a",
+              shape: "text",
+              text: "B",
+            });
+            lastSignalIndex = t;
+            pending = null;
+          }
+        }else{
+          let confirmed = (sNow < 0) && (sPrev >= 0);
+          if(usePulseFilter && pulseBias==="BULL") confirmed = false;
+          if(confirmed){
+            markers.push({
+              time: bars[t].time,
+              position: "aboveBar",
+              color: "#ff3b3b",
+              shape: "text",
+              text: "S",
+            });
+            lastSignalIndex = t;
+            pending = null;
+          }
+        }
+      }
+
+      // 控制密度：保留最后 N 个
+      const keepN = Number(opts.keepN ?? 18);
+      return markers.slice(-keepN);
     }
 
     /***************
@@ -918,7 +1057,6 @@
     function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
 
     function computeSentiment(bars, emaSeries){
-      // Use momentum: last close vs EMA and EMA slope
       const n = bars.length;
       const last = bars[n-1];
       const e = emaSeries[emaSeries.length-1]?.value ?? last.close;
@@ -927,22 +1065,18 @@
       const slope = (e - prevE) / Math.max(1, Math.abs(prevE)) * 100; // %
       const dist = (last.close - e) / Math.max(1, Math.abs(e)) * 100; // %
 
-      // Convert to 0-100 score
       let score = 50 + (dist*480) + (slope*900);
       score = clamp(score, 0, 100);
 
-      // Compose bull/bear/neutral
       const bull = clamp(score, 0, 100);
       const bear = clamp(100 - score, 0, 100);
       const neutral = clamp(100 - Math.abs(score-50)*2, 0, 100);
 
-      // Normalize to 100
       const sum = bull + bear + neutral;
       const bullPct = bull/sum*100;
       const bearPct = bear/sum*100;
       const neuPct  = neutral/sum*100;
 
-      // Net inflow demo: tie to score
       const netInflow = (score-50) * 12.3;
 
       return {
@@ -953,21 +1087,32 @@
       };
     }
 
+    /* ✅ 环形图按比例显示：绿(多) + 红(空) + 灰(中性) */
     function setPulseUI(s){
       $("pulseScore").textContent = String(s.score);
 
-      const deg = Math.round(s.score/100*360);
-      // color by bias
-      let col = "var(--brand1)";
-      if(s.bias==="BEAR") col = "var(--danger)";
-      if(s.bias==="NEUTRAL") col = "var(--warn)";
+      const bull = clamp(s.bullPct, 0, 100);
+      const bear = clamp(s.bearPct, 0, 100);
+      const neu  = clamp(s.neuPct, 0, 100);
+
+      const bullDeg = bull/100*360;
+      const bearDeg = bear/100*360;
+      const neuDeg  = Math.max(0, 360 - bullDeg - bearDeg);
+
+      // 顺序：bull(绿) -> bear(红) -> neutral(灰)
+      const d1 = bullDeg;
+      const d2 = bullDeg + bearDeg;
 
       $("pulseGauge").style.background =
-        `conic-gradient(${col} 0deg, ${col} ${deg}deg, rgba(255,255,255,.10) ${deg}deg, rgba(255,255,255,.10) 360deg)`;
+        `conic-gradient(
+          var(--brand1) 0deg, var(--brand1) ${d1}deg,
+          var(--danger) ${d1}deg, var(--danger) ${d2}deg,
+          rgba(255,255,255,.12) ${d2}deg, rgba(255,255,255,.12) ${d2+neuDeg}deg
+        )`;
 
-      $("bullPct").textContent = s.bullPct.toFixed(2) + "%";
-      $("bearPct").textContent = s.bearPct.toFixed(2) + "%";
-      $("neuPct").textContent  = s.neuPct.toFixed(2) + "%";
+      $("bullPct").textContent = bull.toFixed(2) + "%";
+      $("bearPct").textContent = bear.toFixed(2) + "%";
+      $("neuPct").textContent  = neu.toFixed(2) + "%";
       $("netInflow").textContent = (s.netInflow>=0?"+":"") + s.netInflow.toFixed(2);
 
       const tag = $("pulseTag");
@@ -986,25 +1131,27 @@
       }
     }
 
-    function setSignal(bias, price, tf){
+    function setSignal(bias, price, tf, lastBsText){
       const row = $("signalRow");
       row.classList.remove("buy","sell","neutral");
       $("signalTf").textContent = "TF: " + tf.toUpperCase();
 
+      const bsHint = lastBsText ? ` · Latest: ${lastBsText}` : "";
+
       if(bias==="BULL"){
         row.classList.add("buy");
         $("signalSide").textContent = "BUY · 看多 / 买入";
-        $("signalMeta").textContent = "Bullish momentum aligned with Market Pulse.";
+        $("signalMeta").textContent = "Bullish momentum aligned with Market Pulse." + bsHint;
         $("signalPx").textContent = "@ " + price;
       }else if(bias==="BEAR"){
         row.classList.add("sell");
         $("signalSide").textContent = "SELL · 看空 / 卖出";
-        $("signalMeta").textContent = "Bearish momentum aligned with Market Pulse.";
+        $("signalMeta").textContent = "Bearish momentum aligned with Market Pulse." + bsHint;
         $("signalPx").textContent = "@ " + price;
       }else{
         row.classList.add("neutral");
         $("signalSide").textContent = "WAIT · 观望";
-        $("signalMeta").textContent = "Neutral market. Wait for clearer inflection.";
+        $("signalMeta").textContent = "Neutral market. Wait for clearer inflection." + bsHint;
         $("signalPx").textContent = "@ " + price;
       }
     }
@@ -1021,7 +1168,6 @@
       $("riskStop").textContent  = stop.toFixed(2);
       $("riskTargets").textContent = [t1,t2,t3].map(x=>x.toFixed(2)).join(", ");
 
-      // Confidence demo: tie to volatility
       const vol = Math.abs(bars[bars.length-1].close - bars[bars.length-12].close) / bars[bars.length-12].close * 100;
       const conf = clamp(92 - vol*2.0, 55, 95);
       $("riskConf").textContent = Math.round(conf) + "%";
@@ -1065,8 +1211,7 @@
       new ResizeObserver(() => fit()).observe(el);
       window.addEventListener("resize", fit);
 
-      // first load
-      load();
+      load(); // first load
       fit();
     }
 
@@ -1074,9 +1219,17 @@
      * Data fetch placeholder
      ***************/
     async function fetchMarketData(symbol, tf){
-      // reserved for future provider
-      // for now: demo local
-      return genDemoCandles(240);
+      return genDemoCandles(240, tf);
+    }
+
+    /***************
+     * Timeframe sync (Tabs <-> Select)
+     ***************/
+    function setActiveTf(tf){
+      $("tf").value = tf;
+      document.querySelectorAll("#tfTabs button").forEach(b=>{
+        b.classList.toggle("active", (b.dataset.tf===tf));
+      });
     }
 
     /***************
@@ -1091,52 +1244,57 @@
 
       const bars = await fetchMarketData(sym, tf);
 
-      const emaP = Math.max(3, Number($("emaPeriod").value)||10);
-      const auxP = Math.max(5, Number($("auxPeriod").value)||21);
-      $("emaShow").textContent = String(emaP);
-      $("auxShow").textContent = String(auxP);
+      /* ✅ 商业机密：内部参数不展示给客户（可后续按你真实算法替换） */
+      const EMA_INTERNAL = 10;
+      const AUX_INTERNAL = 21;
 
-      const emaSeries = calcEMA(bars, emaP);
-      const auxSeries = calcEMA(bars, auxP);
+      const emaSeries = calcEMA(bars, EMA_INTERNAL);
+      const auxSeries = calcEMA(bars, AUX_INTERNAL);
 
       candle.setData(bars);
       ema.setData(emaSeries);
       aux.setData(auxSeries);
       applyToggles();
 
-      // B/S markers restored
-      const markers = detectPivots(bars, 2);
-      candle.setMarkers(markers);
-
       const last = bars[bars.length-1];
       $("priceText").textContent = last.close.toFixed(2);
 
-      // sentiment + signal consistent
       const s = computeSentiment(bars, emaSeries);
       setPulseUI(s);
-      setSignal(s.bias, last.close.toFixed(2), tf);
+
+      /* ✅ B/S：交叉 + EMA斜率翻转 + cooldown；标在确认完成那根K线 */
+      const markers = generateBSSignals(emaSeries, auxSeries, bars, {
+        cooldownBars: 12,
+        usePulseFilter: false,   // 可选过滤项：默认关闭
+        pulseBias: s.bias,
+        keepN: 18,
+      });
+      candle.setMarkers(markers);
+
+      // 给信号栏补充“最近一次 B/S”
+      let lastBsText = "";
+      if(markers && markers.length){
+        const m = markers[markers.length-1];
+        lastBsText = m.text === "B" ? "B (confirmed)" : "S (confirmed)";
+      }
+
+      setSignal(s.bias, last.close.toFixed(2), tf, lastBsText);
       updateRisk(bars);
 
-      $("hintText").textContent = "Loaded · 已加载（含 B/S 标记 + 情绪/信号一致）";
+      $("hintText").textContent = "Loaded · 已加载（B/S=交叉+斜率翻转+cooldown，标在确认K线）";
       setStatus("API OK", true);
 
-      log(`✅ load: ${sym} ${tf} EMA=${emaP} AUX=${auxP} bias=${s.bias} score=${s.score}`);
+      log(`✅ load: ${sym} ${tf} bias=${s.bias} score=${s.score}`);
     }
 
     /***************
-     * API helper
-     ***************/
-    async function apiGet(path){
-      const resp = await fetch(`${API_BASE}${path}`, { method:"GET" });
-      const txt = await resp.text();
-      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,180)}`);
-      try{ return JSON.parse(txt); }catch(_){ return txt; }
-    }
-
-    /***************
-     * Billing: fetch plans from backend
+     * Billing: Plans + Status + Portal (FULL)
+     * 1) /api/plans is the ONLY source of truth
+     * 2) /api/subscription/status decides access display
+     * 3) /billing/portal for upgrade/cancel/resume/card/invoices
      ***************/
     let PLANS = []; // {key,label,price_id,trial_days}
+
     function setPlanStatus(t){ $("planStatus").textContent = t; }
 
     function updateTrialHint(){
@@ -1153,44 +1311,79 @@
       for(const p of PLANS){
         const opt = document.createElement("option");
         opt.value = p.key;
-        opt.textContent = p.label || p.key;
+        opt.textContent = `${p.label}${p.trial_days ? ` (Trial ${p.trial_days}d)` : ""}`;
         sel.appendChild(opt);
       }
-      setPlanStatus(`已加载 ${PLANS.length} 个计划`);
-      $("subscribeBtn").disabled = (PLANS.length===0);
+      setPlanStatus(`已加载 ${PLANS.length} 个计划（/api/plans）`);
+      $("btnStartSub").disabled = (PLANS.length===0);
       updateTrialHint();
     }
 
     async function initPlans(){
       try{
-        setPlanStatus("从后端拉取…");
-        const data = await apiGet("/billing/prices");
-        // Expect backend returns: [{plan:"weekly", price_id:"...", trial_days:0, label:"Weekly · $4.90"}, ...]
-        if(!Array.isArray(data) || data.length===0) throw new Error("Invalid /billing/prices response");
-        const plans = data.map(x=>({
-          key: x.plan || x.key || x.name,
-          label: x.label || x.display || (x.plan || "plan"),
+        setPlanStatus("从后端 /api/plans 拉取…");
+        const data = await apiGet("/api/plans");
+        if(!data || !data.ok || !Array.isArray(data.plans) || data.plans.length===0){
+          throw new Error("Invalid /api/plans response");
+        }
+        const plans = data.plans.map(x=>({
+          key: x.key,
+          label: x.label || x.key,
           price_id: x.price_id,
           trial_days: x.trial_days || 0
         })).filter(x=>x.key && x.price_id);
 
-        if(plans.length===0) throw new Error("No valid plans with price_id");
+        if(plans.length===0) throw new Error("No valid plans returned");
         populatePlans(plans);
         setStatus("API OK", true);
-        log("✅ plans loaded from /billing/prices");
+        log("✅ plans loaded from /api/plans");
       }catch(e){
-        setPlanStatus("拉取失败（可用兜底手填 price_id）");
+        setPlanStatus("拉取失败（联系管理员/检查后端）");
         $("planSelect").innerHTML = `<option value="">(Plans not loaded)</option>`;
-        $("subscribeBtn").disabled = true;
+        $("btnStartSub").disabled = true;
         setStatus("API Not Ready", false);
         if(isAdmin()) log("❌ initPlans: " + e.message);
       }
     }
 
-    async function subscribe(){
+    function renderSubscriptionCard(sub){
+      const box = $("subscriptionStatus");
+      const btnManage = $("btnManageSub");
+      const btnStart = $("btnStartSub");
+
+      if(!sub){
+        box.textContent = "Status: Not subscribed";
+        btnManage.style.display = "none";
+        btnStart.style.display = "inline-flex";
+        return;
+      }
+      const end = sub.current_period_end ? new Date(sub.current_period_end).toLocaleString() : "";
+      const cap = sub.cancel_at_period_end ? ` · cancel_at_period_end=${sub.cancel_at_period_end}` : "";
+      box.textContent = `Status: ${sub.status || "-"} | End: ${end}${cap}`;
+
+      btnStart.style.display = "none";
+      btnManage.style.display = "inline-flex";
+    }
+
+    async function refreshSubStatus(){
+      const user_id = ($("userId").value || "").trim();
+      if(!user_id){
+        renderSubscriptionCard(null);
+        return;
+      }
+      try{
+        const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
+        renderSubscriptionCard(data.subscription || null);
+      }catch(e){
+        $("subscriptionStatus").textContent = "Status: (check failed) — 请检查后端或稍后再试";
+        if(isAdmin()) log("❌ status: " + e.message);
+      }
+    }
+
+    async function startSubscription(){
       const user_id = ($("userId").value || "").trim();
       const email = ($("email").value || "").trim();
-      const key = $("planSelect").value;
+      const plan = $("planSelect").value;
       const override = ($("priceOverride").value || "").trim();
 
       if(!user_id){
@@ -1199,44 +1392,47 @@
         return;
       }
 
-      let price_id = override;
-      if(!price_id){
-        const p = PLANS.find(x=>x.key===key);
-        if(!p){
-          alert("Plan 未加载成功。请稍后重试，或在 Price ID Override 里手动填入 price_id。");
-          return;
-        }
-        price_id = p.price_id;
-      }
-
       try{
         setStatus("Creating checkout…", true);
-        if(isAdmin()) log(`➡️ POST /billing/checkout user_id=${user_id} price_id=${price_id}`);
 
-        const resp = await fetch(`${API_BASE}/billing/checkout`, {
-          method:"POST",
-          headers: { "Content-Type":"application/json" },
-          body: JSON.stringify({ user_id, email: email || undefined, price_id })
-        });
+        // ✅ 默认走 plan（推荐）；override 仅兜底
+        const payload = override
+          ? { user_id, email: email || undefined, price_id: override }
+          : { user_id, email: email || undefined, plan };
 
-        const txt = await resp.text();
-        if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,220)}`);
+        if(isAdmin()) log(`➡️ POST /billing/checkout user_id=${user_id} ${override ? "price_id=override" : "plan="+plan}`);
 
-        let data = null;
-        try{ data = JSON.parse(txt); }catch(_){ data = { raw: txt }; }
+        const data = await apiPost("/billing/checkout", payload);
 
         if(!data || !data.checkout_url){
           throw new Error("No checkout_url returned");
         }
-
         setStatus("Redirecting to Stripe…", true);
         if(isAdmin()) log("✅ checkout_url received. Redirecting...");
         window.location.href = data.checkout_url;
-
       }catch(e){
         setStatus("Network/API error", false);
         if(isAdmin()) log(`❌ subscribe failed: ${e.message}`);
         alert("订阅失败：网络错误/后端未联通或接口报错。\n\n错误：\n" + e.message);
+      }
+    }
+
+    async function openPortal(){
+      const user_id = ($("userId").value || "").trim();
+      if(!user_id){
+        alert("请先填写 User ID。");
+        $("userId").focus();
+        return;
+      }
+      try{
+        setStatus("Opening portal…", true);
+        const out = await apiPost("/billing/portal", { user_id, return_url: window.location.href });
+        if(!out || !out.portal_url) throw new Error("No portal_url returned");
+        window.location.href = out.portal_url;
+      }catch(e){
+        setStatus("Portal error", false);
+        alert("打开管理订阅失败：\n" + e.message);
+        if(isAdmin()) log("❌ portal: " + e.message);
       }
     }
 
@@ -1306,7 +1502,7 @@
      * Affiliate reserved
      ***************/
     function openAffiliate(){
-      alert("Affiliate 入口已预留：\n\n下一步建议：\n1) 做 /affiliate 登录\n2) 做 /affiliate/dashboard（推荐数、返佣、链接/代码）\n3) 前端按钮跳转到你的 Affiliate 页面");
+      alert("Affiliate 入口已预留：\n\n下一步建议：\n1) 做 /affiliate 登录\n2) 做 /affiliate/dashboard（推荐数、返佣、链接/代码）\n3) 注册时接入电子签：W9/W-8 + 合作协议 + 佣金/结算条款");
     }
 
     /***************
@@ -1315,30 +1511,52 @@
     (function boot(){
       $("yearNow").textContent = String(new Date().getFullYear());
 
-      // Admin diagnostics visibility
       if(isAdmin()){
         $("diagCard").classList.remove("hidden");
         log("Admin mode enabled (?admin=1)");
       }
 
-      // Query params
       const p = new URLSearchParams(location.search);
       const qsSym = p.get("symbol");
       const qsTf  = p.get("tf");
       if(qsSym) $("symbol").value = qsSym.toUpperCase();
-      if(qsTf) $("tf").value = qsTf;
+      if(qsTf) {
+        $("tf").value = qsTf;
+        setActiveTf(qsTf);
+      } else {
+        setActiveTf($("tf").value);
+      }
+
+      // Top TF tabs
+      document.querySelectorAll("#tfTabs button").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const tf = btn.dataset.tf;
+          setActiveTf(tf);
+          load();
+        });
+      });
+
+      // Sync select -> tabs
+      $("tf").addEventListener("change", ()=>{
+        setActiveTf($("tf").value);
+      });
 
       // events
       $("tgEMA").addEventListener("change", applyToggles);
       $("tgAux").addEventListener("change", applyToggles);
 
-      $("emaPeriod").addEventListener("change", ()=>{ $("emaShow").textContent = $("emaPeriod").value; });
-      $("auxPeriod").addEventListener("change", ()=>{ $("auxShow").textContent = $("auxPeriod").value; });
-
-      $("loadBtn").addEventListener("click", load);
-      $("subscribeBtn").addEventListener("click", subscribe);
+      $("loadBtn").addEventListener("click", ()=>{
+        setActiveTf($("tf").value);
+        load();
+      });
 
       $("planSelect").addEventListener("change", updateTrialHint);
+
+      $("btnStartSub").addEventListener("click", startSubscription);
+      $("btnManageSub").addEventListener("click", openPortal);
+
+      $("userId").addEventListener("blur", refreshSubStatus);
+      $("userId").addEventListener("change", refreshSubStatus);
 
       $("copyLinkBtn").addEventListener("click", copyShareLink);
       $("exportBtn").addEventListener("click", exportPNG);
@@ -1351,8 +1569,9 @@
       }
 
       setStatus("Ready · 前端已就绪", true);
+
       initChart();
-      initPlans(); // key fix: fetch 4 plans dynamically
+      initPlans().then(()=>refreshSubStatus());
     })();
   </script>
 </body>
