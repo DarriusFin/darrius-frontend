@@ -1,969 +1,958 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>DarriusAI · Inflection Hunter</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>DarriusAI • Inflection Hunter</title>
 
-  <!-- Plotly (for chart + B/S overlay) -->
-  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
   <style>
     :root{
-      --bg:#071018;
-      --panel:#0b1621;
-      --panel2:#0a131c;
-      --line:#142434;
-      --text:#d6e2f1;
-      --muted:#8aa0b7;
+      --bg:#070b12;
+      --panel:#0b1220;
+      --txt:#e7eefc;
+      --muted:#9cb0d6;
       --good:#2ee59d;
       --bad:#ff5c6c;
       --warn:#ffcc66;
-      --btn:#1b9cff;
-      --btn2:#2ee59d;
-      --shadow: 0 10px 30px rgba(0,0,0,.35);
       --radius:14px;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial;
     }
-
     *{ box-sizing:border-box; }
     body{
       margin:0;
-      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
-      background: radial-gradient(1200px 600px at 20% 0%, rgba(46,229,157,.10), transparent 60%),
-                  radial-gradient(900px 500px at 80% 0%, rgba(27,156,255,.10), transparent 60%),
+      font-family:var(--sans);
+      background: radial-gradient(1200px 600px at 35% 20%, rgba(32,214,167,.10), transparent 60%),
+                  radial-gradient(1000px 500px at 70% 10%, rgba(99,155,255,.10), transparent 60%),
                   var(--bg);
-      color:var(--text);
+      color:var(--txt);
     }
-
-    header{
-      height:56px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding: 0 18px;
-      border-bottom: 1px solid rgba(255,255,255,.06);
-      background: linear-gradient(180deg, rgba(10,19,28,.85), rgba(10,19,28,.55));
-      position: sticky;
-      top:0;
-      z-index:5;
-      backdrop-filter: blur(10px);
-    }
-    .brand{
-      display:flex;align-items:center;gap:10px;
-      font-weight:700; letter-spacing:.2px;
-    }
-    .dot{
-      width:10px;height:10px;border-radius:50%;
-      background: var(--good);
-      box-shadow: 0 0 14px rgba(46,229,157,.7);
-    }
-    .badge{
-      font-size:12px;
-      padding: 6px 10px;
-      border:1px solid rgba(255,255,255,.10);
-      border-radius: 999px;
-      color: var(--muted);
-      background: rgba(255,255,255,.03);
-      display:flex;align-items:center;gap:8px;
-    }
-    .api-pill{
-      width:8px;height:8px;border-radius:50%;
-      background: var(--good);
-    }
-    .api-pill.off{ background: var(--bad); box-shadow: 0 0 10px rgba(255,92,108,.6); }
-    .wrap{
+    .app{
+      height:100vh;
       display:grid;
-      grid-template-columns: 1fr 360px;
-      gap: 14px;
-      padding: 14px;
-      max-width: 1500px;
-      margin: 0 auto;
+      grid-template-columns: 360px 1fr 360px;
+      gap:14px;
+      padding:14px;
     }
-
     .card{
-      background: linear-gradient(180deg, rgba(11,22,33,.90), rgba(11,22,33,.70));
-      border:1px solid rgba(255,255,255,.08);
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border:1px solid rgba(255,255,255,.06);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       overflow:hidden;
-    }
-    .card-h{
-      padding: 12px 14px;
-      border-bottom: 1px solid rgba(255,255,255,.07);
-      display:flex; align-items:center; justify-content:space-between;
-    }
-    .card-h h3{ margin:0; font-size:14px; font-weight:700; color:#e7f1ff; }
-    .card-b{ padding: 12px 14px; }
-
-    /* Chart area */
-    #chart{
-      width:100%;
-      height: calc(100vh - 56px - 28px);
-      min-height: 560px;
-    }
-    .toolbar{
       display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
+      flex-direction:column;
+      min-height:0;
     }
-    .pillbar{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-    .pill{
-      cursor:pointer;
-      user-select:none;
-      font-size:12px;
-      padding: 7px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.03);
-      color: var(--muted);
-      transition: .15s;
-    }
-    .pill.active{
-      border-color: rgba(46,229,157,.35);
-      color:#eafff6;
-      background: rgba(46,229,157,.10);
-    }
-
-    /* Right panel */
-    .field{ margin-bottom: 12px; }
-    label{
-      display:block;
-      font-size:12px;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    input, select{
-      width:100%;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.15);
-      color: var(--text);
-      outline: none;
-    }
-    input::placeholder{ color: rgba(138,160,183,.7); }
-    .row2{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:10px;
-    }
-
-    .btn{
-      width:100%;
-      padding: 11px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.10);
-      cursor:pointer;
-      font-weight:700;
-      transition:.15s;
-    }
-    .btn.primary{
-      background: linear-gradient(180deg, rgba(27,156,255,.95), rgba(27,156,255,.75));
-      border-color: rgba(27,156,255,.35);
-      color:#04111c;
-    }
-    .btn.good{
-      background: linear-gradient(180deg, rgba(46,229,157,.95), rgba(46,229,157,.75));
-      border-color: rgba(46,229,157,.35);
-      color:#04111c;
-    }
-    .btn.ghost{
-      background: rgba(255,255,255,.04);
-      color: var(--text);
-    }
-    .btn:active{ transform: translateY(1px); }
-
-    .hint{
-      font-size:12px;
-      color: var(--muted);
-      line-height:1.45;
-    }
-    .statusline{
+    .cardHeader{
+      padding:14px 14px 10px;
+      border-bottom:1px solid rgba(255,255,255,.06);
       display:flex;
       align-items:center;
       justify-content:space-between;
       gap:10px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: rgba(255,255,255,.03);
-      border: 1px solid rgba(255,255,255,.06);
-      margin-bottom: 10px;
-      font-size: 12px;
-      color: var(--muted);
     }
-    .status-badge{
-      font-weight:800;
-      padding: 5px 9px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.10);
+    .brand{ display:flex; flex-direction:column; gap:2px; line-height:1.1; }
+    .brand .title{ font-weight:900; letter-spacing:.2px; }
+    .brand .sub{ font-size:12px; color:var(--muted); }
+
+    .badge{
+      font-size:12px;
+      border:1px solid rgba(255,255,255,.10);
       background: rgba(255,255,255,.04);
-      color: #e7f1ff;
+      padding:4px 8px;
+      border-radius:999px;
+      color:var(--muted);
+      white-space:nowrap;
     }
-    .status-badge.ok{
-      border-color: rgba(46,229,157,.35);
-      background: rgba(46,229,157,.10);
-      color: #eafff6;
+    .badge.ok{ color:var(--good); border-color: rgba(46,229,157,.35); background: rgba(46,229,157,.08); }
+    .badge.warn{ color:var(--warn); border-color: rgba(255,204,102,.35); background: rgba(255,204,102,.08); }
+    .badge.bad{ color:var(--bad); border-color: rgba(255,92,108,.35); background: rgba(255,92,108,.08); }
+
+    .cardBody{ padding:14px; overflow:auto; min-height:0; }
+    .section{
+      border:1px solid rgba(255,255,255,.06);
+      background: rgba(0,0,0,.14);
+      border-radius: 14px;
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
     }
-    .status-badge.err{
-      border-color: rgba(255,92,108,.35);
-      background: rgba(255,92,108,.10);
-      color: #ffe9ec;
+    .sectionTitle{
+      font-weight:900;
+      font-size:13px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+    .mini{ font-size:12px; color:var(--muted); line-height:1.35; }
+    .mono{ font-family: var(--mono); font-size:12px; color:rgba(231,238,252,.92); }
+
+    label{ font-size:12px; color:var(--muted); }
+    input, select{
+      width:100%;
+      border-radius:12px;
+      background: rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.08);
+      color:var(--txt);
+      padding:10px 12px;
+      outline:none;
+    }
+    input::placeholder{ color:rgba(156,176,214,.55); }
+
+    .row{ display:flex; gap:10px; align-items:center; }
+    .btn{
+      width:100%;
+      border:none;
+      border-radius:12px;
+      padding:11px 12px;
+      cursor:pointer;
+      font-weight:900;
+      color:#022016;
+      background: linear-gradient(180deg, rgba(32,214,167,1), rgba(20,190,150,1));
+      box-shadow: 0 10px 18px rgba(32,214,167,.18);
+    }
+    .btn.secondary{
+      background: rgba(255,255,255,.06);
+      color:var(--txt);
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow:none;
+      font-weight:800;
+    }
+    .btn:disabled{ opacity:.55; cursor:not-allowed; }
+
+    /* Center chart */
+    #chartWrap{ padding:0; }
+    #chartTop{
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    #chartTitle{ font-weight:900; letter-spacing:.2px; }
+    #tfPills{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .pill{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      color:var(--muted);
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .pill.active{
+      color:var(--txt);
+      border-color: rgba(32,214,167,.38);
+      background: rgba(32,214,167,.10);
+    }
+    #chart{
+      width:100%;
+      height: calc(100vh - 14px*2 - 44px - 2px);
+      min-height:520px;
     }
 
     /* Toast */
-    #toast{
-      position: fixed;
-      left: 50%;
-      bottom: 18px;
-      transform: translateX(-50%);
-      background: rgba(10,19,28,.92);
-      border: 1px solid rgba(255,255,255,.10);
-      box-shadow: var(--shadow);
-      padding: 10px 12px;
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:18px;
+      transform:translateX(-50%);
+      background: rgba(0,0,0,.75);
+      border:1px solid rgba(255,255,255,.12);
+      color:var(--txt);
+      padding:10px 12px;
       border-radius: 12px;
-      font-size: 13px;
-      color: var(--text);
+      box-shadow: var(--shadow);
+      font-size:13px;
       display:none;
-      max-width: 92vw;
-      z-index: 20;
+      max-width: min(860px, 92vw);
+      z-index:9999;
     }
-    #toast .t-muted{ color: var(--muted); font-size:12px; margin-top:4px; }
+    .toast.show{ display:block; }
+    .toast strong{ color: var(--warn); }
 
-    .small{
-      font-size:12px;
-      color: var(--muted);
-    }
+    .divider{ height:1px; background: rgba(255,255,255,.06); margin:6px 0; }
 
-    @media (max-width: 1100px){
-      .wrap{ grid-template-columns: 1fr; }
+    @media (max-width: 1180px){
+      .app{ grid-template-columns: 1fr; height:auto; }
       #chart{ height: 62vh; min-height: 420px; }
     }
   </style>
+Fio
 </head>
 
 <body>
-<header>
-  <div class="brand">
-    <span class="dot"></span>
-    <div>DarriusAI · Inflection Hunter</div>
-  </div>
-  <div class="badge" title="Backend connectivity">
-    <span id="apiPill" class="api-pill"></span>
-    <span id="apiText">API: checking…</span>
-  </div>
-</header>
+  <div class="app">
 
-<div class="wrap">
+    <!-- LEFT -->
+    <div class="card">
+      <div class="cardHeader">
+        <div class="brand">
+          <div class="title">DarriusAI • Inflection Hunter</div>
+          <div class="sub">AI 拐点猎手系统</div>
+        </div>
+        <div id="apiBadge" class="badge">API …</div>
+      </div>
 
-  <!-- Main chart -->
-  <div class="card">
-    <div class="card-h">
-      <h3 id="chartTitle">Chart</h3>
-      <div class="toolbar">
-        <div class="pillbar" id="tfPills"></div>
+      <div class="cardBody">
+        <div class="section">
+          <div class="sectionTitle">
+            Market Pulse
+            <span id="pulseBadge" class="badge ok">BULL</span>
+          </div>
+          <div class="row">
+            <div style="flex:1">
+              <div class="mini">Sentiment</div>
+              <div style="font-size:42px;font-weight:900;line-height:1; color:var(--good);" id="sentimentScore">—</div>
+            </div>
+            <div style="flex:2">
+              <div class="mini" id="pulseDesc">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:10px"></div>
+
+        <!-- SAFE Signal Summary: no algorithm leakage -->
+        <div class="section">
+          <div class="sectionTitle">Signal Summary</div>
+          <div class="mini" id="signalText">—</div>
+          <div class="mini">Proprietary rules. UI shows status only.</div>
+        </div>
+
+        <div style="height:10px"></div>
+
+        <div class="section">
+          <div class="sectionTitle">Signals Count</div>
+          <div class="mini">Buy: <span class="mono" id="buyCount">0</span> · Sell: <span class="mono" id="sellCount">0</span></div>
+          <div class="mini" id="sigHint">—</div>
+        </div>
+
+        <div style="height:10px"></div>
+
+        <div class="mini">
+          Educational use only. No solicitation. Past performance is not indicative of future results.
+        </div>
       </div>
     </div>
-    <div class="card-b" style="padding:0;">
+
+    <!-- CENTER -->
+    <div class="card" id="chartWrap">
+      <div id="chartTop">
+        <div class="row" style="gap:10px;">
+          <div id="chartTitle">BTCUSDT</div>
+          <div class="badge" id="lastPrice">—</div>
+          <!-- SAFE: no rule wording -->
+          <div class="badge" id="loadedText">Loaded · —</div>
+        </div>
+        <div id="tfPills"></div>
+      </div>
       <div id="chart"></div>
     </div>
-  </div>
 
-  <!-- Right control panel -->
-  <div class="card">
-    <div class="card-h">
-      <h3>Control Center</h3>
-      <span class="small" id="buildInfo">v1</span>
-    </div>
-    <div class="card-b">
-
-      <!-- Market selection -->
-      <div class="field">
-        <label>Symbol</label>
-        <input id="symbolInput" value="BTCUSDT" placeholder="e.g. BTCUSDT, AAPL, SPY"/>
+    <!-- RIGHT -->
+    <div class="card">
+      <div class="cardHeader">
+        <div class="brand">
+          <div class="title">Control Center • 控制台</div>
+          <div class="sub">Market / Timeframe / Subscription</div>
+        </div>
+        <div class="badge">© 2026</div>
       </div>
 
-      <div class="row2">
-        <div class="field">
-          <label>Timeframe</label>
-          <select id="tfSelect"></select>
-        </div>
-        <div class="field" style="display:flex; align-items:end;">
-          <button class="btn primary" id="loadBtn">Load</button>
-        </div>
-      </div>
+      <div class="cardBody" style="display:flex; flex-direction:column; gap:12px;">
 
-      <div class="field">
-        <div class="hint">EMA / AUX overlays can be toggled here (if your backend returns them).</div>
-        <div class="row2" style="margin-top:10px;">
-          <label style="display:flex;gap:8px;align-items:center;margin:0;">
-            <input type="checkbox" id="toggleEMA" checked style="width:auto;"/>
-            <span>EMA</span>
-          </label>
-          <label style="display:flex;gap:8px;align-items:center;margin:0;">
-            <input type="checkbox" id="toggleAUX" checked style="width:auto;"/>
-            <span>AUX</span>
-          </label>
-        </div>
-      </div>
+        <!-- Market -->
+        <div class="section">
+          <div class="sectionTitle">Market</div>
 
-      <hr style="border:none;border-top:1px solid rgba(255,255,255,.07); margin:14px 0;">
-
-      <!-- Plans / subscription -->
-      <div class="field">
-        <div class="statusline">
-          <div>
-            <div style="color:#e7f1ff;font-weight:700;">Subscription</div>
-            <div class="small" id="subLine">Status: Unknown</div>
+          <div class="row">
+            <div style="flex:1">
+              <label for="symbolInput">Symbol</label>
+              <input id="symbolInput" placeholder="e.g. BTCUSDT" value="BTCUSDT" />
+            </div>
           </div>
-          <span id="plansHealth" class="status-badge">Plans</span>
+
+          <div class="row">
+            <div style="flex:1">
+              <label for="tfSelect">Timeframe</label>
+              <select id="tfSelect"></select>
+            </div>
+          </div>
+
+          <div class="row">
+            <button class="btn" id="loadBtn">Load • 加载</button>
+          </div>
+
+          <div class="mini" id="tfSupportHint" style="display:none; color: var(--warn);">
+            <strong>Notice:</strong> timeframe not supported. Fallback to 1D.
+          </div>
         </div>
 
-        <label>Plan</label>
-        <select id="planSelect"></select>
-        <div class="small" id="planError" style="margin-top:8px; display:none; color: #ffe9ec;">
-          Plans config error: expected 4 plans.
+        <!-- Indicators -->
+        <div class="section">
+          <div class="sectionTitle">Indicators</div>
+          <div class="row">
+            <label class="mini" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="toggleEMA" checked /> EMA
+            </label>
+            <label class="mini" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="toggleAUX" checked /> AUX
+            </label>
+            <label class="mini" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="toggleSignals" checked /> B/S
+            </label>
+          </div>
+          <div class="mini">B/S are drawn as independent overlays and persist across redraws.</div>
         </div>
-      </div>
 
-      <div class="field">
-        <label>User ID</label>
-        <input id="userIdInput" placeholder="e.g. user_123" />
-      </div>
+        <!-- Subscription (CORE) -->
+        <div class="section">
+          <div class="sectionTitle">
+            Subscription
+            <span class="badge ok" id="stripeBadge">Stripe Secure</span>
+          </div>
 
-      <div class="field">
-        <label>Email (optional)</label>
-        <input id="emailInput" placeholder="name@domain.com"/>
-      </div>
+          <div class="row">
+            <div style="flex:1">
+              <label for="userIdInput">User ID</label>
+              <input id="userIdInput" placeholder="e.g. user_123" value="darrius888"/>
+            </div>
+          </div>
 
-      <button class="btn good" id="subActionBtn">Subscribe & Start</button>
-      <div class="hint" style="margin-top:10px;">
-        One button flow: creates Stripe Checkout Session, then access is enabled by webhook.
-      </div>
+          <div class="row">
+            <div style="flex:1">
+              <label for="emailInput">Email (optional)</label>
+              <input id="emailInput" placeholder="name@domain.com" value="perrywu666@outlook.com"/>
+            </div>
+          </div>
 
+          <div class="row">
+            <div style="flex:1">
+              <label for="planSelect">Plan</label>
+              <select id="planSelect"></select>
+              <div class="mini" id="planSelfCheck"></div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- 2 lines status -->
+          <div class="mini">
+            <div>Status: <span id="subStatusText" class="mono">unknown</span></div>
+            <div>Plan: <span id="subPlanText" class="mono">—</span></div>
+          </div>
+
+          <!-- SINGLE BUTTON -->
+          <div class="row">
+            <button class="btn" id="subActionBtn" disabled>Subscribe & Start</button>
+          </div>
+
+          <div class="row">
+            <button class="btn secondary" id="refreshSubBtn">Refresh Status</button>
+          </div>
+
+          <div class="mini">Plans are core. UI enforces 4 plans and self-checks.</div>
+        </div>
+
+        <!-- Utilities -->
+        <div class="section">
+          <div class="sectionTitle">Utilities</div>
+          <div class="row">
+            <button class="btn secondary" id="copyLinkBtn">Copy Share Link</button>
+            <button class="btn secondary" id="exportPngBtn">Export PNG</button>
+          </div>
+        </div>
+
+      </div>
     </div>
+
   </div>
 
-</div>
-
-<div id="toast"></div>
+  <div id="toast" class="toast"></div>
 
 <script>
 /** =========================
- *  CONFIG — adjust if needed
+ *  CONFIG
  *  ========================= */
-const API_BASE = ""; // same origin by default. If your API is on another domain, set it here.
-const PRICES_ENDPOINT = `${API_BASE}/billing/prices`; // must return array of 4 plans
-const CHECKOUT_ENDPOINT = `${API_BASE}/create-checkout-session`; // POST
-const MARKET_ENDPOINT = `${API_BASE}/api/market`; // GET ?symbol=BTCUSDT&tf=1d (change if your backend differs)
-const HEALTH_ENDPOINT = `${API_BASE}/`; // used to test API is alive
+const API_BASE = ""; // same origin recommended. If API is different, put e.g. "https://darrius-api.onrender.com"
 
-/** Timeframes required by your spec (8 options) */
-const TIMEFRAMES = [
-  { key:'5m', label:'5m'  },
-  { key:'15m', label:'15m'},
-  { key:'30m', label:'30m'},
-  { key:'1h', label:'1h' },
-  { key:'4h', label:'4h' },
-  { key:'1d', label:'1D' },
-  { key:'1w', label:'1W' },
-  { key:'1m', label:'1M' },
-];
-
-const TF_FALLBACK = '1d';
-
-/** Fixed expected plan order (stable rendering) */
-const PLAN_ORDER = { week:1, weekly:1, month:2, monthly:2, quarter:3, quarterly:3, year:4, yearly:4, annual:4 };
-
-/** App state */
-const state = {
-  symbol: 'BTCUSDT',
-  tf: '1d',
-  plans: [],
-  subscription_status: 'unknown', // 'active' | 'inactive' | 'unknown'
-  chartReady: false,
-  lastMarketPayload: null,
+const ENDPOINTS = {
+  prices:   "/billing/prices",                 // GET -> array of 4 plans
+  checkout: "/billing/checkout",               // POST -> {checkout_url}
+  subStatus:"/api/subscription/status",        // GET -> {subscribed,status,price_id}
+  portal:  "/api/billing/portal",              // POST -> {portal_url}
+  market:  "/api/market",                      // GET -> ?symbol&tf
+  health:  "/health"                           // GET -> ok
 };
 
+// 8 required timeframes (never depend on backend)
+const TIMEFRAMES = [
+  {key:'5m', label:'5m'},
+  {key:'15m', label:'15m'},
+  {key:'30m', label:'30m'},
+  {key:'1h', label:'1h'},
+  {key:'4h', label:'4h'},
+  {key:'1d', label:'1D'},
+  {key:'1w', label:'1W'},
+  {key:'1m', label:'1M'},
+];
+const FALLBACK_TF = '1d';
+
+// YOUR 4 core Stripe price IDs (absolute truth)
+const PLAN_CATALOG_FALLBACK = [
+  { price_id:"price_1SpJMmR84UMUVSTg0T7xfm6r", interval:"weekly",    amount:4.90,  currency:"USD", label:"Weekly · $4.90" },
+  { price_id:"price_1SpbvRR84UMUVSTggbg0SFzi", interval:"monthly",   amount:19.90, currency:"USD", label:"Monthly · $19.90" },
+  { price_id:"price_1SpbwYR84UMUVSTgMQpUrE42", interval:"quarterly", amount:49.90, currency:"USD", label:"Quarterly · $49.90" },
+  { price_id:"price_1SpbpxR84UMUVSTgapaJDjMX", interval:"yearly",    amount:189.0, currency:"USD", label:"Yearly · $189" },
+];
+
+const PLAN_ORDER = { weekly:1, week:1, monthly:2, month:2, quarterly:3, quarter:3, yearly:4, year:4, annual:4 };
+
 /** =========================
- *  Utilities
+ *  STATE
  *  ========================= */
-function toast(msg, sub="") {
-  const t = document.getElementById('toast');
-  t.innerHTML = `<div>${msg}</div>` + (sub ? `<div class="t-muted">${sub}</div>` : "");
-  t.style.display = 'block';
-  clearTimeout(toast._timer);
-  toast._timer = setTimeout(()=> t.style.display='none', 3600);
+let state = {
+  symbol: "BTCUSDT",
+  tf: "1d",
+  plans: [],
+  selectedPriceId: null,
+  chartData: null,
+  subscription: { subscribed:false, status:"unknown", price_id:null }
+};
+
+function $(id){ return document.getElementById(id); }
+
+function toast(msg, ms=2600){
+  const el = $("toast");
+  el.innerHTML = msg;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(()=> el.classList.remove("show"), ms);
 }
 
-function setApiHealth(ok, text){
-  const pill = document.getElementById('apiPill');
-  const apiText = document.getElementById('apiText');
-  pill.classList.toggle('off', !ok);
-  apiText.textContent = `API: ${text}`;
-}
+async function apiFetch(path, options={}){
+  const url = API_BASE + path;
+  const res = await fetch(url, {
+    headers: { "Content-Type":"application/json" },
+    ...options
+  });
+  const ct = res.headers.get("content-type") || "";
+  let data = null;
+  if(ct.includes("application/json")) data = await res.json().catch(()=>null);
+  else data = { raw: await res.text().catch(()=> "") };
 
-function qs(id){ return document.getElementById(id); }
+  if(!res.ok){
+    const msg = (data && (data.error || data.detail || data.message)) ? (data.error || data.detail || data.message) : `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
 
 function normalizeTf(tf){
-  const found = TIMEFRAMES.some(x=>x.key===tf);
-  return found ? tf : TF_FALLBACK;
+  tf = (tf||"").toLowerCase().trim();
+  return TIMEFRAMES.some(x=>x.key===tf) ? tf : FALLBACK_TF;
 }
 
-function formatMoney(amount, currency='USD'){
-  // amount can be in cents or dollars depending on backend; try to infer.
-  // If amount is large like 1990 -> cents; if 19.9 -> dollars.
-  let v = Number(amount);
-  if (Number.isFinite(v)) {
-    if (v >= 50 && Number.isInteger(v)) v = v / 100; // heuristics: treat as cents
-    return new Intl.NumberFormat('en-US', { style:'currency', currency }).format(v);
-  }
-  return String(amount);
-}
-
-/** =========================
- *  1) Plans: load + render + self-check
- *  ========================= */
-async function loadPlans(){
-  try{
-    const res = await fetch(PRICES_ENDPOINT, { method:'GET' });
-    if(!res.ok) throw new Error(`prices http ${res.status}`);
-    const data = await res.json();
-
-    // Expect: array of plans. Each plan should include:
-    // { price_id, amount, currency, interval } OR stripe-like fields
-    // We will map best-effort.
-    const plans = Array.isArray(data) ? data : (data?.data || data?.prices || []);
-    if(!Array.isArray(plans)) throw new Error('prices not array');
-
-    // Normalize
-    const normalized = plans.map(p=>{
-      const intervalRaw = (p.interval || p.recurring?.interval || p.billing_period || p.plan_interval || '').toString().toLowerCase();
-      // Some backends might use 'week','month','year' OR 'weekly','monthly', etc.
-      let interval = intervalRaw;
-      if(interval === 'week') interval = 'weekly';
-      if(interval === 'month') interval = 'monthly';
-      if(interval === 'year') interval = 'yearly';
-      if(interval === 'quarter') interval = 'quarterly';
-
-      // price id field variants
-      const price_id = p.price_id || p.id || p.priceId || p.price || p.stripe_price_id;
-
-      // amount variants
-      const amount = p.amount ?? p.unit_amount ?? p.unitAmount ?? p.price_amount ?? p.display_amount;
-
-      const currency = (p.currency || 'USD').toUpperCase();
-
-      const nickname = p.nickname || p.name || p.product_name || p.product || '';
-
-      // Provide default label fallback
-      const prettyInterval =
-        interval === 'weekly' ? 'Weekly' :
-        interval === 'monthly' ? 'Monthly' :
-        interval === 'quarterly' ? 'Quarterly' :
-        interval === 'yearly' || interval === 'annual' ? 'Yearly' : (interval || 'Plan');
-
-      const label = `${prettyInterval} — ${formatMoney(amount, currency)}`;
-
-      return { price_id, amount, currency, interval, nickname, label, raw:p };
-    })
-    .filter(p=>!!p.price_id);
-
-    // Stable order
-    normalized.sort((a,b)=>{
-      const ia = PLAN_ORDER[a.interval] ?? 99;
-      const ib = PLAN_ORDER[b.interval] ?? 99;
-      return ia - ib;
-    });
-
-    state.plans = normalized;
-
-    renderPlans();
-    selfCheckPlans();
-
-  }catch(err){
-    console.error(err);
-    state.plans = [];
-    renderPlans();
-    selfCheckPlans();
-    toast("Failed to load plans", String(err));
-  }
-}
-
-function renderPlans(){
-  const sel = qs('planSelect');
-  sel.innerHTML = '';
-  if(state.plans.length === 0){
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = 'No plans';
-    sel.appendChild(opt);
-    return;
-  }
-  for(const p of state.plans){
-    const opt = document.createElement('option');
-    opt.value = p.price_id;
-    opt.textContent = p.label;
-    sel.appendChild(opt);
-  }
-}
-
-function selfCheckPlans(){
-  const badge = qs('plansHealth');
-  const err = qs('planError');
-
-  if(state.plans.length === 4){
-    badge.textContent = 'Plans OK';
-    badge.classList.add('ok');
-    badge.classList.remove('err');
-    err.style.display = 'none';
+function setApiBadge(ok){
+  const b = $("apiBadge");
+  if(ok){
+    b.textContent = "API OK";
+    b.className = "badge ok";
   }else{
-    badge.textContent = `Plans ${state.plans.length}/4`;
-    badge.classList.add('err');
-    badge.classList.remove('ok');
-    err.style.display = 'block';
-    console.error("Plans missing or extra:", state.plans);
+    b.textContent = "API ERR";
+    b.className = "badge bad";
   }
 }
 
+function setActiveTfPill(tf){
+  tf = normalizeTf(tf);
+  document.querySelectorAll(".pill").forEach(p=>{
+    p.classList.toggle("active", normalizeTf(p.getAttribute("data-tf")) === tf);
+  });
+}
+
 /** =========================
- *  2) Timeframe: render 8 options + load must include tf + fallback
+ *  TIMEFRAMES (always 8)
  *  ========================= */
-function renderTimeframes(){
-  // select
-  const sel = qs('tfSelect');
-  sel.innerHTML = '';
-  for(const tf of TIMEFRAMES){
-    const opt = document.createElement('option');
-    opt.value = tf.key;
-    opt.textContent = tf.label;
-    sel.appendChild(opt);
-  }
+function initTimeframesUI(){
+  const sel = $("tfSelect");
+  sel.innerHTML = TIMEFRAMES.map(t => `<option value="${t.key}">${t.label}</option>`).join("");
   sel.value = state.tf;
 
-  // pills (top toolbar)
-  const bar = qs('tfPills');
-  bar.innerHTML = '';
-  for(const tf of TIMEFRAMES){
-    const pill = document.createElement('div');
-    pill.className = 'pill' + (tf.key === state.tf ? ' active' : '');
-    pill.textContent = tf.label;
-    pill.onclick = ()=>{
-      setTimeframe(tf.key);
-      // optional: auto-load on click
-      loadMarket();
-    };
-    bar.appendChild(pill);
-  }
-}
+  sel.addEventListener("change", ()=>{
+    state.tf = normalizeTf(sel.value);
+    setActiveTfPill(state.tf);
+  });
 
-function setTimeframe(tf){
-  state.tf = normalizeTf(tf);
-  qs('tfSelect').value = state.tf;
-  // update pills
-  renderTimeframes();
+  const wrap = $("tfPills");
+  wrap.innerHTML = TIMEFRAMES.map(t => `<div class="pill" data-tf="${t.key}">${t.label}</div>`).join("");
+  wrap.addEventListener("click", (e)=>{
+    const p = e.target.closest(".pill");
+    if(!p) return;
+    const tf = p.getAttribute("data-tf");
+    state.tf = normalizeTf(tf);
+    $("tfSelect").value = state.tf;
+    setActiveTfPill(state.tf);
+    // auto-load on pill click:
+    loadMarketAndRender();
+  });
+
+  setActiveTfPill(state.tf);
 }
 
 /** =========================
- *  3) Chart: candles/line + EMA/AUX + B/S overlay traces
+ *  PLANS (core: must be 4)
  *  ========================= */
-function initChart(){
-  const layout = {
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)',
-    margin: { l:55, r:15, t:10, b:35 },
-    xaxis: {
-      gridcolor: 'rgba(255,255,255,.06)',
-      zerolinecolor: 'rgba(255,255,255,.08)',
-      color: 'rgba(214,226,241,.85)',
-    },
-    yaxis: {
-      gridcolor: 'rgba(255,255,255,.06)',
-      zerolinecolor: 'rgba(255,255,255,.08)',
-      color: 'rgba(214,226,241,.85)',
-    },
-    showlegend: false,
-  };
-
-  Plotly.newPlot('chart', [], layout, {
-    displayModeBar: true,
-    responsive: true,
-  });
-
-  state.chartReady = true;
+function planLabel(p){
+  // prefer backend label if exists
+  if(p.label) return p.label;
+  const name =
+    (p.plan || p.interval || "").toLowerCase().includes("week") ? "Weekly" :
+    (p.plan || p.interval || "").toLowerCase().includes("month") ? "Monthly" :
+    (p.plan || p.interval || "").toLowerCase().includes("quarter") ? "Quarterly" :
+    (p.plan || p.interval || "").toLowerCase().includes("year") ? "Yearly" : "Plan";
+  return `${name}`;
 }
 
-/**
- * Expected market payload (best effort):
- * {
- *   symbol: "BTCUSDT",
- *   tf: "1d",
- *   candles: [{t, o,h,l,c}] OR [{time, open, high, low, close}] OR line points,
- *   ema: [{t, v}] optional,
- *   aux: [{t, v}] optional,
- *   signals: [{t, type:"B"|"S", price}] optional
- * }
- */
-function buildTraces(payload){
-  const candles = payload.candles || payload.ohlc || payload.data || [];
-  const ema = payload.ema || payload.EMA || null;
-  const aux = payload.aux || payload.AUX || null;
-  const signals = payload.signals || payload.bs || payload.BS || [];
-
-  // Normalize candle fields
-  const xs = [];
-  const os = [];
-  const hs = [];
-  const ls = [];
-  const cs = [];
-
-  for(const row of candles){
-    const t = row.t ?? row.time ?? row.ts ?? row.date;
-    const o = row.o ?? row.open;
-    const h = row.h ?? row.high;
-    const l = row.l ?? row.low;
-    const c = row.c ?? row.close ?? row.value;
-
-    if(t == null) continue;
-    xs.push(t);
-    os.push(o);
-    hs.push(h);
-    ls.push(l);
-    cs.push(c);
+async function loadPlans(){
+  let plans = [];
+  try{
+    const data = await apiFetch(ENDPOINTS.prices, { method:"GET" });
+    const raw = Array.isArray(data) ? data : (data.plans || data.data || []);
+    plans = (raw||[]).map(p=>{
+      const price_id = p.price_id || p.id || p.priceId || p.price;
+      const interval = (p.plan || p.interval || "").toString().toLowerCase();
+      const label = p.label || null;
+      return { price_id, interval, label, raw:p };
+    }).filter(x=>x.price_id);
+  }catch(e){
+    // ignore and fallback
   }
 
-  // Main trace: if OHLC exists -> candlestick; else -> line
-  let mainTrace;
-  const hasOhlc = os.every(v=>v!=null) && hs.every(v=>v!=null) && ls.every(v=>v!=null) && cs.every(v=>v!=null);
-  if(hasOhlc){
-    mainTrace = {
-      type: 'candlestick',
-      x: xs, open: os, high: hs, low: ls, close: cs,
-      increasing: { line: { width: 1 } },
-      decreasing: { line: { width: 1 } },
-      name: 'Price'
-    };
+  // enforce fallback if not exactly 4
+  if(plans.length !== 4){
+    plans = PLAN_CATALOG_FALLBACK.map(x=>({ ...x }));
+  }
+
+  plans.sort((a,b)=>{
+    const ia = PLAN_ORDER[a.interval] ?? 99;
+    const ib = PLAN_ORDER[b.interval] ?? 99;
+    return ia - ib;
+  });
+
+  state.plans = plans;
+  const sel = $("planSelect");
+  sel.innerHTML = plans.map(p => `<option value="${p.price_id}">${p.label || planLabel(p)}</option>`).join("");
+
+  state.selectedPriceId = plans[0]?.price_id || null;
+  sel.value = state.selectedPriceId;
+
+  sel.onchange = ()=>{
+    state.selectedPriceId = sel.value;
+    syncPlanText();
+    updateSubActionEnabled();
+  };
+
+  // self-check
+  if(state.plans.length === 4){
+    $("planSelfCheck").textContent = "Plans OK: 4 loaded.";
+    $("planSelfCheck").style.color = "var(--good)";
   }else{
-    mainTrace = {
-      type:'scatter',
-      mode:'lines',
-      x: xs,
-      y: cs.filter(v=>v!=null),
-      line: { width: 2 },
-      name:'Price'
-    };
+    $("planSelfCheck").textContent = `Plans ERROR: ${state.plans.length} (expected 4).`;
+    $("planSelfCheck").style.color = "var(--bad)";
   }
 
-  const traces = [mainTrace];
+  syncPlanText();
+  updateSubActionEnabled();
+}
 
-  // EMA trace (optional)
-  const showEMA = qs('toggleEMA').checked;
-  if(showEMA && Array.isArray(ema) && ema.length){
-    const ex = ema.map(r=>r.t ?? r.time ?? r.ts ?? r.date).filter(v=>v!=null);
-    const ey = ema.map(r=>r.v ?? r.value ?? r.y).filter(v=>v!=null);
-    traces.push({
-      type:'scatter',
-      mode:'lines',
-      x: ex,
-      y: ey,
-      line: { width: 2 },
-      name:'EMA'
+function syncPlanText(){
+  const p = state.plans.find(x=>x.price_id === state.selectedPriceId);
+  $("subPlanText").textContent = p ? (p.label || planLabel(p)) : "—";
+}
+
+function updateSubActionEnabled(){
+  const userId = ($("userIdInput").value||"").trim();
+  $("subActionBtn").disabled = !(userId && state.selectedPriceId);
+}
+
+/** =========================
+ *  SUBSCRIPTION (single button)
+ *  ========================= */
+async function refreshSubscriptionStatus(){
+  const userId = ($("userIdInput").value||"").trim();
+  if(!userId){
+    toast("<strong>User ID required.</strong>");
+    return;
+  }
+
+  $("refreshSubBtn").disabled = true;
+  $("refreshSubBtn").textContent = "Refreshing…";
+
+  try{
+    const qs = new URLSearchParams({ user_id: userId });
+    const data = await apiFetch(`${ENDPOINTS.subStatus}?${qs.toString()}`, { method:"GET" });
+
+    state.subscription.subscribed = !!data.subscribed;
+    state.subscription.status = (data.status || "unknown").toString().toLowerCase();
+    state.subscription.price_id = data.price_id || null;
+
+    $("subStatusText").textContent = state.subscription.status;
+
+    // if backend returns price_id, map to plan label
+    if(state.subscription.price_id){
+      const p = state.plans.find(x=>x.price_id === state.subscription.price_id) || PLAN_CATALOG_FALLBACK.find(x=>x.price_id===state.subscription.price_id);
+      if(p) $("subPlanText").textContent = p.label || planLabel(p);
+    }else{
+      syncPlanText();
+    }
+
+    updateSubActionText();
+
+  }catch(e){
+    // keep unknown, but still usable
+    $("subStatusText").textContent = "unknown";
+    updateSubActionText();
+  }finally{
+    $("refreshSubBtn").disabled = false;
+    $("refreshSubBtn").textContent = "Refresh Status";
+    updateSubActionEnabled();
+  }
+}
+
+function updateSubActionText(){
+  const st = state.subscription.status;
+  const btn = $("subActionBtn");
+  if(st === "active" || st === "trialing"){
+    btn.textContent = "Manage Subscription";
+  }else{
+    btn.textContent = "Subscribe & Start";
+  }
+}
+
+async function handleSubscriptionAction(){
+  const userId = ($("userIdInput").value||"").trim();
+  const email = ($("emailInput").value||"").trim();
+  if(!userId){
+    toast("<strong>User ID required.</strong>");
+    return;
+  }
+
+  const btn = $("subActionBtn");
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = "Working…";
+
+  try{
+    // active -> portal
+    if(state.subscription.status === "active" || state.subscription.status === "trialing"){
+      const data = await apiFetch(ENDPOINTS.portal, {
+        method:"POST",
+        body: JSON.stringify({ user_id: userId })
+      });
+      const url = data.portal_url || data.url;
+      if(url){ window.location.href = url; return; }
+      toast("<strong>Portal not available.</strong>");
+      return;
+    }
+
+    // else -> checkout
+    if(!state.selectedPriceId){
+      toast("<strong>Please select a plan.</strong>");
+      return;
+    }
+
+    const data = await apiFetch(ENDPOINTS.checkout, {
+      method:"POST",
+      body: JSON.stringify({ user_id: userId, price_id: state.selectedPriceId, email })
     });
+
+    const url = data.checkout_url || data.url;
+    if(url){ window.location.href = url; return; }
+
+    toast("<strong>Checkout error:</strong> no redirect url.");
+  }catch(e){
+    toast(`<strong>Action failed:</strong> ${e.message}`);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
+/** =========================
+ *  MARKET + CHART (B/S overlay persists)
+ *  ========================= */
+function baseLayout(){
+  return {
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    margin:{l:60,r:20,t:18,b:40},
+    xaxis:{ gridcolor:"rgba(255,255,255,.06)", tickfont:{color:"rgba(231,238,252,.7)"}, rangeslider:{visible:false}, zeroline:false },
+    yaxis:{ gridcolor:"rgba(255,255,255,.06)", tickfont:{color:"rgba(231,238,252,.7)"}, zeroline:false },
+  };
+}
+
+function toLineSeries(series, candles){
+  if(!series) return {ex:[], ey:[]};
+  if(Array.isArray(series) && series.length && typeof series[0] === "number"){
+    const ex = (candles||[]).map(d=> d.t ?? d.time ?? d.ts ?? d[0]);
+    const ey = series.map(v=> Number(v));
+    return {ex, ey};
+  }
+  if(Array.isArray(series) && series.length && typeof series[0] === "object"){
+    const ex = series.map(d=> d.t ?? d.time ?? d.ts ?? d.x).filter(Boolean);
+    const ey = series.map(d=> d.v ?? d.value ?? d.y).filter(v=>v!==undefined && v!==null);
+    return {ex, ey};
+  }
+  if(series.x && series.y) return {ex: series.x, ey: series.y};
+  return {ex:[], ey:[]};
+}
+
+function renderChart(payload){
+  if(!payload){
+    Plotly.newPlot("chart", [], baseLayout(), {displayModeBar:false, responsive:true});
+    return;
   }
 
-  // AUX trace (optional)
-  const showAUX = qs('toggleAUX').checked;
-  if(showAUX && Array.isArray(aux) && aux.length){
-    const ax = aux.map(r=>r.t ?? r.time ?? r.ts ?? r.date).filter(v=>v!=null);
-    const ay = aux.map(r=>r.v ?? r.value ?? r.y).filter(v=>v!=null);
-    traces.push({
-      type:'scatter',
-      mode:'lines',
-      x: ax,
-      y: ay,
-      line: { width: 2, dash:'dot' },
-      name:'AUX'
-    });
+  const candles = payload.candles || payload.ohlc || [];
+  const ema = payload.ema || payload.EMA || [];
+  const aux = payload.aux || payload.AUX || [];
+  const signals = payload.signals || payload.SIGNALS || payload.bs || payload.BS || [];
+
+  const x = candles.map(d => d.t ?? d.time ?? d.ts ?? d[0]);
+  const open = candles.map(d => d.o ?? d.open ?? d[1]);
+  const high = candles.map(d => d.h ?? d.high ?? d[2]);
+  const low  = candles.map(d => d.l ?? d.low  ?? d[3]);
+  const close= candles.map(d => d.c ?? d.close?? d[4]);
+
+  const last = close.length ? close[close.length-1] : null;
+  $("lastPrice").textContent = last ? `Last: ${Number(last).toFixed(2)}` : "—";
+
+  const showEMA = $("toggleEMA").checked;
+  const showAUX = $("toggleAUX").checked;
+  const showSig = $("toggleSignals").checked;
+
+  const traces = [{
+    type:"candlestick",
+    x, open, high, low, close,
+    name:"Price",
+    increasing: {line:{color:"#2ee59d"}},
+    decreasing: {line:{color:"#ff5c6c"}},
+  }];
+
+  if(showEMA){
+    const {ex, ey} = toLineSeries(ema, candles);
+    if(ex.length) traces.push({ type:"scatter", mode:"lines", x:ex, y:ey, name:"EMA", line:{width:2, color:"rgba(255,255,255,.65)"}, hoverinfo:"skip" });
+  }
+  if(showAUX){
+    const {ex, ey} = toLineSeries(aux, candles);
+    if(ex.length) traces.push({ type:"scatter", mode:"lines", x:ex, y:ey, name:"AUX", line:{width:2, color:"rgba(99,155,255,.75)"}, hoverinfo:"skip" });
   }
 
-  // === B/S overlay: independent traces, always attached on redraw ===
-  if(Array.isArray(signals) && signals.length){
-    const buys = signals.filter(s => (s.type || s.side || '').toString().toUpperCase() === 'B');
-    const sells = signals.filter(s => (s.type || s.side || '').toString().toUpperCase() === 'S');
+  const normSide = (s)=>{
+    const t = (s.type ?? s.signal ?? s.side ?? s.action ?? "").toString().trim().toUpperCase();
+    if(["B","BUY","LONG","ENTRY","OPEN_LONG"].includes(t)) return "B";
+    if(["S","SELL","SHORT","EXIT","CLOSE_LONG","OPEN_SHORT"].includes(t)) return "S";
+    const tl = t.toLowerCase();
+    if(tl === "buy") return "B";
+    if(tl === "sell") return "S";
+    return "";
+  };
+  const normTime = (s)=> (s.t ?? s.time ?? s.ts ?? s.date);
+  const normPrice = (s)=> (s.price ?? s.p ?? s.value ?? s.y);
 
-    const bx = buys.map(s=>s.t ?? s.time ?? s.ts ?? s.date).filter(v=>v!=null);
-    const by = buys.map(s=>s.price ?? s.p ?? s.value ?? s.y).filter(v=>v!=null);
+  const buys = Array.isArray(signals) ? signals.filter(s=> normSide(s)==="B") : [];
+  const sells= Array.isArray(signals) ? signals.filter(s=> normSide(s)==="S") : [];
 
-    const sx = sells.map(s=>s.t ?? s.time ?? s.ts ?? s.date).filter(v=>v!=null);
-    const sy = sells.map(s=>s.price ?? s.p ?? s.value ?? s.y).filter(v=>v!=null);
+  $("buyCount").textContent = String(buys.length);
+  $("sellCount").textContent = String(sells.length);
+
+  $("sigHint").textContent =
+    (sells.length===0 && buys.length>0) ? "Sell=0: backend may not have emitted S (rule not met / cooldown / window)."
+    : (buys.length===0 && sells.length===0) ? "No signals returned by backend."
+    : "Signals rendered.";
+
+  if(showSig){
+    const bx = buys.map(normTime).filter(Boolean);
+    const by = buys.map(normPrice).filter(v=>v!==undefined && v!==null);
+    const sx = sells.map(normTime).filter(Boolean);
+    const sy = sells.map(normPrice).filter(v=>v!==undefined && v!==null);
 
     if(bx.length && by.length){
       traces.push({
-        type:'scatter',
-        mode:'markers+text',
-        x: bx,
-        y: by,
-        text: bx.map(()=> 'B'),
-        textposition:'top center',
-        marker:{ size:10, color: 'rgba(46,229,157,1)' },
-        name:'B'
+        type:"scatter", mode:"markers+text", name:"Buy",
+        x:bx, y:by, text:bx.map(()=> "B"), textposition:"top center",
+        marker:{size:10, color:"#2ee59d", line:{width:1, color:"rgba(0,0,0,.45)"}},
+        hovertemplate:"<b>B</b><br>%{x}<br>%{y}<extra></extra>"
       });
     }
     if(sx.length && sy.length){
       traces.push({
-        type:'scatter',
-        mode:'markers+text',
-        x: sx,
-        y: sy,
-        text: sx.map(()=> 'S'),
-        textposition:'bottom center',
-        marker:{ size:10, color: 'rgba(255,92,108,1)' },
-        name:'S'
+        type:"scatter", mode:"markers+text", name:"Sell",
+        x:sx, y:sy, text:sx.map(()=> "S"), textposition:"bottom center",
+        marker:{size:10, color:"#ff5c6c", line:{width:1, color:"rgba(0,0,0,.45)"}},
+        hovertemplate:"<b>S</b><br>%{x}<br>%{y}<extra></extra>"
       });
     }
   }
 
-  return traces;
+  Plotly.react("chart", traces, baseLayout(), {displayModeBar:false, responsive:true});
 }
 
-function renderChart(payload){
-  state.lastMarketPayload = payload;
+function updateLeftPanelsFromPayload(payload){
+  const sentiment = payload.sentiment_score ?? payload.sentiment ?? payload.market_pulse?.sentiment ?? null;
+  $("sentimentScore").textContent = (sentiment!==null && sentiment!==undefined) ? Math.round(Number(sentiment)) : "—";
 
-  const symbol = payload.symbol || state.symbol;
-  const tf = payload.tf || state.tf;
-  qs('chartTitle').textContent = `${symbol} · ${tf}`;
+  const pulse = (payload.pulse ?? payload.market_pulse?.label ?? "BULL").toString().toUpperCase();
+  $("pulseBadge").textContent = pulse;
+  $("pulseBadge").className = pulse.includes("BEAR") ? "badge bad" : "badge ok";
 
-  const traces = buildTraces(payload);
+  $("pulseDesc").textContent = payload.pulse_desc ?? payload.market_pulse?.desc ?? "Market pulse loaded.";
 
-  const layout = {
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)',
-    margin: { l:55, r:15, t:10, b:35 },
-    xaxis: { gridcolor:'rgba(255,255,255,.06)', color:'rgba(214,226,241,.85)' },
-    yaxis: { gridcolor:'rgba(255,255,255,.06)', color:'rgba(214,226,241,.85)' },
-    showlegend: false
-  };
-
-  // IMPORTANT: use Plotly.react so every redraw includes B/S overlay traces.
-  Plotly.react('chart', traces, layout, { displayModeBar:true, responsive:true });
+  // SAFE summary: no rule words
+  let summary = payload.current_signal || payload.signal_status || "";
+  if(!summary){
+    const sig = payload.signals || payload.bs || [];
+    if(Array.isArray(sig) && sig.length){
+      const last = sig[sig.length-1];
+      const t = (last.type ?? last.side ?? last.signal ?? "").toString().toUpperCase();
+      if(["B","BUY","LONG"].includes(t)) summary = "BUY · Confirmed";
+      else if(["S","SELL","SHORT","EXIT"].includes(t)) summary = "SELL · Confirmed";
+      else summary = "Signal · Ready";
+    }else{
+      summary = "Signal · Ready";
+    }
+  }
+  $("signalText").textContent = summary;
 }
 
-/** =========================
- *  Market: fetch with tf + fallback
- *  ========================= */
-async function loadMarket(){
-  const symbol = qs('symbolInput').value.trim() || 'BTCUSDT';
-  const tf = normalizeTf(qs('tfSelect').value);
+async function loadMarketAndRender(){
+  const symbol = ($("symbolInput").value || "BTCUSDT").trim().toUpperCase();
+  let tf = normalizeTf($("tfSelect").value || state.tf || FALLBACK_TF);
 
   state.symbol = symbol;
   state.tf = tf;
-  renderTimeframes(); // keep pills consistent
+  $("chartTitle").textContent = symbol;
+  setActiveTfPill(tf);
 
-  const url = `${MARKET_ENDPOINT}?symbol=${encodeURIComponent(symbol)}&tf=${encodeURIComponent(tf)}`;
-
-  qs('loadBtn').disabled = true;
-  qs('loadBtn').textContent = 'Loading…';
-
-  try{
-    const res = await fetch(url, { method:'GET' });
-
-    if(!res.ok){
-      // fallback on unsupported tf: revert to 1d
-      if(tf !== TF_FALLBACK){
-        toast("Timeframe not supported", `Fallback to ${TF_FALLBACK.toUpperCase()}`);
-        setTimeframe(TF_FALLBACK);
-        return await loadMarket(); // retry once with fallback
-      }
-      throw new Error(`market http ${res.status}`);
-    }
-
-    const payload = await res.json();
-
-    // If backend responded with an explicit unsupported marker
-    if(payload && payload.error && tf !== TF_FALLBACK){
-      toast("Timeframe not supported", `Fallback to ${TF_FALLBACK.toUpperCase()}`);
-      setTimeframe(TF_FALLBACK);
-      return await loadMarket();
-    }
-
-    renderChart(payload);
-
-  }catch(err){
-    console.error(err);
-    toast("Failed to load market data", String(err));
-  }finally{
-    qs('loadBtn').disabled = false;
-    qs('loadBtn').textContent = 'Load';
-  }
-}
-
-/** If overlays toggles change, redraw with last payload (keeps B/S always) */
-function attachOverlayHandlers(){
-  qs('toggleEMA').addEventListener('change', ()=>{
-    if(state.lastMarketPayload) renderChart(state.lastMarketPayload);
-  });
-  qs('toggleAUX').addEventListener('change', ()=>{
-    if(state.lastMarketPayload) renderChart(state.lastMarketPayload);
-  });
-}
-
-/** =========================
- *  4) Subscription UI (2 lines + 1 button)
- *  =========================
- *  - If status is active => button becomes "Manage Subscription"
- *  - Else => "Subscribe & Start" using Checkout Session
- *
- *  NOTE:
- *  We do not assume a subscription status endpoint exists.
- *  If you have one (e.g. GET /billing/subscription-status?user_id=xxx),
- *  you can wire it into refreshSubscriptionStatus().
- */
-function renderSubscriptionUI(){
-  const line = qs('subLine');
-  const btn = qs('subActionBtn');
-
-  const st = state.subscription_status;
-  if(st === 'active'){
-    line.textContent = 'Status: Active';
-    btn.textContent = 'Manage Subscription';
-    btn.classList.remove('good');
-    btn.classList.add('ghost');
-  }else if(st === 'inactive'){
-    line.textContent = 'Status: Inactive';
-    btn.textContent = 'Subscribe & Start';
-    btn.classList.remove('ghost');
-    btn.classList.add('good');
-  }else{
-    line.textContent = 'Status: Unknown';
-    btn.textContent = 'Subscribe & Start';
-    btn.classList.remove('ghost');
-    btn.classList.add('good');
-  }
-}
-
-/**
- * Subscribe & Start:
- * POST /create-checkout-session
- * body: { price_id, user_id, email }
- * expects: { url } OR { sessionUrl } OR { checkout_url }
- */
-async function subscribeAndStart(){
-  const price_id = qs('planSelect').value;
-  const user_id = qs('userIdInput').value.trim();
-  const email = qs('emailInput').value.trim();
-
-  if(!price_id){
-    toast("Please select a plan", "No price_id");
-    return;
-  }
-  if(!user_id){
-    toast("User ID required", "Please input user_id before subscribing.");
-    return;
-  }
-
-  qs('subActionBtn').disabled = true;
-  qs('subActionBtn').textContent = 'Redirecting…';
+  $("loadBtn").disabled = true;
+  $("loadBtn").textContent = "Loading…";
 
   try{
-    const res = await fetch(CHECKOUT_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        price_id,
-        user_id,
-        email: email || undefined
-      })
-    });
+    const qs = new URLSearchParams({ symbol, tf });
+    const data = await apiFetch(`${ENDPOINTS.market}?${qs.toString()}`, { method:"GET" });
 
-    if(!res.ok) throw new Error(`checkout http ${res.status}`);
-    const data = await res.json();
+    let supported = (data.supported !== undefined) ? !!data.supported : true;
+    let payload = data.data ? data.data : data;
 
-    const url = data.url || data.sessionUrl || data.checkout_url || data.checkoutUrl;
-    if(!url) throw new Error("No checkout URL returned by backend");
+    if(!supported){
+      $("tfSupportHint").style.display = "block";
+      toast(`<strong>Timeframe not supported</strong> (${tf}). Fallback to 1D.`);
+      tf = FALLBACK_TF;
+      state.tf = tf;
+      $("tfSelect").value = tf;
+      setActiveTfPill(tf);
 
-    window.location.href = url;
-
-  }catch(err){
-    console.error(err);
-    toast("Failed to start checkout", String(err));
-  }finally{
-    qs('subActionBtn').disabled = false;
-    renderSubscriptionUI();
-  }
-}
-
-/**
- * Manage Subscription:
- * If you have a portal endpoint, wire it here.
- * For now we show a toast, because your route list may not include it yet.
- */
-async function manageSubscription(){
-  toast("Manage Subscription", "Portal endpoint not configured in this front-end yet.");
-}
-
-/** One-button handler */
-function attachSubscriptionHandler(){
-  qs('subActionBtn').addEventListener('click', async ()=>{
-    if(state.subscription_status === 'active'){
-      await manageSubscription();
+      const qs2 = new URLSearchParams({ symbol, tf });
+      const data2 = await apiFetch(`${ENDPOINTS.market}?${qs2.toString()}`, { method:"GET" });
+      payload = data2.data ? data2.data : data2;
     }else{
-      await subscribeAndStart();
-    }
-  });
-}
-
-/** =========================
- *  API health check (nice UX)
- *  ========================= */
-async function checkApiHealth(){
-  try{
-    const res = await fetch(HEALTH_ENDPOINT, { method:'GET' });
-    if(!res.ok) throw new Error(`health http ${res.status}`);
-    const data = await res.json().catch(()=>null);
-
-    // If your root returns {"build": "..."} we display it
-    if(data && data.build){
-      qs('buildInfo').textContent = `build: ${data.build}`;
+      $("tfSupportHint").style.display = "none";
     }
 
-    setApiHealth(true, 'OK');
-  }catch(err){
-    console.warn(err);
-    setApiHealth(false, 'OFF');
+    state.chartData = payload;
+    renderChart(payload);
+    updateLeftPanelsFromPayload(payload);
+    setApiBadge(true);
+
+    // SAFE loaded text
+    $("loadedText").textContent = `Loaded · TF=${state.tf.toUpperCase()} · Signals Ready`;
+
+  }catch(e){
+    setApiBadge(false);
+    toast(`<strong>Load failed:</strong> ${e.message}`);
+  }finally{
+    $("loadBtn").disabled = false;
+    $("loadBtn").textContent = "Load • 加载";
   }
 }
 
 /** =========================
- *  Boot
+ *  CONTROLS + UTILITIES
  *  ========================= */
-function boot(){
-  // default state
-  state.symbol = qs('symbolInput').value.trim() || 'BTCUSDT';
-  state.tf = '1d';
+function initControls(){
+  $("symbolInput").addEventListener("change", (e)=>{
+    state.symbol = (e.target.value || "BTCUSDT").trim().toUpperCase();
+    $("chartTitle").textContent = state.symbol;
+  });
+  $("loadBtn").addEventListener("click", ()=> loadMarketAndRender());
+  $("toggleEMA").addEventListener("change", ()=> renderChart(state.chartData));
+  $("toggleAUX").addEventListener("change", ()=> renderChart(state.chartData));
+  $("toggleSignals").addEventListener("change", ()=> renderChart(state.chartData));
 
-  // render tf controls
-  renderTimeframes();
+  $("userIdInput").addEventListener("input", ()=> updateSubActionEnabled());
+  $("subActionBtn").addEventListener("click", ()=> handleSubscriptionAction());
+  $("refreshSubBtn").addEventListener("click", ()=> refreshSubscriptionStatus());
 
-  // init chart
-  initChart();
+  $("copyLinkBtn").addEventListener("click", async ()=>{
+    const u = new URL(location.href);
+    u.searchParams.set("symbol", state.symbol);
+    u.searchParams.set("tf", state.tf);
+    await navigator.clipboard.writeText(u.toString());
+    toast("Share link copied.");
+  });
 
-  // attach handlers
-  qs('tfSelect').addEventListener('change', ()=> setTimeframe(qs('tfSelect').value));
-  qs('loadBtn').addEventListener('click', loadMarket);
-  attachOverlayHandlers();
+  $("exportPngBtn").addEventListener("click", async ()=>{
+    try{
+      await Plotly.downloadImage("chart", {format:"png", filename:`${state.symbol}_${state.tf}`});
+    }catch(e){
+      toast(`<strong>Export failed:</strong> ${e.message}`);
+    }
+  });
+}
 
-  // subscription
-  renderSubscriptionUI();
-  attachSubscriptionHandler();
+async function checkHealth(){
+  try{
+    await apiFetch(ENDPOINTS.health, { method:"GET" });
+    setApiBadge(true);
+  }catch(e){
+    setApiBadge(false);
+  }
+}
 
-  // health + plans + initial market
-  checkApiHealth();
-  loadPlans();
-  loadMarket();
+async function boot(){
+  // URL params
+  const params = new URLSearchParams(location.search);
+  const urlSymbol = (params.get("symbol")||"").trim();
+  const urlTf = normalizeTf(params.get("tf")||"");
+  if(urlSymbol) state.symbol = urlSymbol.toUpperCase();
+  if(urlTf) state.tf = urlTf;
+
+  $("symbolInput").value = state.symbol;
+  $("chartTitle").textContent = state.symbol;
+
+  initTimeframesUI();
+  initControls();
+  renderChart(null);
+
+  await checkHealth();
+  await loadPlans();
+  await refreshSubscriptionStatus();
+
+  $("tfSelect").value = state.tf;
+  setActiveTfPill(state.tf);
+
+  await loadMarketAndRender();
+  updateSubActionText();
 }
 
 boot();
