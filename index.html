@@ -12,35 +12,27 @@
     :root{
       --bg:#0B0F17;
       --bg2:#0A1220;
-
       --panel:#121A28;
       --panel2:#0F1726;
-
       --border:rgba(255,255,255,.08);
       --border2:rgba(255,255,255,.10);
-
       --text:#EAF0F7;
       --muted:#A2B0C2;
-
-      --brand1:#2BE2A6; /* green/teal */
-      --brand2:#4CC2FF; /* blue */
+      --brand1:#2BE2A6;
+      --brand2:#4CC2FF;
       --warn:#FFB86C;
       --danger:#FF5A5A;
-
       --shadow: 0 18px 45px rgba(0,0,0,.40);
       --shadow2: 0 10px 25px rgba(0,0,0,.28);
-
       --r12:12px;
       --r14:14px;
       --r18:18px;
-
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
       --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
     }
 
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
-
     body{
       margin:0;
       color:var(--text);
@@ -289,7 +281,6 @@
       overflow:hidden;
     }
     .gauge::before{
-      /* rotating glow ring */
       content:"";
       position:absolute; inset:-38%;
       background: conic-gradient(from 180deg,
@@ -312,7 +303,6 @@
       z-index:2;
     }
     .gaugeMask{
-      /* shows bull/bear proportion: green for score%, red for rest% */
       position:absolute; inset:0;
       border-radius:50%;
       z-index:1;
@@ -372,7 +362,7 @@
     #leftDisclaimer .mut{ color: rgba(234,240,247,.62); }
 
     /* ===== Center Chart ===== */
-    #chartPanel .panelBody{ padding:0; }
+    #chartPanel .panelBody{ padding:0; display:flex; flex-direction:column; min-height:0; }
     #chartTop{
       padding:10px 14px;
       display:flex;
@@ -381,6 +371,7 @@
       border-bottom:1px solid rgba(255,255,255,.06);
       background: rgba(0,0,0,.14);
       gap:12px;
+      flex:0 0 auto;
     }
     #priceLine{
       display:flex;
@@ -404,7 +395,6 @@
       white-space:nowrap;
     }
 
-    /* timeframe quick pills */
     #tfQuick{
       display:flex;
       gap:8px;
@@ -434,7 +424,7 @@
     #chartWrap{
       position:relative;
       width:100%;
-      height: calc(100vh - 78px - 16px - 16px - 52px);
+      flex:1 1 auto;
       min-height:420px;
     }
     #chart{
@@ -443,7 +433,6 @@
       height:100%;
     }
 
-    /* Overlay for BIG glowing B/S */
     #sigOverlay{
       position:absolute; inset:0;
       pointer-events:none;
@@ -618,7 +607,6 @@
       color: rgba(234,240,247,.90);
     }
 
-    /* ===== Diagnostics hidden by default (Admin only) ===== */
     .hidden{ display:none !important; }
 
     #logBox{
@@ -636,20 +624,16 @@
 
     @media (max-width: 1180px){
       body{ overflow:auto; }
-      #main{
-        height:auto;
-        grid-template-columns: 1fr;
-      }
-      #chartWrap{ height: 560px; }
+      #main{ height:auto; grid-template-columns: 1fr; }
       #brand{ min-width:0; }
       #topRight{ min-width:0; }
       #tfQuick{ justify-content:flex-start; }
+      #chartWrap{ height: 560px; }
     }
   </style>
 </head>
 
 <body>
-  <!-- Header -->
   <div id="topbar">
     <div id="brand">
       <div class="logo"></div>
@@ -730,7 +714,6 @@
           </div>
         </div>
 
-        <!-- Affiliate (no commission leakage) -->
         <div class="card" id="affiliateCard" style="margin-top:12px">
           <div class="cardTitle"><b>Affiliate · 推荐人</b><span class="small">入口</span></div>
           <button class="btnGhost" id="affiliateBtn">Affiliate / 推荐入口</button>
@@ -740,7 +723,6 @@
           </div>
         </div>
 
-        <!-- Compliance Disclaimer -->
         <div id="leftDisclaimer">
           <div><b>English:</b> Educational & informational use only. Not investment advice. No offer or solicitation to buy/sell any security, futures, FX, crypto, or other financial instrument. Signals are algorithmic estimates and may be inaccurate, delayed, or incomplete. Past performance is not indicative of future results. You are solely responsible for your trading decisions and risk.</div>
           <div style="margin-top:8px"><b>中文：</b> 本系统仅用于教学与信息展示，不构成任何投资建议、要约或招揽。算法信号可能存在误差、延迟或不完整；历史表现不代表未来收益。任何交易决策与风险均由用户自行承担。</div>
@@ -751,7 +733,6 @@
             <a href="#" onclick="alert('support@darrius.ai');return false;">Support</a>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -789,7 +770,6 @@
       </div>
 
       <div class="panelBody">
-        <!-- Data Source (Reserved for future real data) -->
         <div class="card">
           <div class="cardTitle"><b>Data Source · 数据源</b><span class="small">预留接口</span></div>
           <div class="field">
@@ -804,7 +784,6 @@
           </div>
         </div>
 
-        <!-- Market Control -->
         <div class="card">
           <div class="cardTitle"><b>Market · 品种与周期</b><span class="small">Chart</span></div>
 
@@ -840,7 +819,6 @@
             </label>
           </div>
 
-          <!-- Admin-only internal params (hidden to customers) -->
           <div class="row2 hidden" id="paramRow">
             <div class="field" style="margin:0">
               <div class="label"><span>EMA (internal)</span><span class="small" id="emaShow">—</span></div>
@@ -857,13 +835,13 @@
           </div>
         </div>
 
-        <!-- Subscription (compact + portal) -->
+        <!-- Subscription -->
         <div class="subHero">
           <div class="subHeroTop">
             <div>
               <div class="subHeroTitle"><span class="accent">Subscription</span> · 订阅开通</div>
               <div class="subHeroMeta">
-                套餐从后端 <code>/api/plans</code> 拉取（唯一真相），订阅由 Stripe 托管，支持升级/取消/恢复/更新卡/发票。
+                套餐从后端 <code>/billing/prices</code> 拉取（唯一真相）。若后端异常，将自动降级到本地 4 套餐兜底，保证用户端永不空白。
               </div>
             </div>
             <div class="badge secure">Stripe Secure</div>
@@ -893,34 +871,31 @@
             </select>
           </div>
 
-          <!-- hidden override (admin only) -->
           <div class="field hidden" id="priceOverrideRow">
-            <div class="label"><span>Price ID Override</span><span class="small">（兜底）</span></div>
+            <div class="label"><span>Price ID Override</span><span class="small">（Admin兜底）</span></div>
             <input id="priceOverride" placeholder="price_xxx（通常无需填）"/>
           </div>
 
           <div class="row2" style="margin-top:0">
             <button class="btn" id="subscribeBtn" disabled>Start · 开通</button>
-            <button class="btnGhost" id="manageBtn" disabled>Manage · 管理</button>
+            <button class="btnGhost" id="manageBtn" disabled title="后端尚未提供 Portal 接口">Manage · 管理</button>
           </div>
 
           <div class="note" style="margin-top:10px">
-            <b>Subscription Status：</b><span id="subStatusText" style="margin-left:6px;color:rgba(234,240,247,.88)">Unknown</span>
+            <b>Subscription Status：</b><span id="subStatusText" style="margin-left:6px;color:rgba(234,240,247,.88)">Unverified</span>
           </div>
         </div>
 
-        <!-- Share & Export -->
         <div class="card">
           <div class="cardTitle"><b>Share & Export · 分享与导出</b><span class="small">Utilities</span></div>
           <button class="btnGhost" id="copyLinkBtn">Copy Share Link · 复制分享链接</button>
           <div style="height:10px"></div>
-          <button class="btnGhost" id="exportBtn">Export PNG · 导出图片（含图表）</button>
+          <button class="btnGhost" id="exportBtn">Export PNG · 导出图片（图表截图）</button>
           <div class="note" style="margin-top:10px">
-            注：导出依赖浏览器对 canvas 截图支持；若受限，可改为后端渲染导出（更稳定）。
+            注：导出依赖 lightweight-charts 的截图能力；若你要“包含 DOM 覆盖层(B/S大字)”的整页导出，建议后续用 html2canvas 或后端渲染。
           </div>
         </div>
 
-        <!-- Diagnostics (Admin only) -->
         <div class="card hidden" id="diagCard">
           <div class="cardTitle"><b>Diagnostics · 诊断</b><span class="small">Admin only</span></div>
           <div class="row2" style="margin-top:0">
@@ -955,28 +930,26 @@
       const box = $("logBox");
       const t = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
       const old = (box.textContent || "").split("\n");
-      const clipped = old.slice(Math.max(0, old.length - 160)).join("\n");
+      const clipped = old.slice(Math.max(0, old.length - 180)).join("\n");
       box.textContent = clipped + (clipped ? "\n" : "") + t;
       box.scrollTop = box.scrollHeight;
       console.log("[DarriusAI]", msg);
     }
 
-    /***************
-     * Admin Mode
-     ***************/
     function isAdmin(){
       const p = new URLSearchParams(location.search);
       return p.get("admin")==="1";
     }
+
+    function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
 
     /***************
      * Chart + Indicators
      ***************/
     let chart=null, candle=null, ema=null, aux=null;
     let CURRENT_BARS = [];
-    let CURRENT_SIGS = []; // [{time, price, side:'B'|'S'}]
+    let CURRENT_SIGS = [];
 
-    // Timeframe -> internal default params (more sensitive, but not too noisy)
     const TF_PARAMS = {
       "5m":  { ema: 8,  aux: 20, cooldown: 10 },
       "15m": { ema: 9,  aux: 21, cooldown: 12 },
@@ -988,8 +961,7 @@
       "1M":  { ema: 6,  aux: 14, cooldown: 8  },
     };
 
-    function genDemoCandles(n=220, tf="1d"){
-      // Demo candle step (seconds)
+    function genDemoCandles(n=260, tf="1d"){
       const stepMap = {
         "5m": 300, "15m": 900, "30m": 1800,
         "1h": 3600, "4h": 14400, "1d": 86400,
@@ -1003,7 +975,6 @@
       let price = 67000;
       const arr = [];
       for(let i=0;i<n;i++){
-        // Multi-wave trend + noise
         const wave1 = Math.sin(i/18)*160;
         const wave2 = Math.sin(i/46)*320;
         const noise = (Math.random()-0.5)*260;
@@ -1037,48 +1008,37 @@
     function applyToggles(){
       if(ema) ema.applyOptions({ visible: !!$("tgEMA").checked });
       if(aux) aux.applyOptions({ visible: !!$("tgAux").checked });
-      // overlay always visible (core capability)
       repaintOverlay();
     }
 
     /***************
      * Core Signal Engine
-     * B/S: cross + (EMA slope flip) + cooldown
-     * Mark on the CONFIRM candle (not the cross candle)
+     * B/S: cross + EMA slope flip + cooldown
+     * Mark on CONFIRM candle
      ***************/
     function detectCrossSlopeSignals(bars, emaFast, auxSlow, cooldownBars){
       const sigs = [];
-      let pending = null; // {side:'B'|'S', idxCross:number}
+      let pending = null;
       let lastSigIdx = -1e9;
-
-      // helper
-      const sign = (x)=> (x>0?1:(x<0?-1:0));
 
       for(let i=2; i<bars.length; i++){
         const diffPrev = (emaFast[i-1]?.value ?? bars[i-1].close) - (auxSlow[i-1]?.value ?? bars[i-1].close);
         const diffNow  = (emaFast[i]?.value ?? bars[i].close) - (auxSlow[i]?.value ?? bars[i].close);
 
-        // slopes for EMA fast
         const slopePrev = (emaFast[i-1]?.value ?? bars[i-1].close) - (emaFast[i-2]?.value ?? bars[i-2].close);
         const slopeNow  = (emaFast[i]?.value ?? bars[i].close) - (emaFast[i-1]?.value ?? bars[i-1].close);
 
-        // 1) detect cross => set pending
         if(!pending){
           const crossUp = (diffPrev <= 0 && diffNow > 0);
           const crossDn = (diffPrev >= 0 && diffNow < 0);
-          if(crossUp){
-            pending = { side:'B', idxCross:i };
-          }else if(crossDn){
-            pending = { side:'S', idxCross:i };
-          }
+          if(crossUp) pending = { side:'B', idxCross:i };
+          else if(crossDn) pending = { side:'S', idxCross:i };
         }else{
-          // 2) confirm on slope flip after cross
           const sinceCross = i - pending.idxCross;
           if(sinceCross >= 0){
             if(pending.side==='B'){
               const flipUp = (slopePrev <= 0 && slopeNow > 0);
               if(flipUp){
-                // cooldown
                 if(i - lastSigIdx >= cooldownBars){
                   sigs.push({ time: bars[i].time, price: bars[i].low, side:'B' });
                   lastSigIdx = i;
@@ -1096,18 +1056,13 @@
               }
             }
           }
-          // safety: if too long pending without confirm, drop it (avoid "stuck")
-          if(pending && (i - pending.idxCross) > 80){
-            pending = null;
-          }
+          if(pending && (i - pending.idxCross) > 80) pending = null;
         }
       }
-      // keep last N for readability
       return sigs.slice(-24);
     }
 
     function setChartMarkersFromSignals(sigs){
-      // lightweight-charts markers are kept minimal; BIG B/S is drawn in overlay
       const markers = sigs.map(s => ({
         time: s.time,
         position: s.side==='B' ? "belowBar" : "aboveBar",
@@ -1118,25 +1073,19 @@
       candle.setMarkers(markers);
     }
 
-    /***************
-     * Overlay: BIG glowing B/S on chart
-     ***************/
     function repaintOverlay(){
       const ov = $("sigOverlay");
       if(!ov || !chart || !candle) return;
       ov.innerHTML = "";
-
       if(!CURRENT_SIGS || CURRENT_SIGS.length===0) return;
 
-      // for time->x and price->y coordinate
       const ts = chart.timeScale();
-
       for(const s of CURRENT_SIGS){
         const x = ts.timeToCoordinate(s.time);
-        if(x===null || x===undefined) continue;
+        if(x==null) continue;
 
-        const y = candle.priceToCoordinate(s.side==='B' ? (s.price ?? 0) : (s.price ?? 0));
-        if(y===null || y===undefined) continue;
+        const y = candle.priceToCoordinate(s.price ?? 0);
+        if(y==null) continue;
 
         const d = document.createElement("div");
         d.className = "sigMark " + (s.side==='B' ? "buy" : "sell");
@@ -1156,19 +1105,16 @@
     /***************
      * Market Pulse & Signal
      ***************/
-    function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
-
     function computeSentiment(bars, emaSeries){
       const n = bars.length;
       const last = bars[n-1];
       const e = emaSeries[emaSeries.length-1]?.value ?? last.close;
 
       const prevE = emaSeries[Math.max(0, emaSeries.length-10)]?.value ?? emaSeries[0]?.value ?? e;
-      const slope = (e - prevE) / Math.max(1, Math.abs(prevE)) * 100; // %
-      const dist = (last.close - e) / Math.max(1, Math.abs(e)) * 100; // %
+      const slope = (e - prevE) / Math.max(1, Math.abs(prevE)) * 100;
+      const dist = (last.close - e) / Math.max(1, Math.abs(e)) * 100;
 
       let score = 50 + (dist*460) + (slope*860);
-      // soft clip to avoid always hitting 100 in demo
       score = clamp(score, 3, 97);
 
       const bull = clamp(score, 0, 100);
@@ -1192,9 +1138,7 @@
 
     function setPulseUI(s){
       $("pulseScore").textContent = String(s.score);
-
       const deg = Math.round(s.score/100*360);
-      // show 90 => 10% red remainder (clear)
       $("pulseGaugeMask").style.background =
         `conic-gradient(var(--brand1) 0deg, var(--brand1) ${deg}deg, rgba(255,90,90,.92) ${deg}deg, rgba(255,90,90,.92) 360deg)`;
 
@@ -1236,14 +1180,14 @@
         row.classList.add("buy");
         $("signalSide").textContent = "BUY · 看多 / 买入";
         $("signalMeta").textContent = pulseBias==="BEAR"
-          ? "BUY 已确认，但 Market Pulse 偏空（过滤项：可谨慎）。"
+          ? "BUY 已确认，但 Market Pulse 偏空（可作为过滤项谨慎）。"
           : "BUY 已确认（交叉 + EMA斜率翻转）。";
         $("signalPx").textContent = "@ " + lastPrice;
       }else{
         row.classList.add("sell");
         $("signalSide").textContent = "SELL · 看空 / 卖出";
         $("signalMeta").textContent = pulseBias==="BULL"
-          ? "SELL 已确认，但 Market Pulse 偏多（过滤项：可谨慎）。"
+          ? "SELL 已确认，但 Market Pulse 偏多（可作为过滤项谨慎）。"
           : "SELL 已确认（交叉 + EMA斜率翻转）。";
         $("signalPx").textContent = "@ " + lastPrice;
       }
@@ -1251,7 +1195,6 @@
 
     function updateRisk(bars){
       const last = bars[bars.length-1];
-      // Demo: turn into visible values immediately
       const entry = last.close * 0.992;
       const stop  = last.close * 0.978;
       const t1    = last.close * 1.008;
@@ -1266,8 +1209,6 @@
       const vol = Math.abs(last.close - base) / Math.max(1, base) * 100;
       const conf = clamp(92 - vol*1.6, 55, 95);
       $("riskConf").textContent = Math.round(conf) + "%";
-
-      // Demo win rate placeholder (future: backtest engine)
       $("riskWR").textContent = "72%";
     }
 
@@ -1311,8 +1252,6 @@
       window.addEventListener("resize", fit);
 
       bindOverlayRepaint();
-
-      // first load
       load();
       fit();
     }
@@ -1321,7 +1260,7 @@
      * Data fetch placeholder
      ***************/
     async function fetchMarketData(symbol, tf){
-      // future: if dataSource === provider -> call backend
+      // 未来：dataSource==provider -> 调后端
       return genDemoCandles(260, tf);
     }
 
@@ -1338,13 +1277,11 @@
       const bars = await fetchMarketData(sym, tf);
       CURRENT_BARS = bars;
 
-      // auto params by timeframe (internal)
       const prm = TF_PARAMS[tf] || TF_PARAMS["1d"];
       const emaP = prm.ema;
       const auxP = prm.aux;
       const cooldownBars = prm.cooldown;
 
-      // show internal only in admin
       $("emaShow").textContent = String(emaP);
       $("auxShow").textContent = String(auxP);
       $("emaPeriod").value = String(emaP);
@@ -1358,7 +1295,6 @@
       aux.setData(auxSeries);
       applyToggles();
 
-      // Core signals
       const sigs = detectCrossSlopeSignals(bars, emaSeries, auxSeries, cooldownBars);
       CURRENT_SIGS = sigs;
       setChartMarkersFromSignals(sigs);
@@ -1367,27 +1303,24 @@
       const last = bars[bars.length-1];
       $("priceText").textContent = last.close.toFixed(2);
 
-      // sentiment + pulse
       const s = computeSentiment(bars, emaSeries);
       setPulseUI(s);
 
-      // left signal uses engine output (pulse is optional filter)
       const lastSig = sigs.length ? sigs[sigs.length-1] : null;
       setSignalFromEngine(lastSig, last.close.toFixed(2), tf, s.bias);
 
       updateRisk(bars);
 
       $("hintText").textContent = `Loaded · 已加载（B/S=交叉+斜率翻转+cooldown；TF=${tf}）`;
-      setStatus("API OK", true);
+      setStatus("Ready", true);
 
       log(`✅ load: ${sym} ${tf} ema=${emaP} aux=${auxP} cooldown=${cooldownBars} sigs=${sigs.length} bias=${s.bias} score=${s.score}`);
 
-      // keep quick buttons in sync
       syncTfQuick(tf);
     }
 
     /***************
-     * API helper
+     * API helpers
      ***************/
     async function apiGet(path){
       const resp = await fetch(`${API_BASE}${path}`, { method:"GET" });
@@ -1408,9 +1341,10 @@
     }
 
     /***************
-     * Billing / Plans: /api/plans as source of truth
+     * Plans: Source of truth = /billing/prices
      ***************/
     let PLANS = []; // {key,label,price_id,trial_days}
+
     function setPlanStatus(t){ $("planStatus").textContent = t; }
 
     function updateTrialHint(){
@@ -1436,129 +1370,100 @@
     }
 
     function getLocalFallbackPlans(){
-      // absolute fallback (never empty)
+      // 你口头确认的 4 套餐价格（永不空）
       return [
-        { key:"weekly",    label:"Weekly · $4.90",     price_id:"price_1SpJMmR84UMUVSTg0T7xfm6r", trial_days:0 },
-        { key:"monthly",   label:"Monthly · $19.90",   price_id:"price_1SpbvRR84UMUVSTggbg0SFzi", trial_days:1 },
-        { key:"quarterly", label:"Quarterly · $49.90", price_id:"price_1SpbwYR84UMUVSTgMQpUrE42", trial_days:3 },
-        { key:"yearly",    label:"Yearly · $189",      price_id:"price_1SpbpxR84UMUVSTgapaJDjMX", trial_days:5 },
+        { key:"weekly",    label:"Weekly · $4.90",     price_id:"", trial_days:0 },
+        { key:"monthly",   label:"Monthly · $19.90",   price_id:"", trial_days:1 },
+        { key:"quarterly", label:"Quarterly · $49.90", price_id:"", trial_days:3 },
+        { key:"yearly",    label:"Yearly · $189",      price_id:"", trial_days:5 },
       ];
+    }
+
+    function normalizeFromBillingPrices(legacy){
+      // 兼容你后端常见结构:
+      // { ok:true, prices:[{price_id,trial_days}], plan_to_price:{weekly:'price_x',...} }
+      const planToPrice = legacy?.plan_to_price || {};
+      const priceToTrial = {};
+      const priceSet = new Set();
+      if(Array.isArray(legacy?.prices)){
+        for(const it of legacy.prices){
+          if(it?.price_id) {
+            priceToTrial[it.price_id] = Number(it.trial_days||0);
+            priceSet.add(it.price_id);
+          }
+        }
+      }
+
+      const candidates = [
+        { key:"weekly",    label:"Weekly · $4.90",     price_id: planToPrice.weekly    || "", trial_days: priceToTrial[planToPrice.weekly]    ?? 0 },
+        { key:"monthly",   label:"Monthly · $19.90",   price_id: planToPrice.monthly   || "", trial_days: priceToTrial[planToPrice.monthly]   ?? 1 },
+        { key:"quarterly", label:"Quarterly · $49.90", price_id: planToPrice.quarterly || "", trial_days: priceToTrial[planToPrice.quarterly] ?? 3 },
+        { key:"yearly",    label:"Yearly · $189",      price_id: planToPrice.yearly    || "", trial_days: priceToTrial[planToPrice.yearly]    ?? 5 },
+      ];
+
+      const valid = candidates.filter(x=>x.key && x.label);
+      return valid;
     }
 
     async function initPlans(){
       try{
         setPlanStatus("从后端拉取…");
-        // Source of truth:
-        // expected: { ok:true, plans:[{key,label,price_id,trial_days}, ...] }
-        const data = await apiGet("/api/plans");
-        if(!data || data.ok!==true || !Array.isArray(data.plans) || data.plans.length===0){
-          throw new Error("Invalid /api/plans response");
+        const legacy = await apiGet("/billing/prices");
+        if(!legacy || legacy.ok!==true){
+          throw new Error("Invalid /billing/prices response");
         }
-        const plans = data.plans.map(x=>({
-          key: x.key,
-          label: x.label || x.key,
-          price_id: x.price_id,
-          trial_days: Number(x.trial_days||0)
-        })).filter(x=>x.key && x.price_id);
 
-        if(plans.length===0) throw new Error("No valid plans with price_id");
+        const plans = normalizeFromBillingPrices(legacy);
+
+        // 允许 price_id 为空（后端也可能按 plan 识别），但一般会有
         populatePlans(plans);
 
-        setStatus("API OK", true);
-        log("✅ plans loaded from /api/plans");
-      }catch(e){
-        // fallback to /billing/prices (legacy) then local fallback
-        try{
-          const legacy = await apiGet("/billing/prices");
-          if(legacy && legacy.ok===true && Array.isArray(legacy.prices) && legacy.prices.length>0){
-            // legacy format in your app.py: {ok:true, prices:[{price_id,trial_days}], plan_to_price:{...}}
-            const planToPrice = legacy.plan_to_price || {};
-            const priceToTrial = {};
-            for(const it of legacy.prices) priceToTrial[it.price_id] = Number(it.trial_days||0);
-
-            const candidates = [
-              { key:"weekly",    label:"Weekly · $4.90",     price_id: planToPrice.weekly    || "", trial_days: priceToTrial[planToPrice.weekly]    || 0 },
-              { key:"monthly",   label:"Monthly · $19.90",   price_id: planToPrice.monthly   || "", trial_days: priceToTrial[planToPrice.monthly]   || 1 },
-              { key:"quarterly", label:"Quarterly · $49.90", price_id: planToPrice.quarterly || "", trial_days: priceToTrial[planToPrice.quarterly] || 3 },
-              { key:"yearly",    label:"Yearly · $189",      price_id: planToPrice.yearly    || "", trial_days: priceToTrial[planToPrice.yearly]    || 5 },
-            ].filter(x=>x.price_id);
-
-            if(candidates.length===4){
-              populatePlans(candidates);
-              setPlanStatus("已加载 4 个计划（legacy fallback）");
-              log("⚠️ plans loaded from /billing/prices fallback");
-              return;
-            }
-          }
-          throw new Error("Legacy fallback invalid");
-        }catch(_){
-          const fallback = getLocalFallbackPlans();
-          populatePlans(fallback);
-          setPlanStatus("已加载 4 个计划（local fallback）");
-          setStatus("API Degraded", false);
-          if(isAdmin()) log("❌ initPlans: " + e.message + " -> using local fallback");
+        // 如果后端返回的 plan_to_price 不完整，提示降级（但仍可用）
+        const missing = plans.filter(p=>!p.price_id).map(p=>p.key);
+        if(missing.length){
+          setPlanStatus(`已加载（但缺少 price_id: ${missing.join(", ")}）`);
+          setStatus("Plans partial", false);
+          log("⚠️ /billing/prices loaded but some price_id missing: " + missing.join(","));
+        }else{
+          setPlanStatus("已加载 4 个计划（/billing/prices）");
+          setStatus("API OK", true);
+          log("✅ plans loaded from /billing/prices");
         }
+      }catch(e){
+        // Hard fallback: local plan labels (still stable)
+        const fallback = getLocalFallbackPlans();
+        populatePlans(fallback);
+        setPlanStatus("已加载 4 个计划（local fallback）");
+        setStatus("API Degraded", false);
+        if(isAdmin()) log("❌ initPlans failed: " + e.message + " -> using local fallback");
       }
     }
 
     /***************
-     * Subscription status + portal
+     * Subscription (checkout)
+     * Prefer: POST /billing/checkout
+     * Fallback: POST /create-checkout-session
      ***************/
-    async function refreshSubscriptionStatus(){
-      const user_id = ($("userId").value || "").trim();
-      if(!user_id){
-        $("subStatusText").textContent = "Unknown";
-        $("manageBtn").disabled = true;
-        return;
-      }
-
+    function persistUserInputs(){
       try{
-        // Expected: { ok:true, status:'active'|'trialing'|'canceled'|..., has_access:true/false, customer_portal:true/false }
-        const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
-        const status = data?.status || "unknown";
-        const has = !!data?.has_access;
-
-        $("subStatusText").textContent = `${status}${has ? " · Access ON" : " · Access OFF"}`;
-        $("manageBtn").disabled = !data?.customer_portal; // if backend supports portal
-        if(data?.customer_portal){
-          $("manageBtn").textContent = "Manage · 管理";
-        }else{
-          $("manageBtn").textContent = "Manage · (pending)";
-        }
-        log(`✅ subscription status: ${JSON.stringify(data).slice(0,220)}`);
-      }catch(e){
-        // Not implemented yet is acceptable; keep UI stable
-        $("subStatusText").textContent = "Not implemented";
-        $("manageBtn").disabled = true;
-        if(isAdmin()) log("⚠️ status endpoint missing: " + e.message);
-      }
+        sessionStorage.setItem("darrius_user_id", ($("userId").value||"").trim());
+        sessionStorage.setItem("darrius_email", ($("email").value||"").trim());
+      }catch(_){}
     }
 
-    async function openCustomerPortal(){
-      const user_id = ($("userId").value || "").trim();
-      if(!user_id){
-        alert("请先填写 User ID，再打开订阅管理。");
-        return;
-      }
+    function restoreUserInputs(){
       try{
-        // Expected: { ok:true, url:"https://billing.stripe.com/..." }
-        const data = await apiPost("/api/billing/portal", { user_id });
-        if(!data || !data.url) throw new Error("No portal url");
-        window.location.href = data.url;
-      }catch(e){
-        alert(
-          "订阅管理（Customer Portal）暂未开通或接口未部署。\n\n" +
-          "后端需要提供：POST /api/billing/portal -> 返回 {url}\n\n" +
-          "错误：\n" + e.message
-        );
-        if(isAdmin()) log("❌ open portal: " + e.message);
-      }
+        const u = sessionStorage.getItem("darrius_user_id") || "";
+        const e = sessionStorage.getItem("darrius_email") || "";
+        if(u && !$("userId").value) $("userId").value = u;
+        if(e && !$("email").value) $("email").value = e;
+      }catch(_){}
     }
 
     async function subscribe(){
       const user_id = ($("userId").value || "").trim();
       const email = ($("email").value || "").trim();
-      const key = $("planSelect").value;
+      const plan = ($("planSelect").value || "").trim();
       const override = ($("priceOverride")?.value || "").trim();
 
       if(!user_id){
@@ -1567,49 +1472,71 @@
         return;
       }
 
-      // prefer plan key (clean & stable)
-      const plan = key || "";
-      let payload = { user_id, email: email || undefined };
+      persistUserInputs();
 
-      // admin override only
+      // payload 设计：优先 plan，其次 price_id（若能拿到）
+      const payload = { user_id, email: email || undefined };
       if(override){
         payload.price_id = override;
       }else{
-        payload.plan = plan;
-        // if backend doesn't support plan, it still supports price_id; keep price_id as fallback
+        payload.plan = plan || undefined;
         const p = PLANS.find(x=>x.key===plan);
-        if(p && p.price_id) payload.price_id = p.price_id;
+        if(p?.price_id) payload.price_id = p.price_id;
       }
+
+      // 两条路由兜底（按你 /routes）
+      const candidates = ["/billing/checkout", "/create-checkout-session"];
 
       try{
         setStatus("Creating checkout…", true);
-        if(isAdmin()) log(`➡️ POST /billing/checkout ${JSON.stringify(payload)}`);
+        if(isAdmin()) log(`➡️ checkout payload: ${JSON.stringify(payload)}`);
 
-        const resp = await fetch(`${API_BASE}/billing/checkout`, {
-          method:"POST",
-          headers: { "Content-Type":"application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        const txt = await resp.text();
-        if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,260)}`);
-
-        let data = null;
-        try{ data = JSON.parse(txt); }catch(_){ data = { raw: txt }; }
-
-        if(!data || !data.checkout_url){
-          throw new Error("No checkout_url returned");
+        let lastErr = null;
+        for(const path of candidates){
+          try{
+            const data = await apiPost(path, payload);
+            const url = data?.checkout_url || data?.url; // 兼容不同返回字段
+            if(!url) throw new Error("No checkout url in response");
+            setStatus("Redirecting to Stripe…", true);
+            if(isAdmin()) log(`✅ checkout via ${path} ok -> redirect`);
+            window.location.href = url;
+            return;
+          }catch(e){
+            lastErr = e;
+            if(isAdmin()) log(`⚠️ checkout via ${path} failed: ${e.message}`);
+          }
         }
-
-        setStatus("Redirecting to Stripe…", true);
-        if(isAdmin()) log("✅ checkout_url received. Redirecting...");
-        window.location.href = data.checkout_url;
-
+        throw lastErr || new Error("All checkout endpoints failed");
       }catch(e){
-        setStatus("Network/API error", false);
-        if(isAdmin()) log(`❌ subscribe failed: ${e.message}`);
-        alert("订阅失败：网络错误/后端未联通或接口报错。\n\n错误：\n" + e.message);
+        setStatus("Checkout failed", false);
+        alert("订阅失败：后端未联通/接口报错/未返回 checkout_url。\n\n错误：\n" + e.message);
       }
+    }
+
+    /***************
+     * Subscription Status / Portal
+     * 说明：你当前 routes 未暴露 status/portal，因此这里保持“稳定但不误导”
+     ***************/
+    function refreshSubscriptionStatus(){
+      const user_id = ($("userId").value || "").trim();
+      if(!user_id){
+        $("subStatusText").textContent = "Unverified";
+        $("manageBtn").disabled = true;
+        return;
+      }
+      // 当前后端未提供 status endpoint：保持一致展示（不报错，不抖 UI）
+      $("subStatusText").textContent = "Unverified · (backend status endpoint not exposed)";
+      $("manageBtn").disabled = true;
+      $("manageBtn").title = "后端尚未提供 Customer Portal 接口";
+    }
+
+    function openCustomerPortal(){
+      alert(
+        "订阅管理（Customer Portal）当前未启用。\n\n" +
+        "若你希望启用：后端增加一个接口，例如：\n" +
+        "POST /billing/portal  {user_id} -> {url}\n\n" +
+        "前端即可自动放开 Manage 按钮。"
+      );
     }
 
     /***************
@@ -1674,9 +1601,6 @@
       }
     }
 
-    /***************
-     * Affiliate reserved
-     ***************/
     function openAffiliate(){
       alert(
         "Affiliate 入口（合规版）：\n\n" +
@@ -1714,7 +1638,6 @@
     (function boot(){
       $("yearNow").textContent = String(new Date().getFullYear());
 
-      // Admin visibility
       if(isAdmin()){
         $("diagCard").classList.remove("hidden");
         $("paramRow").classList.remove("hidden");
@@ -1729,11 +1652,11 @@
       if(qsSym) $("symbol").value = qsSym.toUpperCase();
       if(qsTf) $("tf").value = qsTf;
 
-      // quick TF
+      restoreUserInputs();
+
       bindTfQuick();
       syncTfQuick($("tf").value);
 
-      // events
       $("tgEMA").addEventListener("change", applyToggles);
       $("tgAux").addEventListener("change", applyToggles);
 
@@ -1748,11 +1671,16 @@
 
       $("affiliateBtn").addEventListener("click", openAffiliate);
 
-      // refresh status when user types userId
       $("userId").addEventListener("input", ()=>{
-        // debounce-ish
         window.clearTimeout(window.__subT);
-        window.__subT = window.setTimeout(refreshSubscriptionStatus, 400);
+        window.__subT = window.setTimeout(()=>{
+          persistUserInputs();
+          refreshSubscriptionStatus();
+        }, 350);
+      });
+      $("email").addEventListener("input", ()=>{
+        window.clearTimeout(window.__mailT);
+        window.__mailT = window.setTimeout(persistUserInputs, 350);
       });
 
       if(isAdmin()){
