@@ -437,11 +437,16 @@
 
     resize();
 
-    // Do NOT auto-load here if boot.js controls lifecycle.
-    // If you still want auto-load, set opts.autoLoad=true
-    if (opts.autoLoad) {
-      load().catch((e) => log("[chart] initial load failed:", e.message || e));
-    }
+   // Default: auto load (so existing index/boot won't break)
+// Only disable when opts.autoLoad === false
+if (opts.autoLoad !== false) {
+  load().catch((e) => log("[chart] initial load failed:", e.message || e));
+}
+// Default: auto load (so existing index/boot won't break)
+// Only disable when opts.autoLoad === false
+if (opts.autoLoad !== false) {
+  load().catch((e) => log("[chart] initial load failed:", e.message || e));
+}
   }
 
   /* -----------------------------
