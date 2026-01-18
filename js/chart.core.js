@@ -284,37 +284,48 @@
    * Overlay
    * ----------------------------- */
   function repaintOverlay() {
-    if (!overlayEl || !chart || !candleSeries) return;
-    overlayEl.innerHTML = "";
-    if (!CURRENT_SIGS || CURRENT_SIGS.length === 0) return;
+  if (!overlayEl || !chart || !candleSeries) return;
 
-    const ts = chart.timeScale();
+  overlayEl.innerHTML = "";
+  if (!CURRENT_SIGS || CURRENT_SIGS.length === 0) return;
 
-    for (const s of CURRENT_SIGS) {
-      const x = ts.timeToCoordinate(s.time);
-      const y = candleSeries.priceToCoordinate(s.price);
-      if (x == null || y == null) continue;
+  const ts = chart.timeScale();
 
-      const d = document.createElement("div");
-      d.className = "sigMark " + (s.side === "B" ? "buy" : "sell");
-      d.style.left = x + "px";
-      d.style.top = (y + (s.side === "B" ? 14 : -14)) + "px";
-      d.textContent = s.side;
+  for (const s of CURRENT_SIGS) {
+    const x = ts.timeToCoordinate(s.time);
+    const y = candleSeries.priceToCoordinate(s.price);
+    if (x == null || y == null) continue;
 
-      // FORCE colors (B yellow, S white) regardless of CSS
-      if (s.side === "B") {
-        d.style.background = "#FFD400";
-        d.style.color = "#111";
-        d.style.borderColor = "rgba(255,212,0,.55)";
-      } else {
-        d.style.background = "#FFFFFF";
-        d.style.color = "#111";
-        d.style.borderColor = "rgba(255,255,255,.55)";
-      }
+    const d = document.createElement("div");
+    d.className = "sigMark " + (s.side === "B" ? "buy" : "sell");
+    d.style.left = x + "px";
+    d.style.top = (y + (s.side === "B" ? 12 : -12)) + "px";
+    d.textContent = s.side;
 
-      overlayEl.appendChild(d);
+    // smaller than before
+    d.style.width = "18px";
+    d.style.height = "18px";
+    d.style.lineHeight = "18px";
+    d.style.fontSize = "11px";     // 小一号
+    d.style.fontWeight = "700";
+    d.style.borderRadius = "10px";
+    d.style.textAlign = "center";
+
+    // FORCE colors: B yellow, S white
+    if (s.side === "B") {
+      d.style.background = "#FFD400";
+      d.style.color = "#111";
+      d.style.border = "1px solid rgba(255,212,0,.55)";
+    } else {
+      d.style.background = "#FFFFFF";
+      d.style.color = "#111";
+      d.style.border = "1px solid rgba(255,255,255,.55)";
     }
+
+    overlayEl.appendChild(d);
   }
+}
+
 
   function bindOverlay() {
     if (!chart) return;
