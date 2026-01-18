@@ -1,14 +1,17 @@
 /* =========================================================
- * DarriusAI · Chart Core
+ * DarriusAI · Chart Core (FINAL COVER VERSION)
  * File: js/chart.core.js
  * Role:
  *  - Candlestick chart
- *  - EMA (green up / red down)
+ *  - EMA (green up / red down) via split series
  *  - AUX line
  *  - Signal engine (EMA x AUX cross)
  *  - Markers + big overlay
- *  - Alpaca OHLC via backend proxy
+ *  - Alpaca OHLC via backend proxy (NO KEY on front-end)
  *  - Demo fallback (always safe)
+ *
+ * Public:
+ *  window.ChartCore = { init, load, applyToggles, exportPNG }
  * ========================================================= */
 
 (function () {
@@ -26,9 +29,21 @@
   }
 
   function log() {
-    if (window.console) {
-      console.log.apply(console, arguments);
-    }
+    if (window.console) console.log.apply(console, arguments);
+  }
+
+  function getApiBase() {
+    // Allow index.html or boot.js to set window.API_BASE
+    // Fallback to empty => relative requests (works if front/back same origin via proxy)
+    return (window.API_BASE || "").trim() || "";
+  }
+
+  function getUiSymbol() {
+    return (($("symbol")?.value || "BTCUSDT") + "").trim().toUpperCase();
+  }
+
+  function getUiTf() {
+    return (($("tf")?.value || "1d") + "").trim();
   }
 
   /* -----------------------------
@@ -86,15 +101,15 @@
     let price = 67000;
 
     const arr = [];
-
     for (let i = 0; i < n; i++) {
       const wave1 = Math.sin(i / 14) * 220;
       const wave2 = Math.sin(i / 33) * 420;
       const wave3 = Math.sin(i / 85) * 700;
       const noise = (Math.random() - 0.5) * 260;
+      const drift = Math.sin(i / 170) * 160;
 
       const open = price;
-      const close = open + wave1 + wave2 + wave3 + noise;
+      const close = open + wave1 + wave2 + wave3 + drift + noise;
       const high = Math.max(open, close) + Math.random() * 220;
       const low = Math.min(open, close) - Math.random() * 220;
 
@@ -110,7 +125,6 @@
 
       t += step;
     }
-
     return arr;
   }
 
@@ -127,12 +141,8 @@
     for (let i = 0; i < bars.length; i++) {
       const v = bars[i].close;
       prev = prev === null ? v : v * k + prev * (1 - k);
-      out.push({
-        time: bars[i].time,
-        value: +prev.toFixed(2),
-      });
+      out.push({ time: bars[i].time, value: +prev.toFixed(2) });
     }
-
     return out;
   }
 
@@ -166,7 +176,8 @@
   }
 
   /* -----------------------------
-   * Signal engine (EMA x AUX)
+   * Signal engine (EMA x AUX cross)
+   * - Minimal cross signals (stable, no extra confirm)
    * ----------------------------- */
   function detectSignals(bars, emaFast, auxSlow, cooldown) {
     const sigs = [];
@@ -179,18 +190,10 @@
       if (i - lastIdx < cooldown) continue;
 
       if (prevDiff <= 0 && nowDiff > 0) {
-        sigs.push({
-          time: bars[i].time,
-          price: bars[i].low,
-          side: "B",
-        });
+        sigs.push({ time: bars[i].time, price: bars[i].low, side: "B" });
         lastIdx = i;
       } else if (prevDiff >= 0 && nowDiff < 0) {
-        sigs.push({
-          time: bars[i].time,
-          price: bars[i].high,
-          side: "S",
-        });
+        sigs.push({ time: bars[i].time, price: bars[i].high, side: "S" });
         lastIdx = i;
       }
     }
@@ -206,13 +209,15 @@
 
     overlayEl.innerHTML = "";
 
+    if (!CURRENT_SIGS || CURRENT_SIGS.length === 0) return;
+
     const ts = chart.timeScale();
 
-    CURRENT_SIGS.forEach((s) => {
+    for (const s of CURRENT_SIGS) {
       const x = ts.timeToCoordinate(s.time);
       const y = candleSeries.priceToCoordinate(s.price);
 
-      if (x == null || y == null) return;
+      if (x == null || y == null) continue;
 
       const d = document.createElement("div");
       d.className = "sigMark " + (s.side === "B" ? "buy" : "sell");
@@ -221,7 +226,7 @@
       d.textContent = s.side;
 
       overlayEl.appendChild(d);
-    });
+    }
   }
 
   function bindOverlay() {
@@ -231,58 +236,88 @@
   }
 
   /* -----------------------------
-   * Market data (Alpaca → backend)
+   * Toggles: EMA / AUX (UI checkboxes)
+   * ----------------------------- */
+  function applyToggles() {
+    const showEMA = $("tgEMA") ? !!$("tgEMA").checked : true;
+    const showAUX = $("tgAux") ? !!$("tgAux").checked : true;
+
+    if (emaSeriesUp) emaSeriesUp.applyOptions({ visible: showEMA });
+    if (emaSeriesDown) emaSeriesDown.applyOptions({ visible: showEMA });
+    if (auxSeries) auxSeries.applyOptions({ visible: showAUX });
+
+    repaintOverlay();
+  }
+
+  /* -----------------------------
+   * Market data (Alpaca → backend proxy)
+   * Endpoint (expected):
+   *  GET /api/market/ohlc?symbol=...&tf=...&asset=stock|crypto
+   * Response:
+   *  { ok:true, bars:[{time,open,high,low,close}, ...] }
    * ----------------------------- */
   async function fetchMarketData(symbol, tf) {
     const sym = (symbol || "").trim().toUpperCase();
+    const timeframe = (tf || "1d").trim();
+
+    // crude crypto detection, backend can still decide
     const isCrypto =
       sym.includes("/") ||
       sym.endsWith("USDT") ||
-      sym.endsWith("USD") ||
-      sym.endsWith("USDC");
+      sym.endsWith("USDC") ||
+      sym.endsWith("USD");
 
     const asset = isCrypto ? "crypto" : "stock";
 
     try {
-      const url =
-        window.API_BASE +
-        `/api/market/ohlc?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(
-          tf
-        )}&asset=${asset}`;
+      const base = getApiBase();
+      const path =
+        `/api/market/ohlc?symbol=${encodeURIComponent(sym)}` +
+        `&tf=${encodeURIComponent(timeframe)}` +
+        `&asset=${encodeURIComponent(asset)}`;
 
-      const resp = await fetch(url);
+      const url = base ? `${base}${path}` : path;
+
+      const resp = await fetch(url, { method: "GET" });
       if (!resp.ok) throw new Error("HTTP " + resp.status);
 
       const data = await resp.json();
-      if (!data || !data.ok || !Array.isArray(data.bars)) {
+      if (!data || data.ok !== true || !Array.isArray(data.bars) || data.bars.length === 0) {
         throw new Error("Invalid payload");
       }
 
       return data.bars.map((b) => ({
-        time: b.time,
+        time: Number(b.time),
         open: +b.open,
         high: +b.high,
         low: +b.low,
         close: +b.close,
       }));
     } catch (e) {
-      log("[chart] Alpaca failed, fallback demo:", e.message);
-      return genDemoCandles(DEFAULT_BARS, tf);
+      log("[chart] Market data failed -> demo fallback:", e.message || e);
+      return genDemoCandles(DEFAULT_BARS, timeframe);
     }
   }
 
   /* -----------------------------
    * Load & render
+   * - Supports no-args call: load() reads UI
    * ----------------------------- */
   async function load(symbol, tf) {
-    const bars = await fetchMarketData(symbol, tf);
+    if (!chart || !candleSeries) {
+      throw new Error("Chart not initialized. Call ChartCore.init() first.");
+    }
+
+    const sym = (symbol || getUiSymbol()).trim().toUpperCase();
+    const timeframe = (tf || getUiTf()).trim() || "1d";
+
+    const bars = await fetchMarketData(sym, timeframe);
     CURRENT_BARS = bars;
 
-    const prm = TF_PARAMS[tf] || TF_PARAMS["1d"];
+    const prm = TF_PARAMS[timeframe] || TF_PARAMS["1d"];
 
     const emaArr = calcEMA(bars, prm.ema);
     const auxArr = calcEMA(bars, prm.aux);
-
     const split = splitEMABySlope(emaArr);
 
     candleSeries.setData(bars);
@@ -290,6 +325,7 @@
     emaSeriesDown.setData(split.down);
     auxSeries.setData(auxArr);
 
+    // signals
     const sigs = detectSignals(bars, emaArr, auxArr, prm.cooldown);
     CURRENT_SIGS = sigs;
 
@@ -303,7 +339,36 @@
       }))
     );
 
+    applyToggles();
     repaintOverlay();
+
+    // Update header values if present
+    const last = bars[bars.length - 1];
+    if ($("symText")) $("symText").textContent = sym;
+    if ($("priceText") && last) $("priceText").textContent = (last.close ?? "").toFixed ? last.close.toFixed(2) : String(last.close);
+    if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${timeframe} · sigs=${sigs.length}）`;
+  }
+
+  /* -----------------------------
+   * Export PNG (optional helper)
+   * - Uses lightweight-charts takeScreenshot if available
+   * ----------------------------- */
+  function exportPNG() {
+    try {
+      if (!chart || typeof chart.takeScreenshot !== "function") {
+        alert("当前图表版本不支持 takeScreenshot（或被浏览器限制）。");
+        return;
+      }
+      const canvas = chart.takeScreenshot();
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      const sym = getUiSymbol();
+      const tf = getUiTf();
+      a.download = `DarriusAI_${sym}_${tf}.png`;
+      a.click();
+    } catch (e) {
+      alert("导出失败：" + (e.message || e));
+    }
   }
 
   /* -----------------------------
@@ -311,24 +376,24 @@
    * ----------------------------- */
   function init(opts) {
     opts = opts || {};
-    containerEl = $(opts.containerId || "chart");
-    overlayEl = $(opts.overlayId || "sigOverlay");
+    const containerId = opts.containerId || opts.chartElId || "chart";
+    const overlayId = opts.overlayId || opts.overlayElId || "sigOverlay";
+
+    containerEl = $(containerId);
+    overlayEl = $(overlayId);
 
     if (!containerEl || !window.LightweightCharts) {
-      throw new Error("Chart container or lib missing");
+      throw new Error("Chart container or lightweight-charts missing");
     }
 
     chart = LightweightCharts.createChart(containerEl, {
-      layout: {
-        background: { color: "transparent" },
-        textColor: "#EAF0F7",
-      },
+      layout: { background: { color: "transparent" }, textColor: "#EAF0F7" },
       grid: {
         vertLines: { color: "rgba(255,255,255,.04)" },
         horzLines: { color: "rgba(255,255,255,.04)" },
       },
       rightPriceScale: { borderVisible: false },
-      timeScale: { timeVisible: true, borderVisible: false },
+      timeScale: { timeVisible: true, secondsVisible: false, borderVisible: false },
       crosshair: { mode: 1 },
     });
 
@@ -340,16 +405,17 @@
       borderVisible: false,
     });
 
+    // EMA green/red split
     emaSeriesUp = chart.addLineSeries({
       color: "#2BE2A6",
       lineWidth: 2,
     });
-
     emaSeriesDown = chart.addLineSeries({
       color: "#FF5A5A",
       lineWidth: 2,
     });
 
+    // AUX
     auxSeries = chart.addLineSeries({
       color: "rgba(255,184,108,.85)",
       lineWidth: 2,
@@ -360,17 +426,26 @@
     const resize = () => {
       const r = containerEl.getBoundingClientRect();
       chart.applyOptions({
-        width: Math.floor(r.width),
-        height: Math.floor(r.height),
+        width: Math.max(1, Math.floor(r.width)),
+        height: Math.max(1, Math.floor(r.height)),
       });
       chart.timeScale().fitContent();
       repaintOverlay();
     };
 
-    new ResizeObserver(resize).observe(containerEl);
+    // Resize observers
+    try {
+      new ResizeObserver(resize).observe(containerEl);
+    } catch (_) {
+      // fallback
+      window.addEventListener("resize", resize);
+    }
     window.addEventListener("resize", resize);
 
     resize();
+
+    // Auto first load (safe)
+    load().catch((e) => log("[chart] initial load failed:", e.message || e));
   }
 
   /* -----------------------------
@@ -379,5 +454,7 @@
   window.ChartCore = {
     init,
     load,
+    applyToggles,
+    exportPNG,
   };
 })();
