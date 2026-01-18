@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>DarriusAI · Inflection Hunter | AI 拐点决策系统</title>
 
-  <!-- Lightweight Charts -->
+  <!-- Lightweight Charts (required by chart.core.js) -->
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
   <style>
@@ -485,7 +485,6 @@
     }
     .label b{ color: var(--text); }
 
-    /* FIX #2/#3: make selects dark (including dropdown options) */
     input, select{
       width:100%;
       background: rgba(0,0,0,.24);
@@ -568,7 +567,6 @@
     }
     .note b{ color: var(--text); }
 
-    /* ===== Diagnostics hidden by default (Admin only) ===== */
     .hidden{ display:none !important; }
 
     #logBox{
@@ -646,8 +644,6 @@
                 <span>Neutral</span><b id="neuPct">—</b>
                 <span>Net Inflow</span><b id="netInflow" style="color:var(--brand1)">—</b>
               </div>
-
-              <!-- FIX #5: remove “future access” sentence, and enforce English first -->
               <div class="small" style="margin-top:10px">
                 <b>Note:</b> Market Pulse is a demo momentum model, intended as an optional filter for signal interpretation.<br/>
                 <b>说明：</b>Market Pulse 为演示版动量模型，可作为信号解读的可选过滤项。
@@ -665,15 +661,12 @@
             <span>Confidence · 强度</span><b id="riskConf">—</b>
             <span>Backtest WinRate · 回测胜率</span><b id="riskWR">—</b>
           </div>
-
-          <!-- FIX #6: delete the extra note block (removed) -->
         </div>
 
         <div class="signalBox">
           <div class="signal neutral" id="signalRow">
             <div>
               <div class="side" id="signalSide">Waiting…</div>
-              <!-- FIX #7: remove strategy details + English first -->
               <div class="meta" id="signalMeta">Waiting for confirmation…<br/>等待确认…</div>
             </div>
             <div style="text-align:right">
@@ -683,7 +676,7 @@
           </div>
         </div>
 
-        <!-- Affiliate (no commission leakage) -->
+        <!-- Affiliate -->
         <div class="card" id="affiliateCard" style="margin-top:12px">
           <div class="cardTitle"><b>Affiliate · 推荐人</b><span class="small">入口</span></div>
           <button class="btnGhost" id="affiliateBtn">Affiliate / 推荐入口</button>
@@ -695,7 +688,6 @@
 
         <!-- Compliance Disclaimer -->
         <div id="leftDisclaimer">
-          <!-- FIX #4: “Informational use only” + Chinese wording updated -->
           <div>
             <b>English:</b> Informational use only. Not investment advice. No offer or solicitation to buy/sell any security, futures, FX, crypto, or other financial instrument.
             Signals are algorithmic estimates and may be inaccurate, delayed, or incomplete. Past performance is not indicative of future results. You are solely responsible for your trading decisions and risk.
@@ -711,7 +703,6 @@
             <a href="#" onclick="alert('support@darrius.ai');return false;">Support</a>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -749,7 +740,7 @@
       </div>
 
       <div class="panelBody">
-        <!-- Data Source (Reserved for future real data) -->
+        <!-- Data Source -->
         <div class="card">
           <div class="cardTitle"><b>Data Source · 数据源</b><span class="small">预留接口</span></div>
           <div class="field">
@@ -819,7 +810,7 @@
           </div>
         </div>
 
-        <!-- FIX #8: Subscription + Start/Manage in ONE card; remove Stripe/API text; keep trial sentence (English first) -->
+        <!-- Subscription -->
         <div class="card">
           <div class="cardTitle">
             <b>Subscription · 订阅开通</b>
@@ -890,751 +881,208 @@
       </div>
     </div>
   </div>
+  <!-- IMPORTANT:
+       index.html is now UI-only.
+       All logic has been moved to:
+       - js/chart.core.js
+       - js/subscription.js
+       - js/boot.js
+  -->
 
+  <!-- =========================
+       HEADER
+       ========================= -->
+  <div id="topbar">
+    <div id="brand">
+      <div class="logo"></div>
+      <div id="brandText">
+        <div id="brandLine1">
+          <span class="accent">DarriusAI</span> · Inflection Hunter
+        </div>
+        <div id="brandLine2">
+          <span class="chip brand">AI 拐点决策系统</span>
+          <span class="chip">拐点猎手</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="topRight">
+      <div id="statusBadge" class="pill">
+        <span class="dot"></span>
+        <span id="statusText">Ready</span>
+      </div>
+      <div id="copyright">
+        © <span id="yearNow"></span> Darrius FinTech Inc.
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================
+       MAIN LAYOUT
+       ========================= -->
+  <div id="main">
+
+    <!-- LEFT PANEL -->
+    <div class="panel" id="leftPanel">
+      <div class="panelHeader">
+        <div class="h">Market Pulse <span class="tag">LIVE</span></div>
+      </div>
+      <div class="panelBody">
+
+        <div class="card">
+          <div class="gaugeWrap">
+            <div class="gauge">
+              <div class="gaugeMask" id="pulseGaugeMask"></div>
+              <div class="gaugeCenter">
+                <div class="num" id="pulseScore">—</div>
+                <div class="lbl">Sentiment</div>
+              </div>
+            </div>
+
+            <div style="flex:1">
+              <div class="kv">
+                <span>Bullish</span><b id="bullPct">—</b>
+                <span>Bearish</span><b id="bearPct">—</b>
+                <span>Neutral</span><b id="neuPct">—</b>
+                <span>Net Inflow</span><b id="netInflow">—</b>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardTitle"><b>Signal</b></div>
+          <div class="signalBox">
+            <div class="signal neutral" id="signalRow">
+              <div>
+                <div class="side" id="signalSide">WAIT</div>
+                <div class="meta" id="signalMeta">Waiting for confirmation…</div>
+              </div>
+              <div style="text-align:right">
+                <div id="signalPx">—</div>
+                <div id="signalTf">TF: —</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="leftDisclaimer">
+          <b>English:</b> Informational use only. Not investment advice.<br/>
+          <b>中文：</b> 本系统仅用于信息展示，不构成任何投资建议。
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CENTER PANEL -->
+    <div class="panel" id="chartPanel">
+      <div id="chartTop">
+        <div id="priceLine">
+          <span class="sym" id="symText">—</span>
+          <span id="priceText">—</span>
+        </div>
+
+        <div id="tfQuick">
+          <button class="tfBtn" data-tf="5m">5m</button>
+          <button class="tfBtn" data-tf="15m">15m</button>
+          <button class="tfBtn" data-tf="30m">30m</button>
+          <button class="tfBtn" data-tf="1h">1h</button>
+          <button class="tfBtn" data-tf="4h">4h</button>
+          <button class="tfBtn" data-tf="1d">1D</button>
+        </div>
+      </div>
+
+      <div class="panelBody">
+        <div id="chartWrap">
+          <div id="chart"></div>
+          <div id="sigOverlay"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="panel" id="rightPanel">
+      <div class="panelHeader">
+        <div class="h">Control Center</div>
+      </div>
+
+      <div class="panelBody">
+
+        <div class="card">
+          <div class="cardTitle"><b>Market</b></div>
+
+          <div class="field">
+            <div class="label">Symbol</div>
+            <input id="symbol" value="BTCUSDT" />
+          </div>
+
+          <div class="field">
+            <div class="label">Timeframe</div>
+            <select id="tf">
+              <option value="5m">5m</option>
+              <option value="15m">15m</option>
+              <option value="30m">30m</option>
+              <option value="1h">1h</option>
+              <option value="4h">4h</option>
+              <option value="1d" selected>1d</option>
+            </select>
+          </div>
+
+          <button class="btn" id="loadBtn">Load</button>
+
+          <div class="row2">
+            <label class="btnGhost">
+              <input type="checkbox" id="tgEMA" checked /> EMA
+            </label>
+            <label class="btnGhost">
+              <input type="checkbox" id="tgAux" checked /> AUX
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardTitle"><b>Subscription</b></div>
+
+          <div class="field">
+            <div class="label">User ID</div>
+            <input id="userId" placeholder="user_xxx" />
+          </div>
+
+          <div class="field">
+            <div class="label">Email</div>
+            <input id="email" placeholder="email@example.com" />
+          </div>
+
+          <div class="field">
+            <div class="label">Plan</div>
+            <select id="planSelect"></select>
+          </div>
+
+          <div class="row2">
+            <button class="btn" id="subscribeBtn">Subscribe</button>
+            <button class="btnGhost" id="manageBtn">Manage</button>
+          </div>
+
+          <div class="note">
+            Status: <span id="subStatusText">Unknown</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- =========================
+       SCRIPTS (ORDER IS CRITICAL)
+       ========================= -->
   <script>
-    /***************
-     * Config
-     ***************/
-    const API_BASE = "https://darrius-api.onrender.com";
-
-    function $(id){ return document.getElementById(id); }
-
-    function setStatus(text, ok=true){
-      const badge = $("statusBadge");
-      badge.classList.toggle("bad", !ok);
-      $("statusText").textContent = text;
-    }
-
-    function log(msg){
-      const card = $("diagCard");
-      if(card.classList.contains("hidden")) return;
-      const box = $("logBox");
-      const t = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
-      const old = (box.textContent || "").split("\n");
-      const clipped = old.slice(Math.max(0, old.length - 160)).join("\n");
-      box.textContent = clipped + (clipped ? "\n" : "") + t;
-      box.scrollTop = box.scrollHeight;
-      console.log("[DarriusAI]", msg);
-    }
-
-    /***************
-     * Admin Mode
-     ***************/
-    function isAdmin(){
-      const p = new URLSearchParams(location.search);
-      return p.get("admin")==="1";
-    }
-
-    /***************
-     * Chart + Indicators
-     ***************/
-    let chart=null, candle=null, ema=null, aux=null;
-    let CURRENT_BARS = [];
-    let CURRENT_SIGS = []; // [{time, price, side:'B'|'S'}]
-
-    const TF_PARAMS = {
-      "5m":  { ema: 8,  aux: 20, cooldown: 10 },
-      "15m": { ema: 9,  aux: 21, cooldown: 12 },
-      "30m": { ema: 10, aux: 24, cooldown: 14 },
-      "1h":  { ema: 10, aux: 26, cooldown: 16 },
-      "4h":  { ema: 12, aux: 30, cooldown: 18 },
-      "1d":  { ema: 10, aux: 21, cooldown: 14 },
-      "1w":  { ema: 8,  aux: 18, cooldown: 10 },
-      "1M":  { ema: 6,  aux: 14, cooldown: 8  },
-    };
-
-    function genDemoCandles(n=260, tf="1d"){
-      const stepMap = {
-        "5m": 300, "15m": 900, "30m": 1800,
-        "1h": 3600, "4h": 14400, "1d": 86400,
-        "1w": 604800, "1M": 2592000
-      };
-      const step = stepMap[tf] || 86400;
-
-      const now = Math.floor(Date.now()/1000);
-      let t = now - n*step;
-
-      let price = 67000;
-      const arr = [];
-      for(let i=0;i<n;i++){
-        // multi-wave + moderate noise (ensure enough crosses)
-        const wave1 = Math.sin(i/14)*220;
-        const wave2 = Math.sin(i/33)*420;
-        const wave3 = Math.sin(i/85)*700;
-        const noise = (Math.random()-0.5)*260;
-        const drift = Math.sin(i/170)*160;
-
-        const open = price;
-        const close = open + wave1 + wave2 + wave3 + drift + noise;
-        const high = Math.max(open, close) + Math.random()*220;
-        const low  = Math.min(open, close) - Math.random()*220;
-        price = close;
-
-        arr.push({ time:t, open:+open.toFixed(2), high:+high.toFixed(2), low:+low.toFixed(2), close:+close.toFixed(2) });
-        t += step;
-      }
-      return arr;
-    }
-
-    function calcEMA(bars, period){
-      const p = Math.max(2, Number(period)||10);
-      const k = 2/(p+1);
-      let prev = null;
-      const out = [];
-      for(const b of bars){
-        const v = b.close;
-        prev = (prev===null) ? v : (v*k + prev*(1-k));
-        out.push({ time:b.time, value:+prev.toFixed(2) });
-      }
-      return out;
-    }
-
-    function applyToggles(){
-      if(ema) ema.applyOptions({ visible: !!$("tgEMA").checked });
-      if(aux) aux.applyOptions({ visible: !!$("tgAux").checked });
-      repaintOverlay();
-    }
-
-    /***************
-     * Core Signal Engine
-     * Rule: EMA vs AUX cross => pending, confirm on next bar with EMA slope direction (to reduce noise)
-     * Mark on the CONFIRM candle.
-     ***************/
-    function detectCrossConfirmSignals(bars, emaFast, auxSlow, cooldownBars){
-      const sigs = [];
-      let lastSigIdx = -1e9;
-      let pending = null; // {side:'B'|'S', idxCross:number}
-
-      for(let i=2; i<bars.length; i++){
-        const diffPrev = (emaFast[i-1]?.value ?? bars[i-1].close) - (auxSlow[i-1]?.value ?? bars[i-1].close);
-        const diffNow  = (emaFast[i]?.value ?? bars[i].close) - (auxSlow[i]?.value ?? bars[i].close);
-
-        const crossUp = (diffPrev <= 0 && diffNow > 0);
-        const crossDn = (diffPrev >= 0 && diffNow < 0);
-
-        if(!pending){
-          if(crossUp) pending = { side:"B", idxCross:i };
-          if(crossDn) pending = { side:"S", idxCross:i };
-        }else{
-          // confirm on the next bar after cross
-          if(i === pending.idxCross + 1){
-            const eNow  = emaFast[i]?.value ?? bars[i].close;
-            const ePrev = emaFast[i-1]?.value ?? bars[i-1].close;
-            const slope = eNow - ePrev;
-
-            const ok =
-              (pending.side==="B" && slope >= 0) ||
-              (pending.side==="S" && slope <= 0);
-
-            if(ok && (i - lastSigIdx >= cooldownBars)){
-              sigs.push({
-                time: bars[i].time,
-                price: pending.side==="B" ? bars[i].low : bars[i].high,
-                side: pending.side
-              });
-              lastSigIdx = i;
-            }
-            pending = null;
-          }
-
-          // safety timeout
-          if(pending && (i - pending.idxCross) > 5){
-            pending = null;
-          }
-        }
-      }
-      return sigs.slice(-30);
-    }
-
-    function setChartMarkersFromSignals(sigs){
-      const markers = sigs.map(s => ({
-        time: s.time,
-        position: s.side==='B' ? "belowBar" : "aboveBar",
-        color: s.side==='B' ? "#2BE2A6" : "#FF5A5A",
-        shape: s.side==='B' ? "arrowUp" : "arrowDown",
-        text: s.side
-      }));
-      candle.setMarkers(markers);
-    }
-
-    /***************
-     * Overlay: BIG glowing B/S on chart
-     ***************/
-    function repaintOverlay(){
-      const ov = $("sigOverlay");
-      if(!ov || !chart || !candle) return;
-      ov.innerHTML = "";
-      if(!CURRENT_SIGS || CURRENT_SIGS.length===0) return;
-
-      const ts = chart.timeScale();
-
-      for(const s of CURRENT_SIGS){
-        const x = ts.timeToCoordinate(s.time);
-        if(x===null || x===undefined) continue;
-
-        // candlestick series has priceToCoordinate in v4+
-        const y = candle.priceToCoordinate(s.price ?? 0);
-        if(y===null || y===undefined) continue;
-
-        const d = document.createElement("div");
-        d.className = "sigMark " + (s.side==='B' ? "buy" : "sell");
-        d.style.left = `${x}px`;
-        d.style.top = `${y + (s.side==='B' ? 14 : -14)}px`;
-        d.textContent = s.side;
-        ov.appendChild(d);
-      }
-    }
-
-    function bindOverlayRepaint(){
-      if(!chart) return;
-      chart.timeScale().subscribeVisibleTimeRangeChange(repaintOverlay);
-      chart.timeScale().subscribeVisibleLogicalRangeChange(repaintOverlay);
-    }
-
-    /***************
-     * Market Pulse & Signal
-     ***************/
-    function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
-
-    function computeSentiment(bars, emaSeries){
-      const n = bars.length;
-      const last = bars[n-1];
-      const e = emaSeries[emaSeries.length-1]?.value ?? last.close;
-
-      const prevE = emaSeries[Math.max(0, emaSeries.length-10)]?.value ?? emaSeries[0]?.value ?? e;
-      const slope = (e - prevE) / Math.max(1, Math.abs(prevE)) * 100;
-      const dist = (last.close - e) / Math.max(1, Math.abs(e)) * 100;
-
-      let score = 50 + (dist*460) + (slope*860);
-      score = clamp(score, 3, 97);
-
-      const bull = clamp(score, 0, 100);
-      const bear = clamp(100 - score, 0, 100);
-      const neutral = clamp(100 - Math.abs(score-50)*2, 0, 100);
-
-      const sum = bull + bear + neutral;
-      const bullPct = bull/sum*100;
-      const bearPct = bear/sum*100;
-      const neuPct  = neutral/sum*100;
-
-      const netInflow = (score-50) * 12.3;
-
-      return {
-        score: Math.round(score),
-        bullPct, bearPct, neuPct,
-        netInflow,
-        bias: score>=58 ? "BULL" : (score<=42 ? "BEAR" : "NEUTRAL")
-      };
-    }
-
-    function setPulseUI(s){
-      $("pulseScore").textContent = String(s.score);
-
-      const deg = Math.round(s.score/100*360);
-      $("pulseGaugeMask").style.background =
-        `conic-gradient(var(--brand1) 0deg, var(--brand1) ${deg}deg, rgba(255,90,90,.92) ${deg}deg, rgba(255,90,90,.92) 360deg)`;
-
-      $("bullPct").textContent = s.bullPct.toFixed(2) + "%";
-      $("bearPct").textContent = s.bearPct.toFixed(2) + "%";
-      $("neuPct").textContent  = s.neuPct.toFixed(2) + "%";
-      $("netInflow").textContent = (s.netInflow>=0?"+":"") + s.netInflow.toFixed(2);
-
-      const tag = $("pulseTag");
-      if(s.bias==="BULL"){
-        tag.textContent="BULL";
-        tag.style.background="rgba(43,226,166,.14)";
-        tag.style.border="1px solid rgba(43,226,166,.25)";
-      }else if(s.bias==="BEAR"){
-        tag.textContent="BEAR";
-        tag.style.background="rgba(255,90,90,.12)";
-        tag.style.border="1px solid rgba(255,90,90,.22)";
-      }else{
-        tag.textContent="NEUTRAL";
-        tag.style.background="rgba(255,184,108,.12)";
-        tag.style.border="1px solid rgba(255,184,108,.22)";
-      }
-    }
-
-    function setSignalFromEngine(lastSig, lastPrice, tf, pulseBias){
-      const row = $("signalRow");
-      row.classList.remove("buy","sell","neutral");
-      $("signalTf").textContent = "TF: " + tf.toUpperCase();
-
-      if(!lastSig){
-        row.classList.add("neutral");
-        $("signalSide").textContent = "WAIT · 观望";
-        $("signalMeta").innerHTML = "Waiting for confirmation…<br/>等待确认…";
-        $("signalPx").textContent = "@ " + lastPrice;
-        return;
-      }
-
-      if(lastSig.side==="B"){
-        row.classList.add("buy");
-        $("signalSide").textContent = "BUY · 看多 / 买入";
-        $("signalMeta").innerHTML = (pulseBias==="BEAR")
-          ? "BUY confirmed, but Market Pulse is BEARISH (optional filter).<br/>BUY 已确认，但 Market Pulse 偏空（可选过滤项）。"
-          : "BUY confirmed.<br/>BUY 已确认。";
-        $("signalPx").textContent = "@ " + lastPrice;
-      }else{
-        row.classList.add("sell");
-        $("signalSide").textContent = "SELL · 看空 / 卖出";
-        $("signalMeta").innerHTML = (pulseBias==="BULL")
-          ? "SELL confirmed, but Market Pulse is BULLISH (optional filter).<br/>SELL 已确认，但 Market Pulse 偏多（可选过滤项）。"
-          : "SELL confirmed.<br/>SELL 已确认。";
-        $("signalPx").textContent = "@ " + lastPrice;
-      }
-    }
-
-    function updateRisk(bars){
-      const last = bars[bars.length-1];
-
-      const entry = last.close * 0.992;
-      const stop  = last.close * 0.978;
-      const t1    = last.close * 1.008;
-      const t2    = last.close * 1.018;
-      const t3    = last.close * 1.032;
-
-      $("riskEntry").textContent = entry.toFixed(2);
-      $("riskStop").textContent  = stop.toFixed(2);
-      $("riskTargets").textContent = [t1,t2,t3].map(x=>x.toFixed(2)).join(", ");
-
-      const base = bars[Math.max(0, bars.length-20)].close;
-      const vol = Math.abs(last.close - base) / Math.max(1, base) * 100;
-      const conf = clamp(92 - vol*1.6, 55, 95);
-      $("riskConf").textContent = Math.round(conf) + "%";
-
-      $("riskWR").textContent = "72%";
-    }
-
-    function initChart(){
-      if(typeof LightweightCharts==="undefined"){
-        setStatus("Chart lib missing", false);
-        alert("lightweight-charts 未加载。");
-        return;
-      }
-
-      const el = $("chart");
-      chart = LightweightCharts.createChart(el, {
-        layout: { background: { color: "transparent" }, textColor: "#EAF0F7" },
-        grid: {
-          vertLines: { color: "rgba(255,255,255,.04)" },
-          horzLines: { color: "rgba(255,255,255,.04)" },
-        },
-        rightPriceScale: { borderVisible:false },
-        timeScale: { timeVisible:true, secondsVisible:false, borderVisible:false },
-        crosshair: { mode: 1 },
-      });
-
-      candle = chart.addCandlestickSeries({
-        upColor: "#2BE2A6",
-        downColor:"#FF5A5A",
-        wickUpColor:"#2BE2A6",
-        wickDownColor:"#FF5A5A",
-        borderVisible:false,
-      });
-
-      ema = chart.addLineSeries({ lineWidth: 2, color: "rgba(76,194,255,.92)" });
-      aux = chart.addLineSeries({ lineWidth: 2, color: "rgba(255,184,108,.82)" });
-
-      function fit(){
-        const r = el.getBoundingClientRect();
-        chart.applyOptions({ width: Math.max(1, Math.floor(r.width)), height: Math.max(1, Math.floor(r.height)) });
-        chart.timeScale().fitContent();
-        repaintOverlay();
-      }
-      new ResizeObserver(() => fit()).observe(el);
-      window.addEventListener("resize", fit);
-
-      bindOverlayRepaint();
-
-      load();
-      fit();
-    }
-
-    async function fetchMarketData(symbol, tf){
-      return genDemoCandles(260, tf);
-    }
-
-    async function load(){
-      const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
-      const tf = $("tf").value;
-
-      $("symText").textContent = sym;
-      $("hintText").textContent = "Loading… / 加载中";
-
-      const bars = await fetchMarketData(sym, tf);
-      CURRENT_BARS = bars;
-
-      const prm = TF_PARAMS[tf] || TF_PARAMS["1d"];
-      const emaP = prm.ema;
-      const auxP = prm.aux;
-      const cooldownBars = prm.cooldown;
-
-      $("emaShow").textContent = String(emaP);
-      $("auxShow").textContent = String(auxP);
-      $("emaPeriod").value = String(emaP);
-      $("auxPeriod").value = String(auxP);
-
-      const emaSeries = calcEMA(bars, emaP);
-      const auxSeries = calcEMA(bars, auxP);
-
-      candle.setData(bars);
-      ema.setData(emaSeries);
-      aux.setData(auxSeries);
-      applyToggles();
-
-      // FIX #1: ensure B/S always appear (markers + big overlay)
-      const sigs = detectCrossConfirmSignals(bars, emaSeries, auxSeries, cooldownBars);
-      CURRENT_SIGS = sigs;
-      setChartMarkersFromSignals(sigs);
-      repaintOverlay();
-
-      const last = bars[bars.length-1];
-      $("priceText").textContent = last.close.toFixed(2);
-
-      const s = computeSentiment(bars, emaSeries);
-      setPulseUI(s);
-
-      const lastSig = sigs.length ? sigs[sigs.length-1] : null;
-      setSignalFromEngine(lastSig, last.close.toFixed(2), tf, s.bias);
-
-      updateRisk(bars);
-
-      $("hintText").textContent = `Loaded · 已加载（TF=${tf} · sigs=${sigs.length}）`;
-      setStatus("API OK", true);
-
-      log(`✅ load: ${sym} ${tf} ema=${emaP} aux=${auxP} cooldown=${cooldownBars} sigs=${sigs.length} bias=${s.bias} score=${s.score}`);
-      syncTfQuick(tf);
-    }
-
-    async function apiGet(path){
-      const resp = await fetch(`${API_BASE}${path}`, { method:"GET" });
-      const txt = await resp.text();
-      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,220)}`);
-      try{ return JSON.parse(txt); }catch(_){ return txt; }
-    }
-
-    async function apiPost(path, payload){
-      const resp = await fetch(`${API_BASE}${path}`, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify(payload || {})
-      });
-      const txt = await resp.text();
-      if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,220)}`);
-      try{ return JSON.parse(txt); }catch(_){ return { raw: txt }; }
-    }
-
-    /***************
-     * Billing / Plans
-     ***************/
-    let PLANS = []; // {key,label,price_id,trial_days}
-    function setPlanStatus(t){ $("planStatus").textContent = t; }
-
-    function populatePlans(plans){
-      PLANS = plans.slice();
-      const sel = $("planSelect");
-      sel.innerHTML = "";
-      for(const p of PLANS){
-        const opt = document.createElement("option");
-        opt.value = p.key;
-        opt.textContent = p.label || p.key;
-        sel.appendChild(opt);
-      }
-      setPlanStatus(`已加载 ${PLANS.length} 个计划`);
-      $("subscribeBtn").disabled = (PLANS.length===0);
-    }
-
-    function getLocalFallbackPlans(){
-      return [
-        { key:"weekly",    label:"Weekly · $4.90",     price_id:"price_1SpJMmR84UMUVSTg0T7xfm6r", trial_days:0 },
-        { key:"monthly",   label:"Monthly · $19.90",   price_id:"price_1SpbvRR84UMUVSTggbg0SFzi", trial_days:1 },
-        { key:"quarterly", label:"Quarterly · $49.90", price_id:"price_1SpbwYR84UMUVSTgMQpUrE42", trial_days:3 },
-        { key:"yearly",    label:"Yearly · $189",      price_id:"price_1SpbpxR84UMUVSTgapaJDjMX", trial_days:5 },
-      ];
-    }
-
-    async function initPlans(){
-      try{
-        setPlanStatus("从后端拉取…");
-        const data = await apiGet("/api/plans");
-        if(!data || data.ok!==true || !Array.isArray(data.plans) || data.plans.length===0){
-          throw new Error("Invalid /api/plans response");
-        }
-        const plans = data.plans.map(x=>({
-          key: x.key,
-          label: x.label || x.key,
-          price_id: x.price_id,
-          trial_days: Number(x.trial_days||0)
-        })).filter(x=>x.key && x.price_id);
-
-        if(plans.length===0) throw new Error("No valid plans with price_id");
-        populatePlans(plans);
-
-        setStatus("API OK", true);
-        log("✅ plans loaded from /api/plans");
-      }catch(e){
-        try{
-          const legacy = await apiGet("/billing/prices");
-          if(legacy && legacy.ok===true && Array.isArray(legacy.prices) && legacy.prices.length>0){
-            const planToPrice = legacy.plan_to_price || {};
-            const priceToTrial = {};
-            for(const it of legacy.prices) priceToTrial[it.price_id] = Number(it.trial_days||0);
-
-            const candidates = [
-              { key:"weekly",    label:"Weekly · $4.90",     price_id: planToPrice.weekly    || "", trial_days: priceToTrial[planToPrice.weekly]    || 0 },
-              { key:"monthly",   label:"Monthly · $19.90",   price_id: planToPrice.monthly   || "", trial_days: priceToTrial[planToPrice.monthly]   || 1 },
-              { key:"quarterly", label:"Quarterly · $49.90", price_id: planToPrice.quarterly || "", trial_days: priceToTrial[planToPrice.quarterly] || 3 },
-              { key:"yearly",    label:"Yearly · $189",      price_id: planToPrice.yearly    || "", trial_days: priceToTrial[planToPrice.yearly]    || 5 },
-            ].filter(x=>x.price_id);
-
-            if(candidates.length>=1){
-              populatePlans(candidates);
-              setPlanStatus(`已加载 ${candidates.length} 个计划（legacy fallback）`);
-              log("⚠️ plans loaded from /billing/prices fallback");
-              return;
-            }
-          }
-          throw new Error("Legacy fallback invalid");
-        }catch(_){
-          const fallback = getLocalFallbackPlans();
-          populatePlans(fallback);
-          setPlanStatus("已加载 4 个计划（local fallback）");
-          setStatus("API Degraded", false);
-          if(isAdmin()) log("❌ initPlans: " + e.message + " -> using local fallback");
-        }
-      }
-    }
-
-    async function refreshSubscriptionStatus(){
-      const user_id = ($("userId").value || "").trim();
-      if(!user_id){
-        $("subStatusText").textContent = "Unknown";
-        $("manageBtn").disabled = true;
-        return;
-      }
-
-      try{
-        const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
-        const status = data?.status || "unknown";
-        const has = !!data?.has_access;
-
-        $("subStatusText").textContent = `${status}${has ? " · Access ON" : " · Access OFF"}`;
-        $("manageBtn").disabled = !data?.customer_portal;
-        $("manageBtn").textContent = data?.customer_portal ? "Manage · 管理" : "Manage · (pending)";
-        log(`✅ subscription status: ${JSON.stringify(data).slice(0,220)}`);
-      }catch(e){
-        $("subStatusText").textContent = "Not implemented";
-        $("manageBtn").disabled = true;
-        if(isAdmin()) log("⚠️ status endpoint missing: " + e.message);
-      }
-    }
-
-    async function openCustomerPortal(){
-      const user_id = ($("userId").value || "").trim();
-      if(!user_id){
-        alert("请先填写 User ID，再打开订阅管理。");
-        return;
-      }
-      try{
-        const data = await apiPost("/api/billing/portal", { user_id });
-        if(!data || !data.url) throw new Error("No portal url");
-        window.location.href = data.url;
-      }catch(e){
-        alert(
-          "订阅管理（Customer Portal）暂未开通或接口未部署。\n\n" +
-          "后端需要提供：POST /api/billing/portal -> 返回 {url}\n\n" +
-          "错误：\n" + e.message
-        );
-        if(isAdmin()) log("❌ open portal: " + e.message);
-      }
-    }
-
-    async function subscribe(){
-      const user_id = ($("userId").value || "").trim();
-      const email = ($("email").value || "").trim();
-      const key = $("planSelect").value;
-      const override = ($("priceOverride")?.value || "").trim();
-
-      if(!user_id){
-        alert("User ID 必填（用于绑定 Stripe 订阅到你的系统用户）。");
-        $("userId").focus();
-        return;
-      }
-
-      const plan = key || "";
-      let payload = { user_id, email: email || undefined };
-
-      if(override){
-        payload.price_id = override;
-      }else{
-        payload.plan = plan;
-        const p = PLANS.find(x=>x.key===plan);
-        if(p && p.price_id) payload.price_id = p.price_id;
-      }
-
-      try{
-        setStatus("Creating checkout…", true);
-        if(isAdmin()) log(`➡️ POST /billing/checkout ${JSON.stringify(payload)}`);
-
-        const resp = await fetch(`${API_BASE}/billing/checkout`, {
-          method:"POST",
-          headers: { "Content-Type":"application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        const txt = await resp.text();
-        if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0,260)}`);
-
-        let data = null;
-        try{ data = JSON.parse(txt); }catch(_){ data = { raw: txt }; }
-
-        if(!data || !data.checkout_url){
-          throw new Error("No checkout_url returned");
-        }
-
-        setStatus("Redirecting to Stripe…", true);
-        if(isAdmin()) log("✅ checkout_url received. Redirecting...");
-        window.location.href = data.checkout_url;
-
-      }catch(e){
-        setStatus("Network/API error", false);
-        if(isAdmin()) log(`❌ subscribe failed: ${e.message}`);
-        alert("订阅失败：网络错误/后端未联通或接口报错。\n\n错误：\n" + e.message);
-      }
-    }
-
-    async function testHealth(){
-      try{
-        setStatus("Checking API…", true);
-        const data = await apiGet("/health");
-        setStatus("API OK", true);
-        log(`✅ /health: ${typeof data==="string"?data:JSON.stringify(data).slice(0,260)}`);
-      }catch(e){
-        setStatus("API Not Ready", false);
-        log(`❌ /health: ${e.message}`);
-        alert("Health 检查失败：\n" + e.message);
-      }
-    }
-
-    async function showRoutes(){
-      try{
-        setStatus("Loading routes…", true);
-        const data = await apiGet("/routes");
-        setStatus("Routes OK", true);
-        log(`✅ /routes: ${JSON.stringify(data).slice(0,520)}...`);
-      }catch(e){
-        setStatus("Routes failed", false);
-        log(`❌ /routes: ${e.message}`);
-        alert("Routes 获取失败：\n" + e.message);
-      }
-    }
-
-    async function copyShareLink(){
-      const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
-      const tf = $("tf").value;
-      const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
-      try{
-        await navigator.clipboard.writeText(url);
-        alert("已复制分享链接：\n" + url);
-      }catch(_){
-        prompt("复制失败，请手动复制：", url);
-      }
-    }
-
-    function exportPNG(){
-      try{
-        if(!chart || typeof chart.takeScreenshot !== "function"){
-          alert("当前图表版本不支持 takeScreenshot（或被浏览器限制）。");
-          return;
-        }
-        const canvas = chart.takeScreenshot();
-        const a = document.createElement("a");
-        a.href = canvas.toDataURL("image/png");
-        const sym = ($("symbol").value || "BTCUSDT").trim().toUpperCase();
-        const tf = $("tf").value;
-        a.download = `DarriusAI_${sym}_${tf}.png`;
-        a.click();
-      }catch(e){
-        alert("导出失败：" + e.message);
-      }
-    }
-
-    function openAffiliate(){
-      alert(
-        "Affiliate 入口（合规版）：\n\n" +
-        "下一步建议：\n" +
-        "1) /affiliate/register（选择 US / non-US 身份）\n" +
-        "2) 电子签署：W-9/1099 或 W-8 系列 + 合作协议\n" +
-        "3) /affiliate/dashboard（推荐数、结算、发票/对账）\n\n" +
-        "注：返佣比例与结算规则不在前端公开展示（商业机密）。"
-      );
-    }
-
-    function syncTfQuick(tf){
-      document.querySelectorAll(".tfBtn").forEach(btn=>{
-        btn.classList.toggle("active", btn.dataset.tf===tf);
-      });
-    }
-
-    function bindTfQuick(){
-      document.querySelectorAll(".tfBtn").forEach(btn=>{
-        btn.addEventListener("click", ()=>{
-          const tf = btn.dataset.tf;
-          $("tf").value = tf;
-          syncTfQuick(tf);
-          load();
-        });
-      });
-    }
-
-    (function boot(){
-      $("yearNow").textContent = String(new Date().getFullYear());
-
-      if(isAdmin()){
-        $("diagCard").classList.remove("hidden");
-        $("paramRow").classList.remove("hidden");
-        $("priceOverrideRow").classList.remove("hidden");
-        log("Admin mode enabled (?admin=1)");
-      }
-
-      const p = new URLSearchParams(location.search);
-      const qsSym = p.get("symbol");
-      const qsTf  = p.get("tf");
-      if(qsSym) $("symbol").value = qsSym.toUpperCase();
-      if(qsTf) $("tf").value = qsTf;
-
-      bindTfQuick();
-      syncTfQuick($("tf").value);
-
-      $("tgEMA").addEventListener("change", applyToggles);
-      $("tgAux").addEventListener("change", applyToggles);
-
-      $("loadBtn").addEventListener("click", load);
-      $("subscribeBtn").addEventListener("click", subscribe);
-      $("manageBtn").addEventListener("click", openCustomerPortal);
-
-      $("copyLinkBtn").addEventListener("click", copyShareLink);
-      $("exportBtn").addEventListener("click", exportPNG);
-
-      $("affiliateBtn").addEventListener("click", openAffiliate);
-
-      $("userId").addEventListener("input", ()=>{
-        window.clearTimeout(window.__subT);
-        window.__subT = window.setTimeout(refreshSubscriptionStatus, 400);
-      });
-
-      if(isAdmin()){
-        $("healthBtn").addEventListener("click", testHealth);
-        $("routesBtn").addEventListener("click", showRoutes);
-      }
-
-      setStatus("Ready · 前端已就绪", true);
-      initChart();
-      initPlans();
-      refreshSubscriptionStatus();
-    })();
+    window.API_BASE = "https://darrius-api.onrender.com";
   </script>
+
+  <script src="js/chart.core.js"></script>
+  <script src="js/subscription.js"></script>
+  <script src="js/boot.js"></script>
+
 </body>
 </html>
-
