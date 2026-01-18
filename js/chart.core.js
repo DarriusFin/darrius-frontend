@@ -24,17 +24,11 @@
     return document.getElementById(id);
   }
 
-  function clamp(x, a, b) {
-    return Math.max(a, Math.min(b, x));
-  }
-
   function log() {
     if (window.console) console.log.apply(console, arguments);
   }
 
   function getApiBase() {
-    // Allow index.html or boot.js to set window.API_BASE
-    // Fallback to empty => relative requests (works if front/back same origin via proxy)
     return (window.API_BASE || "").trim() || "";
   }
 
@@ -148,6 +142,8 @@
 
   /* -----------------------------
    * EMA color split (up / down)
+   * IMPORTANT: never use value:null (can render as 0 -> huge vertical spikes)
+   * Use value: undefined to break the line safely.
    * ----------------------------- */
   function splitEMABySlope(emaArr) {
     const up = [];
@@ -158,18 +154,15 @@
       const prev = emaArr[i - 1];
 
       if (!prev) {
-        up.push(cur);
-        down.push({ time: cur.time, value: null });
+        // seed both with the same first point for stable render
+        up.push({ time: cur.time, value: cur.value });
+        down.push({ time: cur.time, value: cur.value });
         continue;
       }
 
-      if (cur.value >= prev.value) {
-        up.push(cur);
-        down.push({ time: cur.time, value: null });
-      } else {
-        down.push(cur);
-        up.push({ time: cur.time, value: null });
-      }
+      const isUp = cur.value >= prev.value;
+      up.push({ time: cur.time, value: isUp ? cur.value : undefined });
+      down.push({ time: cur.time, value: isUp ? undefined : cur.value });
     }
 
     return { up, down };
@@ -208,7 +201,6 @@
     if (!overlayEl || !chart || !candleSeries) return;
 
     overlayEl.innerHTML = "";
-
     if (!CURRENT_SIGS || CURRENT_SIGS.length === 0) return;
 
     const ts = chart.timeScale();
@@ -260,7 +252,6 @@
     const sym = (symbol || "").trim().toUpperCase();
     const timeframe = (tf || "1d").trim();
 
-    // crude crypto detection, backend can still decide
     const isCrypto =
       sym.includes("/") ||
       sym.endsWith("USDT") ||
@@ -302,6 +293,7 @@
   /* -----------------------------
    * Load & render
    * - Supports no-args call: load() reads UI
+   * - Returns data for boot.js to update other UI panels
    * ----------------------------- */
   async function load(symbol, tf) {
     if (!chart || !candleSeries) {
@@ -325,7 +317,6 @@
     emaSeriesDown.setData(split.down);
     auxSeries.setData(auxArr);
 
-    // signals
     const sigs = detectSignals(bars, emaArr, auxArr, prm.cooldown);
     CURRENT_SIGS = sigs;
 
@@ -342,16 +333,16 @@
     applyToggles();
     repaintOverlay();
 
-    // Update header values if present
     const last = bars[bars.length - 1];
     if ($("symText")) $("symText").textContent = sym;
-    if ($("priceText") && last) $("priceText").textContent = (last.close ?? "").toFixed ? last.close.toFixed(2) : String(last.close);
+    if ($("priceText") && last && typeof last.close === "number") $("priceText").textContent = last.close.toFixed(2);
     if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${timeframe} · sigs=${sigs.length}）`;
+
+    return { ok: true, sym, tf: timeframe, bars, emaArr, auxArr, sigs, params: prm };
   }
 
   /* -----------------------------
    * Export PNG (optional helper)
-   * - Uses lightweight-charts takeScreenshot if available
    * ----------------------------- */
   function exportPNG() {
     try {
@@ -403,22 +394,26 @@
       wickUpColor: "#2BE2A6",
       wickDownColor: "#FF5A5A",
       borderVisible: false,
+      priceLineVisible: true,
     });
 
-    // EMA green/red split
+    // EMA split (disable priceLine for clean right scale)
     emaSeriesUp = chart.addLineSeries({
       color: "#2BE2A6",
       lineWidth: 2,
+      priceLineVisible: false,
     });
     emaSeriesDown = chart.addLineSeries({
       color: "#FF5A5A",
       lineWidth: 2,
+      priceLineVisible: false,
     });
 
-    // AUX
+    // AUX (disable priceLine for clean right scale)
     auxSeries = chart.addLineSeries({
       color: "rgba(255,184,108,.85)",
       lineWidth: 2,
+      priceLineVisible: false,
     });
 
     bindOverlay();
@@ -433,19 +428,20 @@
       repaintOverlay();
     };
 
-    // Resize observers
     try {
       new ResizeObserver(resize).observe(containerEl);
     } catch (_) {
-      // fallback
-      window.addEventListener("resize", resize);
+      // ignore
     }
     window.addEventListener("resize", resize);
 
     resize();
 
-    // Auto first load (safe)
-    load().catch((e) => log("[chart] initial load failed:", e.message || e));
+    // Do NOT auto-load here if boot.js controls lifecycle.
+    // If you still want auto-load, set opts.autoLoad=true
+    if (opts.autoLoad) {
+      load().catch((e) => log("[chart] initial load failed:", e.message || e));
+    }
   }
 
   /* -----------------------------
