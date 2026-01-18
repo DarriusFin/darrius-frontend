@@ -159,27 +159,34 @@
   /* -----------------------------
    * EMA color split (REAL gap using undefined)
    * ----------------------------- */
-  function splitEMABySlope(emaArr) {
-    const up = [];
-    const down = [];
-    for (let i = 0; i < emaArr.length; i++) {
-      const cur = emaArr[i];
-      const prev = emaArr[i - 1];
-      if (!prev) {
-        up.push({ time: cur.time, value: cur.value });
-        down.push({ time: cur.time, value: undefined });
-        continue;
-      }
-      if (cur.value >= prev.value) {
-        up.push({ time: cur.time, value: cur.value });
-        down.push({ time: cur.time, value: undefined });
-      } else {
-        down.push({ time: cur.time, value: cur.value });
-        up.push({ time: cur.time, value: undefined });
-      }
+ function splitEMABySlope(emaArr) {
+  const up = [];
+  const down = [];
+
+  for (let i = 0; i < emaArr.length; i++) {
+    const cur = emaArr[i];
+    const prev = emaArr[i - 1];
+
+    if (!prev) {
+      // first point: show as up by default
+      up.push({ time: cur.time, value: cur.value });
+      continue;
     }
-    return { up, down };
+
+    if (cur.value >= prev.value) {
+      // show ONLY green point
+      up.push({ time: cur.time, value: cur.value });
+      // do NOT push down point at this time => hard gap
+    } else {
+      // show ONLY red point
+      down.push({ time: cur.time, value: cur.value });
+      // do NOT push up point at this time => hard gap
+    }
   }
+
+  return { up, down };
+}
+
 
   /* -----------------------------
    * More realistic signals:
