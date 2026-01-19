@@ -156,19 +156,154 @@
    *   => green = rising, red = falling
    * --------------------------------------------------------- */
   function buildColorSwitchEMA(emaArr) {
-    const up = [];
-    const dn = [];
+  // ====== 防抖参数（可按感觉微调）======
+  const CONFIRM_BARS = 3;          // 连续确认几根才允许切换（建议 3~5）
+  const REL_EPS = 0.00015;         // 相对阈值：过滤极小斜率抖动（建议 0.00010~0.00030）
+  // ====================================
 
-    for (let i = 0; i < emaArr.length; i++) {
-      const cur = emaArr[i];
-      const prev = emaArr[i - 1];
+  const up = [];
+  const dn = [];
 
-      if (!prev) {
-        // start: default to "up" so it draws immediately
-        up.push(cur);
-        dn.push({ time: cur.time, value: null });
-        continue;
+  let state = null;               // "UP" or "DN"
+  let pending = null;             // "UP" or "DN"
+  let pendingCount = 0;
+
+  for (let i = 0; i < emaArr.length; i++) {
+    const cur = emaArr[i];
+    const prev = emaArr[i - 1];
+
+    if (!prev) {
+      // 起点：先当作 UP
+      state = "UP";
+      up.push(cur);
+      dn.push({ time: cur.time, value: null });
+      continue;
+    }
+
+    // 用相对阈值过滤很小的斜率：避免一丁点波动就切换
+    const slope = cur.value - prev.value;
+    const eps = Math.max(Math.abs(cur.value) * REL_EPS, 1e-9);
+
+    let want = null;
+    if (slope > eps) want = "UP";
+    else if (slope < -eps) want = "DN";
+    else want = state; // 斜率太小：保持原趋势，不触发切换
+
+    // 初始化 state
+    if (!state) state = want;
+
+    // 防抖确认：want != state 时，必须连续 CONFIRM_BARS 次才切换
+    if (want !== state) {
+      if (pending === want) pendingCount++;
+      else {
+        pending = want;
+        pendingCount = 1;
       }
+
+      if (pendingCount >= CONFIRM_BARS) {
+        // ====== 关键：切换发生，做桥接（像你 MQL 的 x+1 补点）======
+        // 1) 把“上一根(prev)”同时写入两条线，保证切换点连续
+        up[up.length - 1] = { time: prev.time, value: prev.value };
+        dn[dn.length - 1] = { time: prev.time, value: prev.value };
+
+        // 2) 切换状态
+        state = pending;
+        pending = null;
+        pendingCount = 0;
+      }
+    } else {
+      // want == state，清理 pending
+      pending = null;
+      pendingCount = 0;
+    }
+
+    // 输出：用 null 隐藏另一条（EMPTY_VALUE）
+    if (state === "UP") {
+      up.push(cur);
+      dn.push({ time: cur.time, value: null });
+    } else {
+      dn.push(cur);
+      up.push({ time: cur.time, value: null });
+    }
+  }
+
+  return { up, dn };
+}
+function buildColorSwitchEMA(emaArr) {
+  // ====== 防抖参数（可按感觉微调）======
+  const CONFIRM_BARS = 3;          // 连续确认几根才允许切换（建议 3~5）
+  const REL_EPS = 0.00015;         // 相对阈值：过滤极小斜率抖动（建议 0.00010~0.00030）
+  // ====================================
+
+  const up = [];
+  const dn = [];
+
+  let state = null;               // "UP" or "DN"
+  let pending = null;             // "UP" or "DN"
+  let pendingCount = 0;
+
+  for (let i = 0; i < emaArr.length; i++) {
+    const cur = emaArr[i];
+    const prev = emaArr[i - 1];
+
+    if (!prev) {
+      // 起点：先当作 UP
+      state = "UP";
+      up.push(cur);
+      dn.push({ time: cur.time, value: null });
+      continue;
+    }
+
+    // 用相对阈值过滤很小的斜率：避免一丁点波动就切换
+    const slope = cur.value - prev.value;
+    const eps = Math.max(Math.abs(cur.value) * REL_EPS, 1e-9);
+
+    let want = null;
+    if (slope > eps) want = "UP";
+    else if (slope < -eps) want = "DN";
+    else want = state; // 斜率太小：保持原趋势，不触发切换
+
+    // 初始化 state
+    if (!state) state = want;
+
+    // 防抖确认：want != state 时，必须连续 CONFIRM_BARS 次才切换
+    if (want !== state) {
+      if (pending === want) pendingCount++;
+      else {
+        pending = want;
+        pendingCount = 1;
+      }
+
+      if (pendingCount >= CONFIRM_BARS) {
+        // ====== 关键：切换发生，做桥接（像你 MQL 的 x+1 补点）======
+        // 1) 把“上一根(prev)”同时写入两条线，保证切换点连续
+        up[up.length - 1] = { time: prev.time, value: prev.value };
+        dn[dn.length - 1] = { time: prev.time, value: prev.value };
+
+        // 2) 切换状态
+        state = pending;
+        pending = null;
+        pendingCount = 0;
+      }
+    } else {
+      // want == state，清理 pending
+      pending = null;
+      pendingCount = 0;
+    }
+
+    // 输出：用 null 隐藏另一条（EMPTY_VALUE）
+    if (state === "UP") {
+      up.push(cur);
+      dn.push({ time: cur.time, value: null });
+    } else {
+      dn.push(cur);
+      up.push({ time: cur.time, value: null });
+    }
+  }
+
+  return { up, dn };
+}
+
 
       const rising = cur.value >= prev.value;
 
