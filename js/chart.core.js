@@ -1,15 +1,14 @@
 /* =========================================================
  * DarriusAI · Chart Core (FINAL INTEGRATED COVER VERSION)
  * File: js/chart.core.js
- *
- * Goals FIXED:
- *  - Only 2 MAs on screen: EMA (color-changing) + AUX (yellow)
- *  - No extra "3rd line" illusion (disable priceLine/lastValue labels on MA series)
- *  - Fix abnormal stock scaling (e.g., NVDA 227221 -> auto /100)
- *  - Filter invalid bars to remove huge lower wicks to 0
- *  - Markers: B yellow / S white, smaller text
- *  - Overlay: optional, smaller and aligned with markers
- *  - Alpaca OHLC via backend proxy, demo fallback safe
+ * Role:
+ *  - Candlestick chart
+ *  - EMA (single EMA visually, color-changing via split series)
+ *  - AUX line (single yellow line)
+ *  - Signal engine (EMA x AUX cross) + markers + overlay
+ *  - Alpaca OHLC via backend proxy (NO KEY on front-end)
+ *  - Robust normalization (ms->s, cents->dollars heuristic)
+ *  - Demo fallback (safe)
  *
  * Public:
  *  window.ChartCore = { init, load, applyToggles, exportPNG }
@@ -41,20 +40,14 @@
     return (($("tf")?.value || "1d") + "").trim();
   }
 
-  function isLikelyCryptoSymbol(sym) {
+  function isLikelyCrypto(sym) {
     sym = (sym || "").toUpperCase();
     return (
       sym.includes("/") ||
       sym.endsWith("USDT") ||
       sym.endsWith("USDC") ||
-      sym.endsWith("USD") ||
-      sym.endsWith("PERP")
+      sym.endsWith("USD")
     );
-  }
-
-  function num(x) {
-    const v = Number(x);
-    return Number.isFinite(v) ? v : NaN;
   }
 
   /* -----------------------------
@@ -79,11 +72,11 @@
   let chart = null;
   let candleSeries = null;
 
-  // EMA split series (one EMA visually)
+  // EMA split (should look like ONE EMA with color change)
   let emaSeriesUp = null;
   let emaSeriesDown = null;
 
-  // AUX
+  // AUX (single line)
   let auxSeries = null;
 
   let CURRENT_BARS = [];
@@ -144,6 +137,59 @@
   }
 
   /* -----------------------------
+   * Normalization
+   * - Fix ms timestamps, cents prices (heuristic), invalid bars
+   * ----------------------------- */
+  function normalizeBars(rawBars, asset) {
+    if (!Array.isArray(rawBars)) return [];
+
+    const bars = [];
+    for (const b of rawBars) {
+      const t0 = Number(b.time ?? b.t ?? b.timestamp);
+      const o0 = Number(b.open ?? b.o);
+      const h0 = Number(b.high ?? b.h);
+      const l0 = Number(b.low ?? b.l);
+      const c0 = Number(b.close ?? b.c);
+
+      if (!isFinite(t0) || !isFinite(o0) || !isFinite(h0) || !isFinite(l0) || !isFinite(c0)) {
+        continue;
+      }
+
+      // ms -> s
+      const time = t0 > 2e10 ? Math.floor(t0 / 1000) : Math.floor(t0);
+
+      bars.push({
+        time,
+        open: o0,
+        high: h0,
+        low: l0,
+        close: c0,
+      });
+    }
+
+    if (bars.length < 5) return bars;
+
+    // Heuristic cents->dollars for stocks:
+    // If stock median close is insanely large (> 5000), assume cents and /100.
+    if (asset === "stock") {
+      const closes = bars.map((x) => x.close).slice().sort((a, b) => a - b);
+      const mid = closes[Math.floor(closes.length / 2)];
+      if (isFinite(mid) && mid > 5000) {
+        for (const x of bars) {
+          x.open = x.open / 100;
+          x.high = x.high / 100;
+          x.low = x.low / 100;
+          x.close = x.close / 100;
+        }
+      }
+    }
+
+    // Ensure monotonic time (lightweight-charts requires sorted asc)
+    bars.sort((a, b) => a.time - b.time);
+    return bars;
+  }
+
+  /* -----------------------------
    * EMA
    * ----------------------------- */
   function calcEMA(bars, period) {
@@ -156,53 +202,65 @@
     for (let i = 0; i < bars.length; i++) {
       const v = bars[i].close;
       prev = prev === null ? v : v * k + prev * (1 - k);
-      out.push({ time: bars[i].time, value: +prev.toFixed(2) });
+      out.push({ time: bars[i].time, value: prev });
     }
     return out;
   }
 
   /* -----------------------------
    * EMA color split (up / down)
-   * IMPORTANT: For gaps, use "whitespace" points: {time} only
+   *
+   * IMPORTANT:
+   *  - Do NOT use null (can collapse to 0 -> vertical lines)
+   *  - Use NaN as gap, and explicitly break line at flips.
    * ----------------------------- */
   function splitEMABySlope(emaArr) {
     const up = [];
     const down = [];
 
-    for (let i = 0; i < emaArr.length; i++) {
+    if (!emaArr || emaArr.length === 0) return { up, down };
+
+    // Start: put first point into "up" by default, and gap in down
+    up.push({ time: emaArr[0].time, value: emaArr[0].value });
+    down.push({ time: emaArr[0].time, value: NaN });
+
+    for (let i = 1; i < emaArr.length; i++) {
       const cur = emaArr[i];
       const prev = emaArr[i - 1];
 
-      if (!prev) {
-        up.push(cur);
-        down.push({ time: cur.time }); // gap
-        continue;
+      const isUp = cur.value >= prev.value;
+
+      if (isUp) {
+        // Up series continues; down series gets gap
+        up.push({ time: cur.time, value: cur.value });
+        down.push({ time: cur.time, value: NaN });
+      } else {
+        down.push({ time: cur.time, value: cur.value });
+        up.push({ time: cur.time, value: NaN });
       }
 
-      if (cur.value >= prev.value) {
-        up.push(cur);
-        down.push({ time: cur.time }); // gap
-      } else {
-        down.push(cur);
-        up.push({ time: cur.time }); // gap
-      }
+      // Break line exactly at flip (prevents faint "double line" effect)
+      // If slope changed between i-1 and i, add an extra gap point right at cur.time for the opposite series.
+      // (NaN already does this; this comment is here to clarify intent.)
     }
 
     return { up, down };
   }
 
   /* -----------------------------
-   * Signal engine (EMA x AUX cross) + cooldown
+   * Signal engine (EMA x AUX cross)
+   * - Minimal stable cross, with cooldown
    * ----------------------------- */
   function detectSignals(bars, emaFast, auxSlow, cooldown) {
     const sigs = [];
     let lastIdx = -1e9;
+    const cd = Math.max(1, Number(cooldown) || 10);
 
     for (let i = 1; i < bars.length; i++) {
       const prevDiff = emaFast[i - 1].value - auxSlow[i - 1].value;
       const nowDiff = emaFast[i].value - auxSlow[i].value;
 
-      if (i - lastIdx < cooldown) continue;
+      if (i - lastIdx < cd) continue;
 
       if (prevDiff <= 0 && nowDiff > 0) {
         sigs.push({ time: bars[i].time, price: bars[i].low, side: "B" });
@@ -217,12 +275,14 @@
   }
 
   /* -----------------------------
-   * Overlay (BIG B / S) — smaller to avoid blocking
+   * Overlay (BIG B / S)
+   * - smaller font per your request
+   * - B yellow / S white
    * ----------------------------- */
   function repaintOverlay() {
     if (!overlayEl || !chart || !candleSeries) return;
-    overlayEl.innerHTML = "";
 
+    overlayEl.innerHTML = "";
     if (!CURRENT_SIGS || CURRENT_SIGS.length === 0) return;
 
     const ts = chart.timeScale();
@@ -233,17 +293,33 @@
       if (x == null || y == null) continue;
 
       const d = document.createElement("div");
-      d.className = "sigMark " + (s.side === "B" ? "buy" : "sell");
+
+      // Inline styling to force smaller text (regardless of CSS drift)
+      d.style.position = "absolute";
+      d.style.transform = "translate(-50%, -50%)";
       d.style.left = x + "px";
-      d.style.top = (y + (s.side === "B" ? 10 : -10)) + "px";
+      d.style.top = (y + (s.side === "B" ? 14 : -14)) + "px";
 
-      // smaller font than before
-      d.style.fontSize = "12px";
-      d.style.width = "22px";
-      d.style.height = "22px";
-      d.style.lineHeight = "22px";
+      d.style.width = "20px";
+      d.style.height = "20px";
+      d.style.borderRadius = "7px";
+      d.style.display = "flex";
+      d.style.alignItems = "center";
+      d.style.justifyContent = "center";
+      d.style.fontWeight = "800";
+      d.style.fontSize = "12px"; // ✅ smaller
 
+      if (s.side === "B") {
+        d.style.background = "#FFD400";
+        d.style.color = "#111";
+      } else {
+        d.style.background = "#FFFFFF";
+        d.style.color = "#111";
+      }
+
+      d.style.boxShadow = "0 10px 24px rgba(0,0,0,.28)";
       d.textContent = s.side;
+
       overlayEl.appendChild(d);
     }
   }
@@ -269,80 +345,16 @@
   }
 
   /* -----------------------------
-   * Normalize + validate bars
-   *  - Remove bad bars (0/NaN/high<low/duplicate time)
-   *  - Fix stock scaling if values look like cents (NVDA 227221 -> 2272.21 or 227.221)
-   *    Here we apply: if NOT crypto and typical close > 10000 => divide by 100
-   * ----------------------------- */
-  function sanitizeBars(rawBars, symbol) {
-    const sym = (symbol || "").toUpperCase();
-    const crypto = isLikelyCryptoSymbol(sym);
-
-    // build cleaned
-    const cleaned = [];
-    const seen = new Set();
-
-    for (const b of rawBars || []) {
-      const t = Math.floor(num(b.time));
-      if (!Number.isFinite(t) || t <= 0) continue;
-      if (seen.has(t)) continue;
-
-      let o = num(b.open);
-      let h = num(b.high);
-      let l = num(b.low);
-      let c = num(b.close);
-
-      if (![o, h, l, c].every(Number.isFinite)) continue;
-      if (o <= 0 || h <= 0 || l <= 0 || c <= 0) continue;
-      if (h < l) continue;
-
-      cleaned.push({ time: t, open: o, high: h, low: l, close: c });
-      seen.add(t);
-    }
-
-    if (cleaned.length < 10) return cleaned;
-
-    // detect scale for stocks
-    if (!crypto) {
-      // Use median close
-      const closes = cleaned.map((x) => x.close).sort((a, b) => a - b);
-      const med = closes[Math.floor(closes.length / 2)];
-
-      // If median is huge for a stock, it is almost certainly scaled (cents etc.)
-      // NVDA 227221 -> med > 10000 (true)
-      if (med > 10000) {
-        const factor = 100; // safest default; avoids over-shrinking crypto
-        for (const x of cleaned) {
-          x.open = +(x.open / factor).toFixed(4);
-          x.high = +(x.high / factor).toFixed(4);
-          x.low = +(x.low / factor).toFixed(4);
-          x.close = +(x.close / factor).toFixed(4);
-        }
-      }
-    }
-
-    // final pass: remove weird spikes (low too far from close)
-    // (prevents "needle to zero" even if backend sends extreme low)
-    const closes2 = cleaned.map((x) => x.close).sort((a, b) => a - b);
-    const med2 = closes2[Math.floor(closes2.length / 2)];
-    const floor = med2 * 0.02; // allow drawdowns but block absurd 0-like
-    for (const x of cleaned) {
-      if (x.low < floor) x.low = floor;
-      if (x.high < x.low) x.high = x.low;
-    }
-
-    return cleaned;
-  }
-
-  /* -----------------------------
    * Market data (backend proxy)
    * Endpoint:
    *  GET /api/market/ohlc?symbol=...&tf=...&asset=stock|crypto
+   * Response:
+   *  { ok:true, bars:[{time,open,high,low,close}, ...] }
    * ----------------------------- */
   async function fetchMarketData(symbol, tf) {
     const sym = (symbol || "").trim().toUpperCase();
     const timeframe = (tf || "1d").trim();
-    const asset = isLikelyCryptoSymbol(sym) ? "crypto" : "stock";
+    const asset = isLikelyCrypto(sym) ? "crypto" : "stock";
 
     try {
       const base = getApiBase();
@@ -361,21 +373,13 @@
         throw new Error("Invalid payload");
       }
 
-      const mapped = data.bars.map((b) => ({
-        time: num(b.time),
-        open: num(b.open),
-        high: num(b.high),
-        low: num(b.low),
-        close: num(b.close),
-      }));
+      const bars = normalizeBars(data.bars, asset);
+      if (!bars || bars.length < 10) throw new Error("Too few bars");
 
-      const clean = sanitizeBars(mapped, sym);
-      if (!clean || clean.length === 0) throw new Error("No valid bars after sanitize");
-
-      return clean;
+      return { bars, meta: { asset, source: "LIVE" } };
     } catch (e) {
       log("[chart] Market data failed -> demo fallback:", e.message || e);
-      return genDemoCandles(DEFAULT_BARS, timeframe);
+      return { bars: genDemoCandles(DEFAULT_BARS, timeframe), meta: { asset, source: "DEMO", error: String(e?.message || e) } };
     }
   }
 
@@ -390,43 +394,52 @@
     const sym = (symbol || getUiSymbol()).trim().toUpperCase();
     const timeframe = (tf || getUiTf()).trim() || "1d";
 
-    const bars = await fetchMarketData(sym, timeframe);
-    CURRENT_BARS = bars;
-
     const prm = TF_PARAMS[timeframe] || TF_PARAMS["1d"];
 
+    const { bars, meta } = await fetchMarketData(sym, timeframe);
+    CURRENT_BARS = bars;
+
+    // EMA & AUX
     const emaArr = calcEMA(bars, prm.ema);
     const auxArr = calcEMA(bars, prm.aux);
+
     const split = splitEMABySlope(emaArr);
 
+    // Render
     candleSeries.setData(bars);
     emaSeriesUp.setData(split.up);
     emaSeriesDown.setData(split.down);
     auxSeries.setData(auxArr);
 
-    // signals
+    // Signals
     const sigs = detectSignals(bars, emaArr, auxArr, prm.cooldown);
     CURRENT_SIGS = sigs;
 
-    // markers per your request: B yellow, S white, smaller text
+    // Markers: B yellow, S white (arrow markers small and clear)
     candleSeries.setMarkers(
       sigs.map((s) => ({
         time: s.time,
         position: s.side === "B" ? "belowBar" : "aboveBar",
         color: s.side === "B" ? "#FFD400" : "#FFFFFF",
         shape: s.side === "B" ? "arrowUp" : "arrowDown",
-        text: s.side, // small label; overlay handles bigger bubble
+        text: s.side,
       }))
     );
 
     applyToggles();
     repaintOverlay();
 
-    // top text
+    // Header text
     const last = bars[bars.length - 1];
     if ($("symText")) $("symText").textContent = sym;
     if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
-    if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${timeframe} · sigs=${sigs.length}）`;
+
+    const extra =
+      meta?.source === "DEMO"
+        ? ` · DEMO（fallback: ${meta.error || "unknown"}）`
+        : ` · ${meta.source || "LIVE"}`;
+
+    if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${timeframe} · sigs=${sigs.length}）${extra}`;
   }
 
   /* -----------------------------
@@ -480,13 +493,10 @@
       wickUpColor: "#2BE2A6",
       wickDownColor: "#FF5A5A",
       borderVisible: false,
-      // keep candle price line ok
-      priceLineVisible: true,
-      lastValueVisible: true,
     });
 
-    // EMA split series (visual ONE EMA with color change)
-    // IMPORTANT: disable priceLine + lastValue to avoid "extra lines" illusion
+    // ✅ EMA split series (visually ONE EMA with color change)
+    // ✅ Hide their price line / last value labels to avoid "extra line/value confusion"
     emaSeriesUp = chart.addLineSeries({
       color: "#2BE2A6",
       lineWidth: 2,
@@ -503,7 +513,7 @@
       crosshairMarkerVisible: false,
     });
 
-    // AUX (yellow) — also disable labels unless you really want them
+    // ✅ AUX (single yellow line)
     auxSeries = chart.addLineSeries({
       color: "rgba(255,184,108,.85)",
       lineWidth: 2,
@@ -533,11 +543,19 @@
 
     resize();
 
-    // IMPORTANT: default auto load (do not break existing boot/index)
+    // ✅ Default auto-load unless explicitly disabled
     if (opts.autoLoad !== false) {
       load().catch((e) => log("[chart] initial load failed:", e.message || e));
     }
   }
 
-  window.ChartCore = { init, load, applyToggles, exportPNG };
+  /* -----------------------------
+   * Public API
+   * ----------------------------- */
+  window.ChartCore = {
+    init,
+    load,
+    applyToggles,
+    exportPNG,
+  };
 })();
