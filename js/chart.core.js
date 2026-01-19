@@ -230,27 +230,32 @@
   }
 
   function buildSplitEmaNoOverlap(bars, emaPts) {
-    if (!bars?.length || !emaPts?.length) return { up: [], down: [] };
-    const emaMap = new Map(emaPts.map((p) => [p.time, p.value]));
+  if (!bars?.length || !emaPts?.length) return { up: [], down: [] };
+  const emaMap = new Map(emaPts.map((p) => [p.time, p.value]));
 
-    const up = [];
-    const down = [];
+  const up = [];
+  const down = [];
 
-    for (let i = 0; i < bars.length; i++) {
-      const t = bars[i].time;
-      const ema = emaMap.get(t);
-      if (!isFinite(ema)) continue;
+  for (let i = 0; i < bars.length; i++) {
+    const t = bars[i].time;
+    const ema = emaMap.get(t);
+    if (!isFinite(ema)) continue;
 
-      const close = bars[i].close;
-      const isUp = close >= ema;
+    const close = bars[i].close;
+    const isUp = close >= ema;
 
-      // ABSOLUTE NO-OVERLAP:
-      up.push({ time: t, value: isUp ? ema : null });
-      down.push({ time: t, value: isUp ? null : ema });
+    // ✅ 真·Whitespace：隐藏的一侧只给 {time}，不带 value
+    if (isUp) {
+      up.push({ time: t, value: ema });
+      down.push({ time: t });        // <- whitespace point
+    } else {
+      up.push({ time: t });          // <- whitespace point
+      down.push({ time: t, value: ema });
     }
-
-    return { up, down };
   }
+  return { up, down };
+}
+
 
   // -----------------------------
   // Markers
