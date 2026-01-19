@@ -1,22 +1,18 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (Integrated, Idempotent Init) — FINAL
- * Build: 2026-01-19
- *
- * ✅ Fixes (based on your latest evidence):
- *  1) Chart blank root-cause fixed:
- *     - Backend route that WORKS is:
- *         /api/market/bars?symbol=BTCUSDT&tf=1d
- *     - Old /ohlc /api/market/ohlc may 404/500 (crypto -> alpaca key missing)
- *     - So this file uses BARS as the primary/required OHLCV source.
- *
- *  2) EMA split-color “EMPTY_VALUE” correctly implemented:
- *     - LightweightCharts "null" IS NOT a real EMPTY_VALUE.
- *     - Correct gap/hidden data = WhitespaceData: { time } (no value field)
- *     - Only ONE EMA visible at a time (green above, red below)
- *     - Seam is stitched at switch points to avoid ugly gaps.
- *
- *  3) Robust parsing for different payload shapes
- *  4) Safe init, safe toggles; NO subscription/billing touch
+ * DarriusAI - chart.core.js (Hardcore, Integrated, Idempotent Init)
+ * What this file guarantees:
+ *  1) NO BLANK CHART from wrong endpoints:
+ *     - Prefer /api/market/bars (works for crypto per your tests)
+ *     - Fallback to other candidates safely
+ *  2) EMA split color: ABSOLUTE NO-OVERLAP
+ *     - For each bar time: only ONE of (emaUp, emaDown) has a numeric value
+ *     - The other is ALWAYS { time, value: null }
+ *     - NO seam-stitch => no parallel double-lines caused by overlap
+ *  3) B/S markers: optional second request
+ *     - Try from bars payload first
+ *     - If missing, try /api/market/sigs then /api/market/signals
+ *     - If not found => silent (no error, no fake signals)
+ *  4) Safe init, safe toggles; NO billing/subscription touch
  * ========================================================================= */
 
 (() => {
@@ -33,15 +29,25 @@
   // -----------------------------
   const DEFAULT_API_BASE =
     window.DARRIUS_API_BASE ||
-    window.__API_BASE__ ||
-    window.API_BASE ||
+    window._API_BASE_ ||
     "https://darrius-api.onrender.com";
 
-  // ✅ Based on your /routes screenshot: this exists and returns bars for crypto.
+  // IMPORTANT: prefer /api/market/bars first (your BTCUSDT works here),
+  // and keep /api/market/ohlc as a later fallback (your BTCUSDT currently 500 there).
   const BARS_PATH_CANDIDATES = [
-    "/api/market/bars", // ✅ confirmed working
+    "/api/market/bars",
+    "/api/market/ohlc",
     "/api/bars",
     "/bars",
+    "/api/ohlcv",
+    "/ohlcv",
+    "/api/market/ohlcv",
+    "/market/ohlcv",
+  ];
+
+  const SIGS_PATH_CANDIDATES = [
+    "/api/market/sigs",
+    "/api/market/signals",
   ];
 
   // -----------------------------
@@ -52,18 +58,14 @@
   let chart = null;
   let candleSeries = null;
 
-  // EMA split (two series but only one visible per bar via WHITESPACE gaps)
+  // EMA split (two series but only one visible per bar via null gaps)
   let emaUp = null;   // green
   let emaDown = null; // red
 
   // AUX series (single fixed color)
   let auxSeries = null;
 
-  // caches
-  let CURRENT_SIGS = [];
   let LAST_BARS = [];
-
-  // toggle state
   let showEMA = true;
   let showAUX = true;
 
@@ -103,27 +105,36 @@
   }
 
   // -----------------------------
-  // Robust fetch helpers
+  // Fetch helpers
   // -----------------------------
   async function fetchJson(url) {
     const r = await fetch(url, { method: "GET", credentials: "omit" });
     if (!r.ok) {
       const text = await r.text().catch(() => "");
-      const err = new Error(`HTTP ${r.status}`);
+      const err = new Error(HTTP ${r.status});
       err.status = r.status;
       err.body = text;
-      err.url = url;
       throw err;
     }
     return r.json();
   }
 
+  async function fetchJsonOptional(url) {
+    try {
+      return await fetchJson(url);
+    } catch (e) {
+      // 404/405 => treat as "not exists"
+      if (e && (e.status === 404 || e.status === 405)) return null;
+      // other errors also treated as optional failure for signals
+      return null;
+    }
+  }
+
   function toUnixTime(t) {
-    // Convert ms/iso to seconds (LightweightCharts supports seconds epoch)
     if (t == null) return null;
     if (typeof t === "number") {
-      if (t > 2e10) return Math.floor(t / 1000);
-      return t;
+      if (t > 2e10) return Math.floor(t / 1000); // ms -> sec
+      return t; // already sec
     }
     if (typeof t === "string") {
       const ms = Date.parse(t);
@@ -135,13 +146,14 @@
   }
 
   function normalizeBars(payload) {
-    // Accept shapes:
-    // 1) payload = [{time,open,high,low,close}, ...]
-    // 2) payload = { bars: [...] }
-    // 3) payload = { data: [...] }
+    // Reject explicit ok:false payloads
+    if (payload && typeof payload === "object" && payload.ok === false) return [];
+
     const raw =
       Array.isArray(payload) ? payload :
       payload?.bars ? payload.bars :
+      payload?.ohlcv ? payload.ohlcv :
+      payload?.ohlc ? payload.ohlc :
       payload?.data ? payload.data :
       [];
 
@@ -157,15 +169,10 @@
       })
       .filter(Boolean);
 
-    bars.sort((a, b) => a.time - b.time);
     return bars;
   }
 
   function normalizeLinePoints(payload, keyCandidates) {
-    // payload could be:
-    // - payload.ema: [{time,value}]
-    // - payload.indicators.ema: ...
-    // - payload.lines.ema: ...
     const pick = (obj, keys) => {
       for (const k of keys) {
         if (obj && obj[k] != null) return obj[k];
@@ -190,8 +197,8 @@
       .filter(Boolean);
   }
 
-  function normalizeSignals(payload) {
-    const raw = payload?.sigs || payload?.signals || [];
+  function normalizeSignalsFromAny(payload) {
+    const raw = payload?.sigs || payload?.signals || payload?.data || [];
     if (!Array.isArray(raw)) return [];
     return raw
       .map((s) => {
@@ -205,12 +212,12 @@
 
   async function fetchBarsPack(sym, tf) {
     const apiBase = (DEFAULT_API_BASE || "").replace(/\/+$/, "");
-    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+    const q = symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)};
 
     let lastErr = null;
 
     for (const p of BARS_PATH_CANDIDATES) {
-      const url = `${apiBase}${p}?${q}`;
+      const url = ${apiBase}${p}?${q};
       try {
         const payload = await fetchJson(url);
         return { payload, urlUsed: url };
@@ -220,92 +227,66 @@
       }
     }
 
-    const err = new Error(
-      `All BARS endpoints failed. Last error: ${lastErr?.message || lastErr}`
-    );
+    const err = new Error(All market endpoints failed. Last error: ${lastErr?.message || lastErr});
     err.cause = lastErr;
     throw err;
   }
 
+  async function fetchSignalsOptional(sym, tf) {
+    const apiBase = (DEFAULT_API_BASE || "").replace(/\/+$/, "");
+    const q = symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)};
+
+    for (const p of SIGS_PATH_CANDIDATES) {
+      const url = ${apiBase}${p}?${q};
+      const payload = await fetchJsonOptional(url);
+      if (!payload) continue;
+
+      const sigs = normalizeSignalsFromAny(payload);
+      if (sigs.length) return { sigs, urlUsed: url };
+
+      // If endpoint exists but returns empty array, still considered valid
+      if (payload && (payload.signals || payload.sigs || Array.isArray(payload.data))) {
+        return { sigs: [], urlUsed: url };
+      }
+    }
+
+    return null;
+  }
+
   // -----------------------------
-  // EMA split color (MT4 EMPTY_VALUE => WhitespaceData)
-  // Rule: close >= ema => show green(emaUp), hide red(emaDown)
-  //       close <  ema => show red(emaDown), hide green(emaUp)
-  //
-  // ✅ IMPORTANT:
-  // - DO NOT use value:null. It's NOT "EMPTY_VALUE" in LightweightCharts.
-  // - To hide a point => WhitespaceData = { time } (no value field)
-  // - Stitch at switch points: give BOTH series a value at the seam bar
-  //   so it looks like ONE line changing color.
+  // EMA split (ABSOLUTE NO-OVERLAP, NO STITCH)
+  // Rule: close >= ema => emaUp has value, emaDown is null
+  //       close <  ema => emaDown has value, emaUp is null
   // -----------------------------
-  function buildSplitEmaSeriesData(bars, emaPoints) {
+  function buildSplitEmaPointsNoOverlap(bars, emaPoints) {
     if (!bars?.length || !emaPoints?.length) return { up: [], down: [] };
 
-    // Map EMA by time for alignment
     const emaMap = new Map(emaPoints.map((p) => [p.time, p.value]));
 
     const up = [];
     const down = [];
 
-    let prevSide = 0;      //  1 = above, -1 = below
-    let prevTime = null;
-    let prevEma = null;
-
     for (let i = 0; i < bars.length; i++) {
       const t = bars[i].time;
       const ema = emaMap.get(t);
-
-      if (!isFinite(ema)) {
-        // no EMA => hide both at this time
-        up.push({ time: t });
-        down.push({ time: t });
-        continue;
-      }
+      if (!isFinite(ema)) continue;
 
       const close = bars[i].close;
-      const side = close >= ema ? 1 : -1;
+      const isUp = close >= ema;
 
-      // Default: one visible, one hidden(whitespace)
-      let upPoint = side === 1 ? { time: t, value: ema } : { time: t };
-      let dnPoint = side === -1 ? { time: t, value: ema } : { time: t };
-
-      // Stitch seam:
-      // If side changes at this bar, put a value at seam for BOTH series
-      // (minimal overlap at the seam only, not over a range)
-      if (prevSide !== 0 && side !== prevSide && prevTime != null && isFinite(prevEma)) {
-        // Put seam point (prevTime) into BOTH so the color switch is continuous
-        // Ensure the previous bar has a value on BOTH series at that bar.
-        // We overwrite last element safely because we always pushed one per bar.
-        const prevIdx = up.length - 1; // last pushed corresponds to prev bar
-        if (prevIdx >= 0) {
-          up[prevIdx] = { time: prevTime, value: prevEma };
-          down[prevIdx] = { time: prevTime, value: prevEma };
-        }
-
-        // And for current bar, also allow both to have value at switch bar (optional but helps)
-        upPoint = { time: t, value: ema };
-        dnPoint = { time: t, value: ema };
-      }
-
-      up.push(upPoint);
-      down.push(dnPoint);
-
-      prevSide = side;
-      prevTime = t;
-      prevEma = ema;
+      up.push({ time: t, value: isUp ? ema : null });
+      down.push({ time: t, value: isUp ? null : ema });
     }
 
     return { up, down };
   }
 
-  // Simple EMA fallback if backend doesn't provide ema[]
   function computeEmaFromBars(bars, period) {
     const k = 2 / (period + 1);
     let ema = null;
     const out = [];
     for (let i = 0; i < bars.length; i++) {
-      const c = bars[i].close;
-      ema = ema == null ? c : c * k + ema * (1 - k);
+      ema = ema == null ? bars[i].close : bars[i].close * k + ema * (1 - k);
       out.push({ time: bars[i].time, value: ema });
     }
     return out;
@@ -315,11 +296,10 @@
   // Markers (B yellow, S white)
   // -----------------------------
   function applyMarkers(sigs) {
-    CURRENT_SIGS = sigs || [];
     if (!candleSeries) return;
-
+    const arr = sigs || [];
     candleSeries.setMarkers(
-      (CURRENT_SIGS || []).map((s) => ({
+      arr.map((s) => ({
         time: s.time,
         position: s.side === "B" ? "belowBar" : "aboveBar",
         color: s.side === "B" ? "#FFD400" : "#FFFFFF",
@@ -336,7 +316,6 @@
     showEMA = !!($("toggleEMA")?.checked ?? $("emaToggle")?.checked ?? showEMA);
     showAUX = !!($("toggleAUX")?.checked ?? $("auxToggle")?.checked ?? showAUX);
 
-    // Alternate ids
     const altEma = $("emaCheck")?.checked;
     const altAux = $("auxCheck")?.checked;
     if (typeof altEma === "boolean") showEMA = altEma;
@@ -344,12 +323,7 @@
 
     if (emaUp) emaUp.applyOptions({ visible: showEMA });
     if (emaDown) emaDown.applyOptions({ visible: showEMA });
-
-    if (auxSeries) {
-      auxSeries.applyOptions({ visible: showAUX });
-      // Optional: when off, clear to avoid lingering artifacts
-      if (!showAUX) auxSeries.setData([]);
-    }
+    if (auxSeries) auxSeries.applyOptions({ visible: showAUX });
   }
 
   // -----------------------------
@@ -367,20 +341,16 @@
     try {
       pack = await fetchBarsPack(sym, tf);
     } catch (e) {
-      log("[ChartCore] load failed:", e.message || e, e?.url ? `url=${e.url}` : "");
-      if ($("hintText")) {
-        const extra = e?.cause?.url ? ` (${e.cause.url})` : "";
-        $("hintText").textContent = `加载失败：${e.message || e}${extra}`;
-      }
+      log("[ChartCore] load failed:", e.message || e);
+      if ($("hintText")) $("hintText").textContent = 加载失败：${e.message || e};
       throw e;
     }
 
     const payload = pack.payload;
-
-    // ✅ bars come from /api/market/bars
     const bars = normalizeBars(payload);
+
     if (!bars.length) {
-      if ($("hintText")) $("hintText").textContent = `加载失败：bars 为空（检查后端返回结构）`;
+      if ($("hintText")) $("hintText").textContent = 加载失败：bars 为空（后端 ok=false 或结构不匹配）;
       throw new Error("bars empty");
     }
 
@@ -389,30 +359,33 @@
     // Candles
     candleSeries.setData(bars);
 
-    // EMA points:
-    // Prefer backend-provided ema; else compute fallback
+    // EMA: prefer backend ema; otherwise compute
     let emaPts = normalizeLinePoints(payload, ["ema", "EMA"]);
     if (!emaPts.length) {
       emaPts = computeEmaFromBars(bars, 20);
     }
 
-    // ✅ TRUE EMPTY_VALUE behavior using WhitespaceData
-    const split = buildSplitEmaSeriesData(bars, emaPts);
+    const split = buildSplitEmaPointsNoOverlap(bars, emaPts);
     emaUp.setData(split.up);
     emaDown.setData(split.down);
 
-    // AUX points (optional)
-    if (showAUX) {
-      const auxPts = normalizeLinePoints(payload, ["aux", "AUX"]);
-      auxSeries.setData(auxPts);
-    } else {
-      auxSeries.setData([]);
+    // AUX
+    const auxPts = normalizeLinePoints(payload, ["aux", "AUX"]);
+    auxSeries.setData(auxPts);
+
+    // Signals:
+    // 1) Try from bars payload first
+    let sigs = normalizeSignalsFromAny(payload);
+
+    // 2) If none, try optional signals endpoint (no error if missing)
+    if (!sigs.length) {
+      const sigPack = await fetchSignalsOptional(sym, tf);
+      if (sigPack) sigs = sigPack.sigs || [];
     }
 
-    // Signals (B/S)
-    const sigs = normalizeSignals(payload);
     applyMarkers(sigs);
 
+    // Fit
     chart.timeScale().fitContent();
 
     // Texts
@@ -420,16 +393,15 @@
     if ($("symText")) $("symText").textContent = sym;
     if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
 
-    const sigCount = sigs.length;
-    if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${tf} · sigs=${sigCount}）`;
+    if ($("hintText")) $("hintText").textContent = Loaded · 已加载（TF=${tf} · sigs=${sigs.length}）;
 
     applyToggles();
 
-    return { urlUsed: pack.urlUsed, bars: bars.length, sigs: sigCount };
+    return { urlUsed: pack.urlUsed, bars: bars.length, sigs: sigs.length };
   }
 
   // -----------------------------
-  // Export PNG
+  // Export PNG (optional)
   // -----------------------------
   function exportPNG() {
     try {
@@ -440,7 +412,7 @@
       const canvas = chart.takeScreenshot();
       const a = document.createElement("a");
       a.href = canvas.toDataURL("image/png");
-      a.download = `DarriusAI_${getUiSymbol()}_${getUiTf()}.png`;
+      a.download = DarriusAI_${getUiSymbol()}_${getUiTf()}.png;
       a.click();
     } catch (e) {
       alert("导出失败：" + (e.message || e));
@@ -474,7 +446,7 @@
       crosshair: { mode: 1 },
     });
 
-    // Candles: green up / red down (你要求：绿色上涨，红色下跌)
+    // Candles: green up / red down (你确认：绿色上涨，红色下跌)
     candleSeries = chart.addCandlestickSeries({
       upColor: "#2BE2A6",
       downColor: "#FF5A5A",
@@ -483,7 +455,7 @@
       borderVisible: false,
     });
 
-    // ✅ EMA split ONLY (no third EMA baseline!)
+    // EMA split series (ABSOLUTE NO-OVERLAP)
     emaUp = chart.addLineSeries({
       color: "#2BE2A6",
       lineWidth: 2,
@@ -498,7 +470,7 @@
       lastValueVisible: false,
     });
 
-    // AUX (fixed color)
+    // AUX (fixed yellow)
     auxSeries = chart.addLineSeries({
       color: "rgba(255,184,108,.85)",
       lineWidth: 2,
@@ -522,7 +494,6 @@
     window.addEventListener("resize", resize);
     resize();
 
-    // Auto load
     if (opts.autoLoad !== false) {
       load().catch((e) => log("[ChartCore] initial load failed:", e.message || e));
     }
