@@ -1,38 +1,32 @@
 /* =========================================================
- * DarriusAI - chart.core.js (Integrated)
- * Goal:
- *  - Candles
- *  - EMA color-switch (2 series, but only ONE visible at a time via NaN gaps)
- *  - AUX single line
- *  - B/S markers
- *  - Toggles
+ * DarriusAI - chart.core.js (Integrated, Idempotent Init)
+ * Build: 2026-01-19 (fix: duplicate init, null-gaps EMA split)
  * ========================================================= */
 (() => {
   "use strict";
 
-  // ---------- DOM helpers ----------
+  // ---------------- DOM helpers ----------------
   const $ = (id) => document.getElementById(id);
-  const log = (...args) => console.log(...args);
+  const log = (...args) => console.log("[ChartCore]", ...args);
 
-  // ---------- State ----------
+  // ---------------- State ----------------
   let chart = null;
   let candleSeries = null;
 
-  // EMA split series (green/red) but only one shows at a time
+  // EMA split series (green/red). Only one should be visible per segment.
   let emaUp = null;
   let emaDown = null;
 
-  // AUX
+  // AUX (single line)
   let auxSeries = null;
 
-  // overlay (optional)
-  let containerEl = null;
-  let overlayEl = null;
+  // Remember last load opts (symbol/tf/apiBase)
+  let LAST_OPTS = null;
 
-  // keep last sigs for export/share overlay usage
+  // Keep last signals
   let CURRENT_SIGS = [];
 
-  // ---------- Config ----------
+  // ---------------- Config ----------------
   const COLORS = {
     candleUp: "#2BE2A6",
     candleDown: "#FF5A5A",
@@ -41,17 +35,10 @@
     aux: "rgba(255,184,108,.85)",
   };
 
-  const DEFAULTS = {
-    containerId: "chart",
-    overlayId: "sigOverlay",
-    // endpoints: keep compatible with your existing backend routes
-    // will call: `${apiBase}/api/ohlc?symbol=...&tf=...`
-    // and:      `${apiBase}/api/sigs?symbol=...&tf=...`
-    apiBase: "",
-    autoLoad: true,
-  };
+  // IMPORTANT: use null (not NaN) as "EMPTY_VALUE" equivalent for LightweightCharts gaps
+  const GAP = null;
 
-  // ---------- Utilities ----------
+  // ---------------- UI helpers ----------------
   function getUiSymbol() {
     const el = $("symInput") || $("symbolInput") || $("symbol");
     const v = el ? (el.value || el.textContent || "").trim() : "";
@@ -64,43 +51,48 @@
     return v || "1d";
   }
 
-  function isChecked(id) {
-    const el = $(id);
-    return !!(el && el.checked);
+  function isCheckedAny(ids) {
+    for (const id of ids) {
+      const el = $(id);
+      if (el && el.checked) return true;
+    }
+    return false;
   }
 
   function safeNum(x) {
     const n = Number(x);
-    return Number.isFinite(n) ? n : NaN;
+    return Number.isFinite(n) ? n : null;
   }
 
-  // Simple EMA (single array)
+  // ---------------- Math: EMA ----------------
   function calcEMA(values, period) {
     const p = Math.max(1, Number(period) || 20);
     const k = 2 / (p + 1);
-    const out = new Array(values.length).fill(NaN);
-    let ema = NaN;
+    const out = new Array(values.length).fill(GAP);
+    let ema = null;
 
     for (let i = 0; i < values.length; i++) {
       const v = values[i];
-      if (!Number.isFinite(v)) {
-        out[i] = NaN;
+      if (v == null) {
+        out[i] = GAP;
         continue;
       }
-      if (!Number.isFinite(ema)) {
-        ema = v; // seed
-      } else {
-        ema = v * k + ema * (1 - k);
-      }
+      if (ema == null) ema = v;
+      else ema = v * k + ema * (1 - k);
       out[i] = ema;
     }
     return out;
   }
 
   /**
-   * Build "color-switch EMA" using NaN gaps (LightweightCharts equivalent of EMPTY_VALUE)
-   * Trend rule: close >= ema ? +1 : -1
-   * Bridge at switch to avoid discontinuity.
+   * Build "color-switch EMA" as TWO series using GAP=null,
+   * so visually only one line is present at any time.
+   *
+   * Trend rule (you can replace later):
+   *   close >= ema ? +1 : -1
+   *
+   * Bridge at switch point so the line doesn't break.
+   * Bridge width = 1 bar (prev+current).
    */
   function buildColorSwitchEMA(bars, emaArr) {
     const up = [];
@@ -113,30 +105,28 @@
       const close = safeNum(bars[i].close);
       const ema = safeNum(emaArr[i]);
 
-      // If ema not ready, hide both
-      if (!Number.isFinite(ema) || !Number.isFinite(close)) {
-        up.push({ time: t, value: NaN });
-        down.push({ time: t, value: NaN });
+      if (close == null || ema == null) {
+        up.push({ time: t, value: GAP });
+        down.push({ time: t, value: GAP });
         continue;
       }
 
       const trend = close >= ema ? 1 : -1;
 
       // default: only one side shows
-      let upVal = trend > 0 ? ema : NaN;
-      let dnVal = trend < 0 ? ema : NaN;
+      let upVal = trend > 0 ? ema : GAP;
+      let dnVal = trend < 0 ? ema : GAP;
 
-      // Bridge at switch: set BOTH at boundary points (i-1 and i)
+      // Bridge at switch
       if (i > 0 && prevTrend !== 0 && trend !== prevTrend) {
-        // make previous point show on both
+        // previous point: show both
         const tPrev = bars[i - 1].time;
         const emaPrev = safeNum(emaArr[i - 1]);
-
-        if (Number.isFinite(emaPrev)) {
+        if (emaPrev != null) {
           up[i - 1] = { time: tPrev, value: emaPrev };
           down[i - 1] = { time: tPrev, value: emaPrev };
         }
-        // make current point show on both
+        // current point: show both
         upVal = ema;
         dnVal = ema;
       }
@@ -150,12 +140,10 @@
     return { up, down };
   }
 
-  // ---------- Markers ----------
+  // ---------------- Markers ----------------
   function applyMarkers(sigs) {
     if (!candleSeries) return;
 
-    // Use your requested colors:
-    // B yellow, S white
     const markers = (sigs || []).map((s) => ({
       time: s.time,
       position: s.side === "B" ? "belowBar" : "aboveBar",
@@ -167,28 +155,19 @@
     candleSeries.setMarkers(markers);
   }
 
-  // ---------- Toggles ----------
+  // ---------------- Toggles ----------------
   function applyToggles() {
     if (!emaUp || !emaDown || !auxSeries) return;
 
-    const showEma = isChecked("toggleEMA") || isChecked("emaToggle") || isChecked("EMA");
-    const showAux = isChecked("toggleAUX") || isChecked("auxToggle") || isChecked("AUX");
+    const showEma = isCheckedAny(["toggleEMA", "emaToggle", "EMA"]);
+    const showAux = isCheckedAny(["toggleAUX", "auxToggle", "AUX"]);
 
     emaUp.applyOptions({ visible: !!showEma });
     emaDown.applyOptions({ visible: !!showEma });
     auxSeries.applyOptions({ visible: !!showAux });
   }
 
-  // ---------- Overlay (optional, safe no-op) ----------
-  function bindOverlay() {
-    // keep as no-op unless you already have overlay canvas logic
-    // (not required for core chart)
-  }
-  function repaintOverlay() {
-    // no-op
-  }
-
-  // ---------- Fetch ----------
+  // ---------------- Fetch ----------------
   async function fetchJSON(url) {
     const res = await fetch(url, { method: "GET" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -196,21 +175,14 @@
   }
 
   function resolveApiBase(opts) {
-    // Prefer explicit opts.apiBase, then window.API_BASE, then empty (same origin)
     return (opts && opts.apiBase) || window.API_BASE || "";
   }
 
-  /**
-   * Expected backend JSON formats:
-   *  - /api/ohlc -> { bars: [{time,open,high,low,close}, ...], ema?:[], aux?:[] }
-   *  - /api/sigs -> { sigs: [{time, side:"B"|"S"}, ...] }
-   * If your backend differs, adjust mapping in normalizeBars/normalizeSeries below.
-   */
   function normalizeBars(raw) {
     const arr = Array.isArray(raw) ? raw : (raw && raw.bars) || [];
     return arr
       .map((b) => ({
-        time: b.time, // should already be unix seconds or business day; keep your current format
+        time: b.time, // MUST match your backend format
         open: Number(b.open),
         high: Number(b.high),
         low: Number(b.low),
@@ -220,14 +192,15 @@
   }
 
   function normalizeLine(raw, key) {
-    // accept raw[key] as array of numbers aligned with bars
     if (raw && Array.isArray(raw[key])) return raw[key].map((x) => Number(x));
     return null;
   }
 
-  // ---------- Core load ----------
+  // ---------------- Core load ----------------
   async function load(opts) {
     opts = opts || {};
+    LAST_OPTS = { ...LAST_OPTS, ...opts };
+
     const sym = (opts.symbol || getUiSymbol()).trim();
     const tf = (opts.timeframe || getUiTf()).trim();
     const apiBase = resolveApiBase(opts);
@@ -235,77 +208,61 @@
     const ohlcUrl = `${apiBase}/api/ohlc?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
     const sigUrl = `${apiBase}/api/sigs?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
 
-    let bars = [];
-    let sigs = [];
+    // ----- OHLC -----
+    const rawOhlc = await fetchJSON(ohlcUrl);
+    const bars = normalizeBars(rawOhlc);
+    if (!bars.length) throw new Error(`No bars returned for ${sym} ${tf}`);
 
-    // --- Fetch OHLC ---
-    let rawOhlc = null;
-    try {
-      rawOhlc = await fetchJSON(ohlcUrl);
-    } catch (e) {
-      log("[chart] ohlc fetch failed:", e.message || e);
-      rawOhlc = null;
-    }
-
-    bars = normalizeBars(rawOhlc);
-    if (!bars.length) {
-      // avoid blank chart
-      throw new Error(`No bars returned for ${sym} ${tf}`);
-    }
-
-    // --- Fetch SIGS (optional) ---
-    try {
-      const rawS = await fetchJSON(sigUrl);
-      sigs = (rawS && rawS.sigs) || [];
-    } catch (e) {
-      // not fatal
-      sigs = [];
-    }
-
-    // ---------- Render candles ----------
     candleSeries.setData(bars);
 
-    // ---------- EMA / AUX ----------
-    // If backend already gives EMA/AUX arrays aligned with bars, use them; else compute EMA locally.
+    // ----- EMA/AUX -----
     const emaFromApi = normalizeLine(rawOhlc, "ema");
     const auxFromApi = normalizeLine(rawOhlc, "aux");
 
-    // Period (optional). If you have a UI control, wire it here.
-    const EMA_PERIOD = Number((window.EMA_PERIOD || 20));
-
+    const EMA_PERIOD = Number(window.EMA_PERIOD || 20);
     const closes = bars.map((b) => safeNum(b.close));
-    const emaArr = emaFromApi && emaFromApi.length === bars.length ? emaFromApi : calcEMA(closes, EMA_PERIOD);
+    const emaArr =
+      emaFromApi && emaFromApi.length === bars.length ? emaFromApi : calcEMA(closes, EMA_PERIOD);
 
-    // Build NaN-gap split series (THIS is the critical fix)
+    // KEY: split EMA with GAP=null, so only one line shows
     const split = buildColorSwitchEMA(bars, emaArr);
     emaUp.setData(split.up);
     emaDown.setData(split.down);
 
-    // AUX: if API aligned, use; else hide (or compute your own)
+    // AUX (only if aligned data exists)
     if (auxFromApi && auxFromApi.length === bars.length) {
-      const auxData = bars.map((b, i) => ({ time: b.time, value: Number(auxFromApi[i]) }));
+      const auxData = bars.map((b, i) => ({
+        time: b.time,
+        value: Number.isFinite(Number(auxFromApi[i])) ? Number(auxFromApi[i]) : GAP,
+      }));
       auxSeries.setData(auxData);
     } else {
-      // keep empty unless your system computes it elsewhere
       auxSeries.setData([]);
     }
 
-    // ---------- Markers ----------
+    // ----- SIGS (optional) -----
+    let sigs = [];
+    try {
+      const rawS = await fetchJSON(sigUrl);
+      sigs = (rawS && rawS.sigs) || [];
+    } catch (e) {
+      sigs = [];
+    }
+
     CURRENT_SIGS = sigs;
     applyMarkers(sigs);
 
-    // ---------- Apply toggles ----------
     applyToggles();
-    repaintOverlay();
 
-    // ---------- Top text ----------
+    // top hint
     const last = bars[bars.length - 1];
     if ($("symText")) $("symText").textContent = sym;
     if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
-    if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${tf} · sigs=${sigs.length}）`;
+    if ($("hintText"))
+      $("hintText").textContent = `Loaded · 已加载（TF=${tf} · sigs=${sigs.length}） · Build 2026-01-19`;
   }
 
-  // ---------- Export PNG ----------
+  // ---------------- Export PNG ----------------
   function exportPNG() {
     try {
       if (!chart || typeof chart.takeScreenshot !== "function") {
@@ -322,18 +279,39 @@
     }
   }
 
-  // ---------- Init ----------
-  function init(opts) {
-    opts = Object.assign({}, DEFAULTS, opts || {});
-    const containerId = opts.containerId || DEFAULTS.containerId;
-    const overlayId = opts.overlayId || DEFAULTS.overlayId;
+  // ---------------- Destroy (critical) ----------------
+  function destroyChart() {
+    try {
+      if (chart) {
+        // remove series (safe)
+        if (candleSeries) chart.removeSeries(candleSeries);
+        if (emaUp) chart.removeSeries(emaUp);
+        if (emaDown) chart.removeSeries(emaDown);
+        if (auxSeries) chart.removeSeries(auxSeries);
+        candleSeries = emaUp = emaDown = auxSeries = null;
 
-    containerEl = $(containerId);
-    overlayEl = $(overlayId);
+        chart.remove();
+        chart = null;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // ---------------- Init (idempotent) ----------------
+  function init(opts) {
+    opts = opts || {};
+    LAST_OPTS = { ...opts };
+
+    const containerId = opts.containerId || "chart";
+    const containerEl = $(containerId);
 
     if (!containerEl || !window.LightweightCharts) {
       throw new Error("Chart container or lightweight-charts missing");
     }
+
+    // CRITICAL: avoid duplicated init/duplicated series overlay
+    destroyChart();
 
     chart = LightweightCharts.createChart(containerEl, {
       layout: { background: { color: "transparent" }, textColor: "#EAF0F7" },
@@ -354,7 +332,7 @@
       borderVisible: false,
     });
 
-    // EMA split series (IMPORTANT: use NaN gaps, and hide last price line)
+    // EMA split series (only one visible at a time by GAP)
     emaUp = chart.addLineSeries({
       color: COLORS.emaUp,
       lineWidth: 2,
@@ -369,15 +347,13 @@
       lastValueVisible: false,
     });
 
-    // AUX single line
+    // AUX
     auxSeries = chart.addLineSeries({
       color: COLORS.aux,
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
     });
-
-    bindOverlay();
 
     const resize = () => {
       const r = containerEl.getBoundingClientRect();
@@ -386,7 +362,6 @@
         height: Math.max(1, Math.floor(r.height)),
       });
       chart.timeScale().fitContent();
-      repaintOverlay();
     };
 
     try {
@@ -395,11 +370,10 @@
     window.addEventListener("resize", resize);
     resize();
 
-    // default auto load
     if (opts.autoLoad !== false) {
-      load(opts).catch((e) => log("[chart] initial load failed:", e.message || e));
+      load(opts).catch((e) => log("initial load failed:", e.message || e));
     }
   }
 
-  window.ChartCore = { init, load, applyToggles, exportPNG };
+  window.ChartCore = { init, load, applyToggles, exportPNG, destroyChart };
 })();
