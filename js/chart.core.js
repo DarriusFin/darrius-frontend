@@ -1,11 +1,22 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (Integrated, Idempotent Init)
- * Fixes:
- *  1) Chart blank: auto-try multiple OHLCV endpoints (avoid HTTP 404)
- *  2) EMA split color: MT4 EMPTY_VALUE => LightweightCharts null gaps
- *     - Only ONE EMA visible at a time (green for above, red for below)
- *  3) Robust parsing for different backend payload shapes
- *  4) Safe toggles, safe init, no subscription/billing touch
+ * DarriusAI - chart.core.js (Integrated, Idempotent Init) — FINAL
+ * Build: 2026-01-19
+ *
+ * ✅ Fixes (based on your latest evidence):
+ *  1) Chart blank root-cause fixed:
+ *     - Backend route that WORKS is:
+ *         /api/market/bars?symbol=BTCUSDT&tf=1d
+ *     - Old /ohlc /api/market/ohlc may 404/500 (crypto -> alpaca key missing)
+ *     - So this file uses BARS as the primary/required OHLCV source.
+ *
+ *  2) EMA split-color “EMPTY_VALUE” correctly implemented:
+ *     - LightweightCharts "null" IS NOT a real EMPTY_VALUE.
+ *     - Correct gap/hidden data = WhitespaceData: { time } (no value field)
+ *     - Only ONE EMA visible at a time (green above, red below)
+ *     - Seam is stitched at switch points to avoid ugly gaps.
+ *
+ *  3) Robust parsing for different payload shapes
+ *  4) Safe init, safe toggles; NO subscription/billing touch
  * ========================================================================= */
 
 (() => {
@@ -23,35 +34,32 @@
   const DEFAULT_API_BASE =
     window.DARRIUS_API_BASE ||
     window.__API_BASE__ ||
+    window.API_BASE ||
     "https://darrius-api.onrender.com";
 
-  // Try multiple paths to avoid “route mismatch => 404 => blank chart”
-  const OHLCV_PATH_CANDIDATES = [
-    "/api/ohlcv",
-    "/ohlcv",
+  // ✅ Based on your /routes screenshot: this exists and returns bars for crypto.
+  const BARS_PATH_CANDIDATES = [
+    "/api/market/bars", // ✅ confirmed working
     "/api/bars",
     "/bars",
-    "/api/market/ohlcv",
-    "/market/ohlcv",
   ];
 
   // -----------------------------
   // State
   // -----------------------------
   let containerEl = null;
-  let overlayEl = null;
 
   let chart = null;
   let candleSeries = null;
 
-  // EMA split (two series but only one visible per bar via null gaps)
+  // EMA split (two series but only one visible per bar via WHITESPACE gaps)
   let emaUp = null;   // green
   let emaDown = null; // red
 
   // AUX series (single fixed color)
   let auxSeries = null;
 
-  // markers cache
+  // caches
   let CURRENT_SIGS = [];
   let LAST_BARS = [];
 
@@ -70,7 +78,6 @@
   // UI readers (tolerant to different ids)
   // -----------------------------
   function getUiSymbol() {
-    // Try common ids / inputs
     const el =
       $("symbolInput") ||
       $("symInput") ||
@@ -105,19 +112,16 @@
       const err = new Error(`HTTP ${r.status}`);
       err.status = r.status;
       err.body = text;
+      err.url = url;
       throw err;
     }
     return r.json();
   }
 
   function toUnixTime(t) {
-    // LightweightCharts supports:
-    // - seconds (number)
-    // - { year, month, day }
-    // We'll convert ms/iso to seconds number.
+    // Convert ms/iso to seconds (LightweightCharts supports seconds epoch)
     if (t == null) return null;
     if (typeof t === "number") {
-      // if ms
       if (t > 2e10) return Math.floor(t / 1000);
       return t;
     }
@@ -131,15 +135,13 @@
   }
 
   function normalizeBars(payload) {
-    // Accept many shapes:
+    // Accept shapes:
     // 1) payload = [{time,open,high,low,close}, ...]
     // 2) payload = { bars: [...] }
-    // 3) payload = { ohlcv: [...] }
-    // 4) payload = { data: [...] }
+    // 3) payload = { data: [...] }
     const raw =
       Array.isArray(payload) ? payload :
       payload?.bars ? payload.bars :
-      payload?.ohlcv ? payload.ohlcv :
       payload?.data ? payload.data :
       [];
 
@@ -155,6 +157,7 @@
       })
       .filter(Boolean);
 
+    bars.sort((a, b) => a.time - b.time);
     return bars;
   }
 
@@ -163,7 +166,6 @@
     // - payload.ema: [{time,value}]
     // - payload.indicators.ema: ...
     // - payload.lines.ema: ...
-    // If not found, return [].
     const pick = (obj, keys) => {
       for (const k of keys) {
         if (obj && obj[k] != null) return obj[k];
@@ -189,7 +191,6 @@
   }
 
   function normalizeSignals(payload) {
-    // Accept: payload.sigs / payload.signals
     const raw = payload?.sigs || payload?.signals || [];
     if (!Array.isArray(raw)) return [];
     return raw
@@ -202,87 +203,112 @@
       .filter(Boolean);
   }
 
-  async function fetchMarketPack(sym, tf) {
+  async function fetchBarsPack(sym, tf) {
     const apiBase = (DEFAULT_API_BASE || "").replace(/\/+$/, "");
     const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
 
     let lastErr = null;
 
-    for (const p of OHLCV_PATH_CANDIDATES) {
+    for (const p of BARS_PATH_CANDIDATES) {
       const url = `${apiBase}${p}?${q}`;
       try {
         const payload = await fetchJson(url);
         return { payload, urlUsed: url };
       } catch (e) {
         lastErr = e;
-        // Try next path on 404/405; for others also try next (robust)
         continue;
       }
     }
 
-    const err = new Error(`All OHLCV endpoints failed. Last error: ${lastErr?.message || lastErr}`);
+    const err = new Error(
+      `All BARS endpoints failed. Last error: ${lastErr?.message || lastErr}`
+    );
     err.cause = lastErr;
     throw err;
   }
 
   // -----------------------------
-  // EMA split color (EMPTY_VALUE => null)
+  // EMA split color (MT4 EMPTY_VALUE => WhitespaceData)
   // Rule: close >= ema => show green(emaUp), hide red(emaDown)
   //       close <  ema => show red(emaDown), hide green(emaUp)
-  // Add boundary stitching to avoid ugly gaps at color switch.
+  //
+  // ✅ IMPORTANT:
+  // - DO NOT use value:null. It's NOT "EMPTY_VALUE" in LightweightCharts.
+  // - To hide a point => WhitespaceData = { time } (no value field)
+  // - Stitch at switch points: give BOTH series a value at the seam bar
+  //   so it looks like ONE line changing color.
   // -----------------------------
-  function buildSplitEmaPoints(bars, emaPoints) {
+  function buildSplitEmaSeriesData(bars, emaPoints) {
     if (!bars?.length || !emaPoints?.length) return { up: [], down: [] };
 
-    // map ema by time
+    // Map EMA by time for alignment
     const emaMap = new Map(emaPoints.map((p) => [p.time, p.value]));
 
     const up = [];
     const down = [];
 
-    let prevState = null; // "UP" or "DOWN"
+    let prevSide = 0;      //  1 = above, -1 = below
     let prevTime = null;
     let prevEma = null;
 
     for (let i = 0; i < bars.length; i++) {
       const t = bars[i].time;
       const ema = emaMap.get(t);
-      if (!isFinite(ema)) continue;
 
-      const close = bars[i].close;
-      const state = close >= ema ? "UP" : "DOWN";
-
-      // Default: one visible, one null
-      let upVal = state === "UP" ? ema : null;
-      let dnVal = state === "DOWN" ? ema : null;
-
-      // Stitch at turning point (so it looks like one continuous line that changes color)
-      // If state changes at this bar, also set previous bar value on both series (if possible)
-      if (prevState && state !== prevState && prevTime != null && isFinite(prevEma)) {
-        // Put a connecting point at prev bar on the new state series
-        // and at current bar on the old state series (minimal overlap for smooth switch)
-        if (state === "UP") {
-          // switched DOWN -> UP
-          // show green starting from prev bar
-          up[up.length - 1] = { time: prevTime, value: prevEma };
-          // keep red until current bar, then it goes null next bars
-          dnVal = ema; // draw red at switch bar too, then red becomes null afterwards
-        } else {
-          // switched UP -> DOWN
-          down[down.length - 1] = { time: prevTime, value: prevEma };
-          upVal = ema;
-        }
+      if (!isFinite(ema)) {
+        // no EMA => hide both at this time
+        up.push({ time: t });
+        down.push({ time: t });
+        continue;
       }
 
-      up.push({ time: t, value: upVal });
-      down.push({ time: t, value: dnVal });
+      const close = bars[i].close;
+      const side = close >= ema ? 1 : -1;
 
-      prevState = state;
+      // Default: one visible, one hidden(whitespace)
+      let upPoint = side === 1 ? { time: t, value: ema } : { time: t };
+      let dnPoint = side === -1 ? { time: t, value: ema } : { time: t };
+
+      // Stitch seam:
+      // If side changes at this bar, put a value at seam for BOTH series
+      // (minimal overlap at the seam only, not over a range)
+      if (prevSide !== 0 && side !== prevSide && prevTime != null && isFinite(prevEma)) {
+        // Put seam point (prevTime) into BOTH so the color switch is continuous
+        // Ensure the previous bar has a value on BOTH series at that bar.
+        // We overwrite last element safely because we always pushed one per bar.
+        const prevIdx = up.length - 1; // last pushed corresponds to prev bar
+        if (prevIdx >= 0) {
+          up[prevIdx] = { time: prevTime, value: prevEma };
+          down[prevIdx] = { time: prevTime, value: prevEma };
+        }
+
+        // And for current bar, also allow both to have value at switch bar (optional but helps)
+        upPoint = { time: t, value: ema };
+        dnPoint = { time: t, value: ema };
+      }
+
+      up.push(upPoint);
+      down.push(dnPoint);
+
+      prevSide = side;
       prevTime = t;
       prevEma = ema;
     }
 
     return { up, down };
+  }
+
+  // Simple EMA fallback if backend doesn't provide ema[]
+  function computeEmaFromBars(bars, period) {
+    const k = 2 / (period + 1);
+    let ema = null;
+    const out = [];
+    for (let i = 0; i < bars.length; i++) {
+      const c = bars[i].close;
+      ema = ema == null ? c : c * k + ema * (1 - k);
+      out.push({ time: bars[i].time, value: ema });
+    }
+    return out;
   }
 
   // -----------------------------
@@ -310,7 +336,7 @@
     showEMA = !!($("toggleEMA")?.checked ?? $("emaToggle")?.checked ?? showEMA);
     showAUX = !!($("toggleAUX")?.checked ?? $("auxToggle")?.checked ?? showAUX);
 
-    // Fallback: if your UI uses #emaCheck/#auxCheck or other ids
+    // Alternate ids
     const altEma = $("emaCheck")?.checked;
     const altAux = $("auxCheck")?.checked;
     if (typeof altEma === "boolean") showEMA = altEma;
@@ -318,7 +344,12 @@
 
     if (emaUp) emaUp.applyOptions({ visible: showEMA });
     if (emaDown) emaDown.applyOptions({ visible: showEMA });
-    if (auxSeries) auxSeries.applyOptions({ visible: showAUX });
+
+    if (auxSeries) {
+      auxSeries.applyOptions({ visible: showAUX });
+      // Optional: when off, clear to avoid lingering artifacts
+      if (!showAUX) auxSeries.setData([]);
+    }
   }
 
   // -----------------------------
@@ -330,20 +361,23 @@
     const sym = getUiSymbol();
     const tf = getUiTf();
 
-    // top hint (if exists)
     if ($("hintText")) $("hintText").textContent = "Loading...";
 
     let pack;
     try {
-      pack = await fetchMarketPack(sym, tf);
+      pack = await fetchBarsPack(sym, tf);
     } catch (e) {
-      log("[ChartCore] load failed:", e.message || e);
-      if ($("hintText")) $("hintText").textContent = `加载失败：${e.message || e}`;
+      log("[ChartCore] load failed:", e.message || e, e?.url ? `url=${e.url}` : "");
+      if ($("hintText")) {
+        const extra = e?.cause?.url ? ` (${e.cause.url})` : "";
+        $("hintText").textContent = `加载失败：${e.message || e}${extra}`;
+      }
       throw e;
     }
 
     const payload = pack.payload;
 
+    // ✅ bars come from /api/market/bars
     const bars = normalizeBars(payload);
     if (!bars.length) {
       if ($("hintText")) $("hintText").textContent = `加载失败：bars 为空（检查后端返回结构）`;
@@ -352,28 +386,33 @@
 
     LAST_BARS = bars;
 
-    // Set candles
+    // Candles
     candleSeries.setData(bars);
 
-    // EMA points: prefer payload.ema; if not present, compute EMA from closes as fallback
+    // EMA points:
+    // Prefer backend-provided ema; else compute fallback
     let emaPts = normalizeLinePoints(payload, ["ema", "EMA"]);
     if (!emaPts.length) {
       emaPts = computeEmaFromBars(bars, 20);
     }
 
-    const split = buildSplitEmaPoints(bars, emaPts);
+    // ✅ TRUE EMPTY_VALUE behavior using WhitespaceData
+    const split = buildSplitEmaSeriesData(bars, emaPts);
     emaUp.setData(split.up);
     emaDown.setData(split.down);
 
-    // AUX points
-    const auxPts = normalizeLinePoints(payload, ["aux", "AUX"]);
-    auxSeries.setData(auxPts);
+    // AUX points (optional)
+    if (showAUX) {
+      const auxPts = normalizeLinePoints(payload, ["aux", "AUX"]);
+      auxSeries.setData(auxPts);
+    } else {
+      auxSeries.setData([]);
+    }
 
     // Signals (B/S)
     const sigs = normalizeSignals(payload);
     applyMarkers(sigs);
 
-    // Fit
     chart.timeScale().fitContent();
 
     // Texts
@@ -384,23 +423,9 @@
     const sigCount = sigs.length;
     if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${tf} · sigs=${sigCount}）`;
 
-    // Apply toggles after data set
     applyToggles();
 
     return { urlUsed: pack.urlUsed, bars: bars.length, sigs: sigCount };
-  }
-
-  // Simple EMA fallback if backend doesn't provide ema[]
-  function computeEmaFromBars(bars, period) {
-    const k = 2 / (period + 1);
-    let ema = null;
-    const out = [];
-    for (let i = 0; i < bars.length; i++) {
-      const c = bars[i].close;
-      ema = ema == null ? c : c * k + ema * (1 - k);
-      out.push({ time: bars[i].time, value: ema });
-    }
-    return out;
   }
 
   // -----------------------------
@@ -428,10 +453,8 @@
   function init(opts) {
     opts = opts || {};
     const containerId = opts.containerId || "chart";
-    const overlayId = opts.overlayId || "sigOverlay";
 
     containerEl = $(containerId);
-    overlayEl = $(overlayId);
 
     if (!containerEl || !window.LightweightCharts) {
       throw new Error("Chart container or lightweight-charts missing");
@@ -460,8 +483,7 @@
       borderVisible: false,
     });
 
-    // EMA split series (ONLY one visible per time by null gaps)
-    // Green (above/up)
+    // ✅ EMA split ONLY (no third EMA baseline!)
     emaUp = chart.addLineSeries({
       color: "#2BE2A6",
       lineWidth: 2,
@@ -469,7 +491,6 @@
       lastValueVisible: false,
     });
 
-    // Red (below/down)
     emaDown = chart.addLineSeries({
       color: "#FF5A5A",
       lineWidth: 2,
@@ -477,7 +498,7 @@
       lastValueVisible: false,
     });
 
-    // AUX
+    // AUX (fixed color)
     auxSeries = chart.addLineSeries({
       color: "rgba(255,184,108,.85)",
       lineWidth: 2,
@@ -501,7 +522,7 @@
     window.addEventListener("resize", resize);
     resize();
 
-    // auto load
+    // Auto load
     if (opts.autoLoad !== false) {
       load().catch((e) => log("[ChartCore] initial load failed:", e.message || e));
     }
