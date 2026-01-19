@@ -159,7 +159,7 @@
   /* -----------------------------
    * EMA color split (REAL gap using undefined)
    * ----------------------------- */
- function splitEMABySlope(emaArr) {
+function splitEMABySlope(emaArr) {
   const up = [];
   const down = [];
 
@@ -170,17 +170,16 @@
     if (!prev) {
       // first point: show as up by default
       up.push({ time: cur.time, value: cur.value });
+      down.push({ time: cur.time, value: null });
       continue;
     }
 
     if (cur.value >= prev.value) {
-      // show ONLY green point
       up.push({ time: cur.time, value: cur.value });
-      // do NOT push down point at this time => hard gap
+      down.push({ time: cur.time, value: null });
     } else {
-      // show ONLY red point
       down.push({ time: cur.time, value: cur.value });
-      // do NOT push up point at this time => hard gap
+      up.push({ time: cur.time, value: null });
     }
   }
 
