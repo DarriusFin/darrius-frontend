@@ -229,7 +229,7 @@
     return out;
   }
 
-  function buildSplitEmaNoOverlap(bars, emaPts) {
+ function buildSplitEmaNoOverlap(bars, emaPts) {
   if (!bars?.length || !emaPts?.length) return { up: [], down: [] };
   const emaMap = new Map(emaPts.map((p) => [p.time, p.value]));
 
@@ -239,22 +239,24 @@
   for (let i = 0; i < bars.length; i++) {
     const t = bars[i].time;
     const ema = emaMap.get(t);
-    if (!isFinite(ema)) continue;
+    if (!isFinite(ema)) {
+      // 保持时间对齐：两边都放 null gap
+      up.push({ time: t, value: null });
+      down.push({ time: t, value: null });
+      continue;
+    }
 
     const close = bars[i].close;
     const isUp = close >= ema;
 
-    // ✅ 真·Whitespace：隐藏的一侧只给 {time}，不带 value
-    if (isUp) {
-      up.push({ time: t, value: ema });
-      down.push({ time: t });        // <- whitespace point
-    } else {
-      up.push({ time: t });          // <- whitespace point
-      down.push({ time: t, value: ema });
-    }
+    // ✅ 绝对不重叠：同一根K线只允许一边有数值，另一边永远 null
+    up.push({ time: t, value: isUp ? ema : null });
+    down.push({ time: t, value: isUp ? null : ema });
   }
+
   return { up, down };
 }
+
 
 
   // -----------------------------
