@@ -1,3 +1,13 @@
+// ===============================
+// HARD GUARD: prevent double init
+// ===============================
+if (window.__DAI_CHARTCORE_LOADED__) {
+  // already loaded once; do not redefine / re-init
+  console.warn("[ChartCore] duplicate load blocked");
+  return;
+}
+window.__DAI_CHARTCORE_LOADED__ = true;
+
 /* =========================================================
  * DarriusAI · Chart Core (HARD-STABLE, NO-DUP INIT)
  * File: js/chart.core.js
