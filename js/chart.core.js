@@ -1,19 +1,20 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (PRODUCTION FROZEN) v2026.01.19
+ * DarriusAI - chart.core.js (PRODUCTION FROZEN) v2026.01.19c
+ *
+ * What changed in this build:
+ *  - AUX implemented per your confidential HMA-like algorithm:
+ *      vect[x] = 2*WMA(x, period/2) - WMA(x, period)
+ *      AUX     = MA_on_array(vect, p=sqrt(period), method=SMA by default)
+ *      trend   = sign(AUX slope)
+ *  - B/S upgraded to: CROSS + INFLECTION CONFIRM
+ *      Buy:  EMA crosses above AUX, and AUX trend flips to UP within window
+ *      Sell: EMA crosses below AUX, and AUX trend flips to DOWN within window
  *
  * Guarantees:
- *  1) NO BLANK CHART from wrong endpoints: prefer /api/market/bars first
- *     - success requires: bars.length > 0
- *  2) NO "bottom spikes": strict NaN/Infinity/0-shape protection
- *     - all line points are either {time, value: finite} or {time, value: null}
- *     - NEVER use {time} without value
- *  3) EMA: single-color (YELLOW) line
- *  4) AUX: single-color (WHITE) line
- *  5) B/S markers:
- *     - Prefer payload embedded sigs/signals
- *     - Else optional second request (/api/market/sigs -> /api/market/signals)
- *     - If still missing => compute locally by EMA/AUX cross (stable fallback)
- *  6) Safe init, safe toggles; NO billing/subscription touch
+ *  1) NO BLANK CHART from wrong endpoints: bars must be non-empty
+ *  2) NO bottom spikes: line points are {time, value: finite} or {time, value: null}
+ *  3) EMA yellow, AUX white, candles green/red
+ *  4) NO billing/subscription touch
  * ========================================================================= */
 
 (() => {
@@ -26,16 +27,16 @@
   const qs = (sel) => document.querySelector(sel);
 
   // -----------------------------
-  // Config (IMPORTANT: no syntax tricks)
+  // Config
   // -----------------------------
   const DEFAULT_API_BASE =
     (window.DARRIUS_API_BASE && String(window.DARRIUS_API_BASE)) ||
-    (window.__API_BASE__ && String(window.__API_BASE__)) ||
     (window._API_BASE_ && String(window._API_BASE_)) ||
+    (window.API_BASE && String(window.API_BASE)) ||
     "https://darrius-api.onrender.com";
 
   const BARS_PATH_CANDIDATES = [
-    "/api/market/bars",   // ✅ best
+    "/api/market/bars", // ✅ best
     "/api/bars",
     "/bars",
     "/api/ohlcv",
@@ -44,7 +45,7 @@
     "/ohlc",
     "/api/market/ohlcv",
     "/market/ohlcv",
-    "/api/market/ohlc",   // ⚠ may 500 for crypto; keep LAST
+    "/api/market/ohlc", // ⚠ keep last
     "/market/ohlc",
   ];
 
@@ -56,6 +57,16 @@
     "/sigs",
     "/signals",
   ];
+
+  // -----------------------------
+  // Indicator params (safe defaults)
+  // -----------------------------
+  const EMA_PERIOD = 20;
+
+  // Your confidential AUX settings:
+  const AUX_PERIOD = 40; // extern int period=40
+  const AUX_METHOD = "SMA"; // method=3 in your comment but labeled MODE_SMA; we use SMA as safest.
+  const CONFIRM_WINDOW = 2; // within N bars after cross must see AUX inflection flip
 
   // -----------------------------
   // State
@@ -97,14 +108,13 @@
   }
 
   // -----------------------------
-  // Robust fetch helpers
+  // Fetch helpers
   // -----------------------------
   async function fetchJson(url) {
     const r = await fetch(url, { method: "GET", credentials: "omit" });
     if (!r.ok) {
       const text = await r.text().catch(() => "");
-      // ✅ FIXED: must be a string
-      const err = new Error(`HTTP ${r.status}`);
+      const err = new Error(HTTP ${r.status}); // ✅ correct string
       err.status = r.status;
       err.body = text;
       throw err;
@@ -145,12 +155,10 @@
 
         if (!time) return null;
         if (!Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) return null;
-
         return { time, open, high, low, close };
       })
       .filter(Boolean);
 
-    // sort + dedupe by time (safety)
     bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
     const out = [];
     let lastT = null;
@@ -182,29 +190,29 @@
 
   async function fetchBarsPack(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
-    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+    const q = symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)};
 
     let lastErr = null;
     for (const p of BARS_PATH_CANDIDATES) {
-      const url = `${apiBase}${p}?${q}`;
+      const url = ${apiBase}${p}?${q};
       try {
         const payload = await fetchJson(url);
         const bars = normalizeBars(payload);
         if (bars.length) return { payload, bars, urlUsed: url };
-        lastErr = new Error(`bars empty from ${url}`);
+        lastErr = new Error(bars empty from ${url});
       } catch (e) {
         lastErr = e;
       }
     }
-    throw new Error(`All bars endpoints failed. Last error: ${lastErr?.message || lastErr}`);
+    throw new Error(All bars endpoints failed. Last error: ${lastErr?.message || lastErr});
   }
 
   async function fetchOptionalSignals(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
-    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+    const q = symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)};
 
     for (const p of SIGS_PATH_CANDIDATES) {
-      const url = `${apiBase}${p}?${q}`;
+      const url = ${apiBase}${p}?${q};
       try {
         const payload = await fetchJson(url);
         return normalizeSignals(payload);
@@ -216,61 +224,201 @@
   }
 
   // -----------------------------
-  // Indicators (EMA + AUX)
+  // Math: EMA / SMA / WMA / MA-on-array
   // -----------------------------
   function ema(values, period) {
     const k = 2 / (period + 1);
     let e = null;
-    const out = [];
+    const out = new Array(values.length);
     for (let i = 0; i < values.length; i++) {
       const v = values[i];
+      if (!Number.isFinite(v)) { out[i] = NaN; continue; }
       e = e == null ? v : v * k + e * (1 - k);
-      out.push(e);
+      out[i] = e;
     }
     return out;
   }
 
+  function smaAt(values, endIdx, period) {
+    const start = endIdx - period + 1;
+    if (start < 0) return NaN;
+    let sum = 0;
+    for (let i = start; i <= endIdx; i++) {
+      const v = values[i];
+      if (!Number.isFinite(v)) return NaN;
+      sum += v;
+    }
+    return sum / period;
+  }
+
+  function wmaAt(values, endIdx, period) {
+    const start = endIdx - period + 1;
+    if (start < 0) return NaN;
+    let num = 0;
+    let den = 0;
+    // weights 1..period (oldest=1, newest=period)
+    for (let i = start; i <= endIdx; i++) {
+      const v = values[i];
+      if (!Number.isFinite(v)) return NaN;
+      const w = i - start + 1;
+      num += v * w;
+      den += w;
+    }
+    return den ? (num / den) : NaN;
+  }
+
+  function maOnArray(values, period, method) {
+    const m = String(method || "SMA").toUpperCase();
+    const out = new Array(values.length).fill(NaN);
+
+    if (period <= 1) {
+      for (let i = 0; i < values.length; i++) out[i] = values[i];
+      return out;
+    }
+
+    if (m === "EMA") {
+      // EMA on array
+      const k = 2 / (period + 1);
+      let e = null;
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (!Number.isFinite(v)) { out[i] = NaN; continue; }
+        e = e == null ? v : v * k + e * (1 - k);
+        out[i] = e;
+      }
+      return out;
+    }
+
+    if (m === "WMA") {
+      for (let i = 0; i < values.length; i++) out[i] = wmaAt(values, i, period);
+      return out;
+    }
+
+    // default SMA
+    for (let i = 0; i < values.length; i++) out[i] = smaAt(values, i, period);
+    return out;
+  }
+
   function buildLinePoints(bars, values) {
-    // Strict: finite => value, else null gap.
-    const pts = [];
+    // Strict: value is finite => number, else null gap
+    const pts = new Array(bars.length);
     for (let i = 0; i < bars.length; i++) {
       const t = bars[i].time;
       const v = values[i];
-      pts.push({ time: t, value: Number.isFinite(v) ? v : null });
+      pts[i] = { time: t, value: Number.isFinite(v) ? v : null };
     }
     return pts;
   }
 
   // -----------------------------
-  // Local B/S fallback by EMA-AUX cross
-  // (you can later replace with your “EMA与AUX交叉+拐点确认”更复杂规则)
+  // AUX per your algorithm (HMA-like)
   // -----------------------------
-  function computeSignalsFromCross(bars, emaPts, auxPts) {
-    if (!bars?.length) return [];
-    const sigs = [];
-    let prevDiff = null;
+  function computeAuxByYourAlgo(closes, period, method) {
+    const n = Math.max(2, Math.floor(period || 40));
+    const half = Math.max(1, Math.floor(n / 2));
+    const p = Math.max(1, Math.round(Math.sqrt(n))); // p = sqrt(period)
 
-    for (let i = 0; i < bars.length; i++) {
-      const e = emaPts[i]?.value;
-      const a = auxPts[i]?.value;
-      if (!Number.isFinite(e) || !Number.isFinite(a)) {
-        prevDiff = null;
-        continue;
+    // vect[i] = 2*WMA(i, n/2) - WMA(i, n)
+    const vect = new Array(closes.length).fill(NaN);
+    for (let i = 0; i < closes.length; i++) {
+      const w1 = wmaAt(closes, i, half);
+      const w2 = wmaAt(closes, i, n);
+      if (!Number.isFinite(w1) || !Number.isFinite(w2)) {
+        vect[i] = NaN;
+      } else {
+        vect[i] = 2 * w1 - w2;
       }
-      const diff = e - a;
-      if (prevDiff == null) {
-        prevDiff = diff;
-        continue;
-      }
-      if (prevDiff <= 0 && diff > 0) sigs.push({ time: bars[i].time, side: "B" });
-      if (prevDiff >= 0 && diff < 0) sigs.push({ time: bars[i].time, side: "S" });
-      prevDiff = diff;
     }
+
+    // ExtMapBuffer = MA_on_array(vect, p, method)
+    const ext = maOnArray(vect, p, method || "SMA");
+    return ext;
+  }
+
+  function computeTrendFromAux(auxVals) {
+    // trend[i] = sign(aux[i] - aux[i-1]); keep last when equal/NaN
+    const trend = new Array(auxVals.length).fill(0);
+    let last = 0;
+    for (let i = 1; i < auxVals.length; i++) {
+      const a0 = auxVals[i - 1];
+      const a1 = auxVals[i];
+      if (!Number.isFinite(a0) || !Number.isFinite(a1)) {
+        trend[i] = last;
+        continue;
+      }
+      if (a1 > a0) last = 1;
+      else if (a1 < a0) last = -1;
+      trend[i] = last;
+    }
+    trend[0] = trend[1] || 0;
+    return trend;
+  }
+
+  // -----------------------------
+  // B/S: CROSS + INFLECTION CONFIRM
+  // -----------------------------
+  function computeSignalsCrossPlusInflection(bars, emaPts, auxPts, confirmWindow) {
+    const n = bars.length;
+    if (n < 5) return [];
+
+    const emaV = emaPts.map(p => p.value);
+    const auxV = auxPts.map(p => p.value);
+    const trend = computeTrendFromAux(auxV);
+
+    const cw = Math.max(0, Math.floor(confirmWindow ?? 2));
+    const sigs = [];
+    const usedTime = new Set();
+
+    function addSig(i, side) {
+      const t = bars[i].time;
+      if (usedTime.has(${t}:${side})) return;
+      usedTime.add(${t}:${side});
+      sigs.push({ time: t, side });
+    }
+
+    // helper: check aux inflection within window
+    function findConfirmIndex(startIdx, wantTrend) {
+      // wantTrend: +1 for buy confirm, -1 for sell confirm
+      for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
+        const prev = trend[j - 1];
+        const curr = trend[j];
+        if (wantTrend > 0) {
+          // confirm UP: prev <=0 and curr >0
+          if (prev <= 0 && curr > 0) return j;
+        } else {
+          // confirm DOWN: prev >=0 and curr <0
+          if (prev >= 0 && curr < 0) return j;
+        }
+      }
+      return -1;
+    }
+
+    for (let i = 1; i < n; i++) {
+      const e0 = emaV[i - 1], e1 = emaV[i];
+      const a0 = auxV[i - 1], a1 = auxV[i];
+      if (!Number.isFinite(e0) || !Number.isFinite(e1) || !Number.isFinite(a0) || !Number.isFinite(a1)) continue;
+
+      const crossUp = (e0 <= a0 && e1 > a1);
+      const crossDn = (e0 >= a0 && e1 < a1);
+
+      if (crossUp) {
+        const k = findConfirmIndex(i, +1);
+        if (k >= 0) addSig(k, "B");
+      } else if (crossDn) {
+        const k = findConfirmIndex(i, -1);
+        if (k >= 0) addSig(k, "S");
+      }
+    }
+
+    // sort by time
+    sigs.sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
     return sigs;
   }
 
   // -----------------------------
-  // Markers (note: LightweightCharts markers have NO fontSize option)
+  // Markers
+  // NOTE: LightweightCharts markers do NOT support font size control.
+  // We'll keep them high-contrast + arrows.
   // -----------------------------
   function applyMarkers(sigs) {
     if (!candleSeries) return;
@@ -279,10 +427,9 @@
       arr.map((s) => ({
         time: s.time,
         position: s.side === "B" ? "belowBar" : "aboveBar",
-        // make them obvious
         color: s.side === "B" ? "#FFD400" : "#FFFFFF",
         shape: s.side === "B" ? "arrowUp" : "arrowDown",
-        text: s.side, // font size is not configurable in this API
+        text: s.side,
       }))
     );
   }
@@ -316,7 +463,7 @@
     try {
       pack = await fetchBarsPack(sym, tf);
     } catch (e) {
-      if ($("hintText")) $("hintText").textContent = `加载失败：${e.message || e}`;
+      if ($("hintText")) $("hintText").textContent = 加载失败：${e.message || e};
       throw e;
     }
 
@@ -325,26 +472,28 @@
     // Candles
     candleSeries.setData(bars);
 
-    // Build EMA (yellow) & AUX (white)
     const closes = bars.map((b) => b.close);
 
-    // EMA period: 20 (you can adjust)
-    const emaVals = ema(closes, 20);
+    // EMA (yellow)
+    const emaVals = ema(closes, EMA_PERIOD);
 
-    // AUX: here use a slower EMA (50) as a stable AUX baseline
-    const auxVals = ema(closes, 50);
+    // AUX (white) per your algorithm
+    const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
 
     const emaPts = buildLinePoints(bars, emaVals);
     const auxPts = buildLinePoints(bars, auxVals);
 
-    // ✅ critical: prevents bottom spikes (never omit value)
+    // ✅ Critical: never omit value, never feed 0/NaN accident
     emaSeries.setData(emaPts);
     auxSeries.setData(auxPts);
 
-    // Signals: payload -> optional endpoint -> local cross fallback
+    // Signals:
+    // 1) payload embedded
+    // 2) optional endpoints
+    // 3) local CROSS + INFLECTION CONFIRM
     let sigs = normalizeSignals(payload);
     if (!sigs.length) sigs = await fetchOptionalSignals(sym, tf);
-    if (!sigs.length) sigs = computeSignalsFromCross(bars, emaPts, auxPts);
+    if (!sigs.length) sigs = computeSignalsCrossPlusInflection(bars, emaPts, auxPts, CONFIRM_WINDOW);
 
     applyMarkers(sigs);
 
@@ -354,7 +503,7 @@
     if ($("symText")) $("symText").textContent = sym;
     if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
 
-    if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${tf} · sigs=${sigs.length}）`;
+    if ($("hintText")) $("hintText").textContent = Loaded · 已加载（TF=${tf} · sigs=${sigs.length}）;
 
     applyToggles();
     return { urlUsed: pack.urlUsed, bars: bars.length, sigs: sigs.length };
@@ -372,7 +521,7 @@
       const canvas = chart.takeScreenshot();
       const a = document.createElement("a");
       a.href = canvas.toDataURL("image/png");
-      a.download = `DarriusAI_${getUiSymbol()}_${getUiTf()}.png`;
+      a.download = DarriusAI_${getUiSymbol()}_${getUiTf()}.png;
       a.click();
     } catch (e) {
       alert("导出失败：" + (e.message || e));
@@ -389,7 +538,7 @@
     containerEl = $(containerId);
     if (!containerEl) throw new Error("Chart container missing: #" + containerId);
     if (!window.LightweightCharts) throw new Error("LightweightCharts missing");
-    if (chart) return; // idempotent
+    if (chart) return;
 
     chart = window.LightweightCharts.createChart(containerEl, {
       layout: { background: { color: "transparent" }, textColor: "#EAF0F7" },
@@ -402,7 +551,7 @@
       crosshair: { mode: 1 },
     });
 
-    // ✅ K线：涨绿跌红
+    // Candles: green up / red down
     candleSeries = chart.addCandlestickSeries({
       upColor: "#2BE2A6",
       downColor: "#FF5A5A",
@@ -411,7 +560,7 @@
       borderVisible: false,
     });
 
-    // ✅ EMA：黄线
+    // EMA: yellow
     emaSeries = chart.addLineSeries({
       color: "#FFD400",
       lineWidth: 2,
@@ -419,7 +568,7 @@
       lastValueVisible: false,
     });
 
-    // ✅ AUX：白线
+    // AUX: white
     auxSeries = chart.addLineSeries({
       color: "#FFFFFF",
       lineWidth: 2,
@@ -442,7 +591,6 @@
     }
     resize();
 
-    // bind toggles
     $("toggleEMA")?.addEventListener("change", applyToggles);
     $("emaToggle")?.addEventListener("change", applyToggles);
     $("emaCheck")?.addEventListener("change", applyToggles);
@@ -451,9 +599,7 @@
     $("auxToggle")?.addEventListener("change", applyToggles);
     $("auxCheck")?.addEventListener("change", applyToggles);
 
-    if (opts.autoLoad !== false) {
-      load().catch(() => {});
-    }
+    if (opts.autoLoad !== false) load().catch(() => {});
   }
 
   window.ChartCore = { init, load, applyToggles, exportPNG };
