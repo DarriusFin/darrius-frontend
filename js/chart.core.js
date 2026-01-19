@@ -1,34 +1,28 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (PRODUCTION FROZEN) v2026.01.19c
+ * DarriusAI - chart.core.js (PRODUCTION FROZEN) v2026.01.19d
  *
- * What changed in this build:
- *  - AUX implemented per your confidential HMA-like algorithm:
- *      vect[x] = 2*WMA(x, period/2) - WMA(x, period)
- *      AUX     = MA_on_array(vect, p=sqrt(period), method=SMA by default)
- *      trend   = sign(AUX slope)
- *  - B/S upgraded to: CROSS + INFLECTION CONFIRM
- *      Buy:  EMA crosses above AUX, and AUX trend flips to UP within window
- *      Sell: EMA crosses below AUX, and AUX trend flips to DOWN within window
+ * Updates requested by Perry:
+ *  1) EMA/AUX closer by default:
+ *     - EMA_PERIOD = 9
+ *     - AUX_PERIOD = 21   (your HMA-like AUX, MA(sqrt(period)) smoothing)
+ *  2) B/S bigger + brighter:
+ *     - keep LightweightCharts markers (arrows) for robustness
+ *     - add overlay DOM labels with configurable font size
+ *  3) Candle color by TREND (not per-candle up/down):
+ *     - trend derived from AUX slope (sign(aux[i]-aux[i-1]))
+ *     - trend>0 => candle green; trend<0 => candle red
  *
  * Guarantees:
- *  1) NO BLANK CHART from wrong endpoints: bars must be non-empty
- *  2) NO bottom spikes: line points are {time, value: finite} or {time, value: null}
- *  3) EMA yellow, AUX white, candles green/red
- *  4) NO billing/subscription touch
+ *  - No subscription/billing touched
+ *  - No "bottom spikes": line points always {time, value: number|null}
  * ========================================================================= */
 
 (() => {
   "use strict";
 
-  // -----------------------------
-  // DOM helpers
-  // -----------------------------
   const $ = (id) => document.getElementById(id);
   const qs = (sel) => document.querySelector(sel);
 
-  // -----------------------------
-  // Config
-  // -----------------------------
   const DEFAULT_API_BASE =
     (window.DARRIUS_API_BASE && String(window.DARRIUS_API_BASE)) ||
     (window._API_BASE_ && String(window._API_BASE_)) ||
@@ -36,7 +30,7 @@
     "https://darrius-api.onrender.com";
 
   const BARS_PATH_CANDIDATES = [
-    "/api/market/bars", // ✅ best
+    "/api/market/bars",
     "/api/bars",
     "/bars",
     "/api/ohlcv",
@@ -45,7 +39,7 @@
     "/ohlc",
     "/api/market/ohlcv",
     "/market/ohlcv",
-    "/api/market/ohlc", // ⚠ keep last
+    "/api/market/ohlc",
     "/market/ohlc",
   ];
 
@@ -59,14 +53,17 @@
   ];
 
   // -----------------------------
-  // Indicator params (safe defaults)
+  // Params (you can tune here)
   // -----------------------------
-  const EMA_PERIOD = 20;
+  const EMA_PERIOD = 9;       // try 7 if you want more sensitive
+  const AUX_PERIOD = 21;      // try 14 if you want more sensitive (may become noisy)
+  const AUX_METHOD = "SMA";   // safest
 
-  // Your confidential AUX settings:
-  const AUX_PERIOD = 40; // extern int period=40
-  const AUX_METHOD = "SMA"; // method=3 in your comment but labeled MODE_SMA; we use SMA as safest.
-  const CONFIRM_WINDOW = 2; // within N bars after cross must see AUX inflection flip
+  const CONFIRM_WINDOW = 2;   // cross + trend inflection within N bars
+
+  // B/S overlay styles
+  const OVERLAY_FONT_PX = 16; // make larger if needed
+  const OVERLAY_ZINDEX = 50;
 
   // -----------------------------
   // State
@@ -74,9 +71,11 @@
   let containerEl = null;
   let chart = null;
   let candleSeries = null;
-
   let emaSeries = null; // yellow
   let auxSeries = null; // white
+
+  let overlayLayer = null; // DOM layer for big B/S
+  let overlayMarkers = []; // nodes
 
   let showEMA = true;
   let showAUX = true;
@@ -108,13 +107,13 @@
   }
 
   // -----------------------------
-  // Fetch helpers
+  // Fetch
   // -----------------------------
   async function fetchJson(url) {
     const r = await fetch(url, { method: "GET", credentials: "omit" });
     if (!r.ok) {
       const text = await r.text().catch(() => "");
-      const err = new Error(HTTP ${r.status}); // ✅ correct string
+      const err = new Error(HTTP ${r.status});
       err.status = r.status;
       err.body = text;
       throw err;
@@ -125,7 +124,7 @@
   function toUnixTime(t) {
     if (t == null) return null;
     if (typeof t === "number") {
-      if (t > 2e10) return Math.floor(t / 1000); // ms -> s
+      if (t > 2e10) return Math.floor(t / 1000);
       return t;
     }
     if (typeof t === "string") {
@@ -152,7 +151,6 @@
         const high = Number(b.high ?? b.h ?? b.High);
         const low  = Number(b.low  ?? b.l ?? b.Low);
         const close= Number(b.close?? b.c ?? b.Close);
-
         if (!time) return null;
         if (!Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) return null;
         return { time, open, high, low, close };
@@ -160,6 +158,7 @@
       .filter(Boolean);
 
     bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+
     const out = [];
     let lastT = null;
     for (const b of bars) {
@@ -210,21 +209,18 @@
   async function fetchOptionalSignals(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
     const q = symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)};
-
     for (const p of SIGS_PATH_CANDIDATES) {
       const url = ${apiBase}${p}?${q};
       try {
         const payload = await fetchJson(url);
         return normalizeSignals(payload);
-      } catch (_) {
-        // silent
-      }
+      } catch (_) {}
     }
     return [];
   }
 
   // -----------------------------
-  // Math: EMA / SMA / WMA / MA-on-array
+  // Math
   // -----------------------------
   function ema(values, period) {
     const k = 2 / (period + 1);
@@ -256,7 +252,6 @@
     if (start < 0) return NaN;
     let num = 0;
     let den = 0;
-    // weights 1..period (oldest=1, newest=period)
     for (let i = start; i <= endIdx; i++) {
       const v = values[i];
       if (!Number.isFinite(v)) return NaN;
@@ -270,37 +265,24 @@
   function maOnArray(values, period, method) {
     const m = String(method || "SMA").toUpperCase();
     const out = new Array(values.length).fill(NaN);
+    const p = Math.max(1, Math.floor(period || 1));
 
-    if (period <= 1) {
+    if (p <= 1) {
       for (let i = 0; i < values.length; i++) out[i] = values[i];
       return out;
     }
 
-    if (m === "EMA") {
-      // EMA on array
-      const k = 2 / (period + 1);
-      let e = null;
-      for (let i = 0; i < values.length; i++) {
-        const v = values[i];
-        if (!Number.isFinite(v)) { out[i] = NaN; continue; }
-        e = e == null ? v : v * k + e * (1 - k);
-        out[i] = e;
-      }
-      return out;
-    }
-
     if (m === "WMA") {
-      for (let i = 0; i < values.length; i++) out[i] = wmaAt(values, i, period);
+      for (let i = 0; i < values.length; i++) out[i] = wmaAt(values, i, p);
       return out;
     }
 
     // default SMA
-    for (let i = 0; i < values.length; i++) out[i] = smaAt(values, i, period);
+    for (let i = 0; i < values.length; i++) out[i] = smaAt(values, i, p);
     return out;
   }
 
   function buildLinePoints(bars, values) {
-    // Strict: value is finite => number, else null gap
     const pts = new Array(bars.length);
     for (let i = 0; i < bars.length; i++) {
       const t = bars[i].time;
@@ -311,41 +293,30 @@
   }
 
   // -----------------------------
-  // AUX per your algorithm (HMA-like)
+  // AUX per your algo
   // -----------------------------
   function computeAuxByYourAlgo(closes, period, method) {
     const n = Math.max(2, Math.floor(period || 40));
     const half = Math.max(1, Math.floor(n / 2));
-    const p = Math.max(1, Math.round(Math.sqrt(n))); // p = sqrt(period)
+    const p = Math.max(1, Math.round(Math.sqrt(n)));
 
-    // vect[i] = 2*WMA(i, n/2) - WMA(i, n)
     const vect = new Array(closes.length).fill(NaN);
     for (let i = 0; i < closes.length; i++) {
       const w1 = wmaAt(closes, i, half);
       const w2 = wmaAt(closes, i, n);
-      if (!Number.isFinite(w1) || !Number.isFinite(w2)) {
-        vect[i] = NaN;
-      } else {
-        vect[i] = 2 * w1 - w2;
-      }
+      if (!Number.isFinite(w1) || !Number.isFinite(w2)) vect[i] = NaN;
+      else vect[i] = 2 * w1 - w2;
     }
-
-    // ExtMapBuffer = MA_on_array(vect, p, method)
-    const ext = maOnArray(vect, p, method || "SMA");
-    return ext;
+    return maOnArray(vect, p, method || "SMA");
   }
 
   function computeTrendFromAux(auxVals) {
-    // trend[i] = sign(aux[i] - aux[i-1]); keep last when equal/NaN
     const trend = new Array(auxVals.length).fill(0);
     let last = 0;
     for (let i = 1; i < auxVals.length; i++) {
       const a0 = auxVals[i - 1];
       const a1 = auxVals[i];
-      if (!Number.isFinite(a0) || !Number.isFinite(a1)) {
-        trend[i] = last;
-        continue;
-      }
+      if (!Number.isFinite(a0) || !Number.isFinite(a1)) { trend[i] = last; continue; }
       if (a1 > a0) last = 1;
       else if (a1 < a0) last = -1;
       trend[i] = last;
@@ -355,38 +326,53 @@
   }
 
   // -----------------------------
-  // B/S: CROSS + INFLECTION CONFIRM
+  // Trend-colored candles
   // -----------------------------
-  function computeSignalsCrossPlusInflection(bars, emaPts, auxPts, confirmWindow) {
+  function buildTrendColoredCandles(bars, trend) {
+    const out = new Array(bars.length);
+    for (let i = 0; i < bars.length; i++) {
+      const t = trend[i] || 0;
+      const isUp = t >= 0; // treat 0 as up to avoid flicker
+      out[i] = {
+        time: bars[i].time,
+        open: bars[i].open,
+        high: bars[i].high,
+        low:  bars[i].low,
+        close: bars[i].close,
+        color: isUp ? "#2BE2A6" : "#FF5A5A",
+        wickColor: isUp ? "#2BE2A6" : "#FF5A5A",
+        borderColor: isUp ? "#2BE2A6" : "#FF5A5A",
+      };
+    }
+    return out;
+  }
+
+  // -----------------------------
+  // Signals: cross + inflection confirm
+  // -----------------------------
+  function computeSignalsCrossPlusInflection(bars, emaVals, auxVals, confirmWindow) {
     const n = bars.length;
     if (n < 5) return [];
-
-    const emaV = emaPts.map(p => p.value);
-    const auxV = auxPts.map(p => p.value);
-    const trend = computeTrendFromAux(auxV);
-
+    const trend = computeTrendFromAux(auxVals);
     const cw = Math.max(0, Math.floor(confirmWindow ?? 2));
+
     const sigs = [];
-    const usedTime = new Set();
+    const used = new Set();
 
     function addSig(i, side) {
-      const t = bars[i].time;
-      if (usedTime.has(${t}:${side})) return;
-      usedTime.add(${t}:${side});
-      sigs.push({ time: t, side });
+      const key = ${bars[i].time}:${side};
+      if (used.has(key)) return;
+      used.add(key);
+      sigs.push({ time: bars[i].time, side });
     }
 
-    // helper: check aux inflection within window
     function findConfirmIndex(startIdx, wantTrend) {
-      // wantTrend: +1 for buy confirm, -1 for sell confirm
       for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
         const prev = trend[j - 1];
         const curr = trend[j];
         if (wantTrend > 0) {
-          // confirm UP: prev <=0 and curr >0
           if (prev <= 0 && curr > 0) return j;
         } else {
-          // confirm DOWN: prev >=0 and curr <0
           if (prev >= 0 && curr < 0) return j;
         }
       }
@@ -394,8 +380,8 @@
     }
 
     for (let i = 1; i < n; i++) {
-      const e0 = emaV[i - 1], e1 = emaV[i];
-      const a0 = auxV[i - 1], a1 = auxV[i];
+      const e0 = emaVals[i - 1], e1 = emaVals[i];
+      const a0 = auxVals[i - 1], a1 = auxVals[i];
       if (!Number.isFinite(e0) || !Number.isFinite(e1) || !Number.isFinite(a0) || !Number.isFinite(a1)) continue;
 
       const crossUp = (e0 <= a0 && e1 > a1);
@@ -410,21 +396,17 @@
       }
     }
 
-    // sort by time
     sigs.sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
     return sigs;
   }
 
   // -----------------------------
-  // Markers
-  // NOTE: LightweightCharts markers do NOT support font size control.
-  // We'll keep them high-contrast + arrows.
+  // Markers (LC native)
   // -----------------------------
-  function applyMarkers(sigs) {
+  function applyMarkersLC(sigs) {
     if (!candleSeries) return;
-    const arr = Array.isArray(sigs) ? sigs : [];
     candleSeries.setMarkers(
-      arr.map((s) => ({
+      (sigs || []).map((s) => ({
         time: s.time,
         position: s.side === "B" ? "belowBar" : "aboveBar",
         color: s.side === "B" ? "#FFD400" : "#FFFFFF",
@@ -432,6 +414,90 @@
         text: s.side,
       }))
     );
+  }
+
+  // -----------------------------
+  // Overlay big B/S (DOM)
+  // -----------------------------
+  function ensureOverlayLayer() {
+    if (!containerEl) return;
+    if (overlayLayer) return;
+
+    const style = window.getComputedStyle(containerEl);
+    if (style.position === "static") containerEl.style.position = "relative";
+
+    overlayLayer = document.createElement("div");
+    overlayLayer.style.position = "absolute";
+    overlayLayer.style.left = "0";
+    overlayLayer.style.top = "0";
+    overlayLayer.style.right = "0";
+    overlayLayer.style.bottom = "0";
+    overlayLayer.style.pointerEvents = "none";
+    overlayLayer.style.zIndex = String(OVERLAY_ZINDEX);
+    containerEl.appendChild(overlayLayer);
+  }
+
+  function clearOverlayMarkers() {
+    for (const n of overlayMarkers) {
+      try { n.remove(); } catch (_) {}
+    }
+    overlayMarkers = [];
+  }
+
+  function placeOverlayMarkers(sigs, bars) {
+    if (!chart || !candleSeries || !overlayLayer) return;
+    clearOverlayMarkers();
+
+    // need coordinate mapping
+    const priceScale = candleSeries.priceScale();
+    const timeScale = chart.timeScale();
+
+    // build quick bar lookup (time -> {high, low})
+    const barMap = new Map();
+    for (const b of bars) barMap.set(b.time, b);
+
+    for (const s of sigs || []) {
+      const b = barMap.get(s.time);
+      if (!b) continue;
+
+      const x = timeScale.timeToCoordinate(s.time);
+      if (!Number.isFinite(x)) continue;
+
+      const price = s.side === "B" ? b.low : b.high;
+      const y = priceScale.priceToCoordinate(price);
+      if (!Number.isFinite(y)) continue;
+
+      const node = document.createElement("div");
+      node.textContent = s.side;
+      node.style.position = "absolute";
+      node.style.transform = "translate(-50%, -50%)";
+      node.style.left = ${x}px;
+
+      // offset up/down a bit
+      node.style.top = ${y + (s.side === "B" ? 18 : -18)}px;
+
+      node.style.fontSize = ${OVERLAY_FONT_PX}px;
+      node.style.fontWeight = "800";
+      node.style.lineHeight = "1";
+      node.style.padding = "4px 7px";
+      node.style.borderRadius = "8px";
+      node.style.boxShadow = "0 0 10px rgba(0,0,0,.35)";
+      node.style.opacity = "0.95";
+      node.style.letterSpacing = "0.5px";
+
+      if (s.side === "B") {
+        node.style.background = "#FFD400";
+        node.style.color = "#000";
+        node.style.border = "1px solid rgba(255,255,255,.35)";
+      } else {
+        node.style.background = "#FFFFFF";
+        node.style.color = "#000";
+        node.style.border = "1px solid rgba(255,212,0,.35)";
+      }
+
+      overlayLayer.appendChild(node);
+      overlayMarkers.push(node);
+    }
   }
 
   // -----------------------------
@@ -456,7 +522,6 @@
 
     const sym = getUiSymbol();
     const tf = getUiTf();
-
     if ($("hintText")) $("hintText").textContent = "Loading...";
 
     let pack;
@@ -468,34 +533,30 @@
     }
 
     const { payload, bars } = pack;
-
-    // Candles
-    candleSeries.setData(bars);
-
     const closes = bars.map((b) => b.close);
 
-    // EMA (yellow)
     const emaVals = ema(closes, EMA_PERIOD);
-
-    // AUX (white) per your algorithm
     const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
+    const trend = computeTrendFromAux(auxVals);
 
-    const emaPts = buildLinePoints(bars, emaVals);
-    const auxPts = buildLinePoints(bars, auxVals);
+    // Trend-colored candles
+    const trendCandles = buildTrendColoredCandles(bars, trend);
+    candleSeries.setData(trendCandles);
 
-    // ✅ Critical: never omit value, never feed 0/NaN accident
-    emaSeries.setData(emaPts);
-    auxSeries.setData(auxPts);
+    // Lines
+    emaSeries.setData(buildLinePoints(bars, emaVals));
+    auxSeries.setData(buildLinePoints(bars, auxVals));
 
-    // Signals:
-    // 1) payload embedded
-    // 2) optional endpoints
-    // 3) local CROSS + INFLECTION CONFIRM
+    // Signals: payload -> optional endpoints -> local
     let sigs = normalizeSignals(payload);
     if (!sigs.length) sigs = await fetchOptionalSignals(sym, tf);
-    if (!sigs.length) sigs = computeSignalsCrossPlusInflection(bars, emaPts, auxPts, CONFIRM_WINDOW);
+    if (!sigs.length) sigs = computeSignalsCrossPlusInflection(bars, emaVals, auxVals, CONFIRM_WINDOW);
 
-    applyMarkers(sigs);
+    applyMarkersLC(sigs);
+
+    // Overlay big markers
+    ensureOverlayLayer();
+    placeOverlayMarkers(sigs, bars);
 
     chart.timeScale().fitContent();
 
@@ -503,7 +564,7 @@
     if ($("symText")) $("symText").textContent = sym;
     if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
 
-    if ($("hintText")) $("hintText").textContent = Loaded · 已加载（TF=${tf} · sigs=${sigs.length}）;
+    if ($("hintText")) $("hintText").textContent = Loaded · 已加载（TF=${tf} · EMA=${EMA_PERIOD} AUX=${AUX_PERIOD} · sigs=${sigs.length}）;
 
     applyToggles();
     return { urlUsed: pack.urlUsed, bars: bars.length, sigs: sigs.length };
@@ -529,7 +590,7 @@
   }
 
   // -----------------------------
-  // Init (idempotent)
+  // Init
   // -----------------------------
   function init(opts) {
     opts = opts || {};
@@ -551,16 +612,15 @@
       crosshair: { mode: 1 },
     });
 
-    // Candles: green up / red down
     candleSeries = chart.addCandlestickSeries({
+      borderVisible: false,
+      // base colors not critical because we override per-bar color in data
       upColor: "#2BE2A6",
       downColor: "#FF5A5A",
       wickUpColor: "#2BE2A6",
       wickDownColor: "#FF5A5A",
-      borderVisible: false,
     });
 
-    // EMA: yellow
     emaSeries = chart.addLineSeries({
       color: "#FFD400",
       lineWidth: 2,
@@ -568,7 +628,6 @@
       lastValueVisible: false,
     });
 
-    // AUX: white
     auxSeries = chart.addLineSeries({
       color: "#FFFFFF",
       lineWidth: 2,
@@ -582,6 +641,10 @@
         width: Math.max(1, Math.floor(r.width)),
         height: Math.max(1, Math.floor(r.height)),
       });
+      // re-place overlay on resize
+      if (overlayLayer && overlayMarkers.length) {
+        // will be re-laid in next load; but keep safe if user resizes
+      }
     };
 
     try {
