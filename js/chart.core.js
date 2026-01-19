@@ -1,33 +1,14 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (PRODUCTION FROZEN) v2026.01.19c-FIX
- *
- * Requirements implemented:
- *  - EMA = 9
- *  - AUX = 21 (your confidential HMA-like algorithm)
- *  - Candles colored by trend:
- *      AUX slope up   => green candles
- *      AUX slope down => red candles
- *  - B/S: CROSS + INFLECTION CONFIRM (within CONFIRM_WINDOW bars)
- *
- * Guarantees:
- *  1) NO BLANK CHART from wrong endpoints: bars must be non-empty
- *  2) NO bottom spikes: line points are {time, value: finite} or {time, value: null}
- *  3) EMA yellow, AUX white
- *  4) NO billing/subscription touch
+ * DarriusAI - chart.core.js (PRODUCTION FROZEN) v2026.01.19c-NO-TEMPLATE
+ * Fix: remove ALL template literals to avoid copy/paste backtick breakage.
  * ========================================================================= */
 
 (() => {
   "use strict";
 
-  // -----------------------------
-  // DOM helpers
-  // -----------------------------
   const $ = (id) => document.getElementById(id);
   const qs = (sel) => document.querySelector(sel);
 
-  // -----------------------------
-  // Config
-  // -----------------------------
   const DEFAULT_API_BASE =
     (window.DARRIUS_API_BASE && String(window.DARRIUS_API_BASE)) ||
     (window._API_BASE_ && String(window._API_BASE_)) ||
@@ -35,7 +16,7 @@
     "https://darrius-api.onrender.com";
 
   const BARS_PATH_CANDIDATES = [
-    "/api/market/bars", // ✅ best
+    "/api/market/bars",
     "/api/bars",
     "/bars",
     "/api/ohlcv",
@@ -44,7 +25,7 @@
     "/ohlc",
     "/api/market/ohlcv",
     "/market/ohlcv",
-    "/api/market/ohlc", // ⚠ keep last
+    "/api/market/ohlc",
     "/market/ohlc",
   ];
 
@@ -57,36 +38,25 @@
     "/signals",
   ];
 
-  // -----------------------------
-  // Indicator params (PRODUCTION)
-  // -----------------------------
+  // ===== Parameters =====
   const EMA_PERIOD = 9;
+  const AUX_PERIOD = 21;
+  const AUX_METHOD = "SMA";
+  const CONFIRM_WINDOW = 2;
 
-  // Your confidential AUX settings:
-  const AUX_PERIOD = 21; // extern int period=21 (per your request)
-  const AUX_METHOD = "SMA"; // safest default
-  const CONFIRM_WINDOW = 2; // within N bars after cross must see AUX inflection flip
-
-  // Candle colors (trend based)
   const UP_COLOR = "#2BE2A6";
   const DOWN_COLOR = "#FF5A5A";
 
-  // -----------------------------
-  // State
-  // -----------------------------
+  // ===== State =====
   let containerEl = null;
   let chart = null;
   let candleSeries = null;
-
-  let emaSeries = null; // yellow
-  let auxSeries = null; // white
+  let emaSeries = null;
+  let auxSeries = null;
 
   let showEMA = true;
   let showAUX = true;
 
-  // -----------------------------
-  // UI readers
-  // -----------------------------
   function getUiSymbol() {
     const el =
       $("symbolInput") ||
@@ -110,14 +80,11 @@
     return (v || "1d").trim();
   }
 
-  // -----------------------------
-  // Fetch helpers
-  // -----------------------------
   async function fetchJson(url) {
     const r = await fetch(url, { method: "GET", credentials: "omit" });
     if (!r.ok) {
       const text = await r.text().catch(() => "");
-      const err = new Error(`HTTP ${r.status}`);
+      const err = new Error("HTTP " + r.status);
       err.status = r.status;
       err.body = text;
       throw err;
@@ -128,12 +95,9 @@
   function toUnixTime(t) {
     if (t == null) return null;
 
-    // LightweightCharts supports:
-    //  - UTCTimestamp (number, seconds)
-    //  - BusinessDay object {year, month, day}
     if (typeof t === "number") {
-      if (t > 2e10) return Math.floor(t / 1000); // ms -> s
-      return t; // already seconds
+      if (t > 2e10) return Math.floor(t / 1000);
+      return t;
     }
 
     if (typeof t === "string") {
@@ -142,7 +106,7 @@
       return Math.floor(ms / 1000);
     }
 
-    if (typeof t === "object" && t.year && t.month && t.day) return t; // BusinessDay
+    if (typeof t === "object" && t.year && t.month && t.day) return t;
 
     return null;
   }
@@ -150,9 +114,9 @@
   function normalizeBars(payload) {
     const raw =
       Array.isArray(payload) ? payload :
-      Array.isArray(payload?.bars) ? payload.bars :
-      Array.isArray(payload?.ohlcv) ? payload.ohlcv :
-      Array.isArray(payload?.data) ? payload.data :
+      Array.isArray(payload && payload.bars) ? payload.bars :
+      Array.isArray(payload && payload.ohlcv) ? payload.ohlcv :
+      Array.isArray(payload && payload.data) ? payload.data :
       [];
 
     const bars = (raw || [])
@@ -169,16 +133,16 @@
       })
       .filter(Boolean);
 
-    // sort ascending
     bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
 
-    // de-dup time
     const out = [];
-    let lastT = null;
+    let lastKey = null;
     for (const b of bars) {
-      const key = typeof b.time === "object" ? `${b.time.year}-${b.time.month}-${b.time.day}` : String(b.time);
-      if (key === lastT) continue;
-      lastT = key;
+      const key = (typeof b.time === "object")
+        ? (b.time.year + "-" + b.time.month + "-" + b.time.day)
+        : String(b.time);
+      if (key === lastKey) continue;
+      lastKey = key;
       out.push(b);
     }
     return out;
@@ -186,10 +150,10 @@
 
   function normalizeSignals(payload) {
     const raw =
-      payload?.sigs ||
-      payload?.signals ||
-      payload?.data?.sigs ||
-      payload?.data?.signals ||
+      (payload && payload.sigs) ||
+      (payload && payload.signals) ||
+      (payload && payload.data && payload.data.sigs) ||
+      (payload && payload.data && payload.data.signals) ||
       [];
     if (!Array.isArray(raw)) return [];
     return raw
@@ -204,52 +168,45 @@
 
   async function fetchBarsPack(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
-    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+    const q = "symbol=" + encodeURIComponent(sym) + "&tf=" + encodeURIComponent(tf);
 
     let lastErr = null;
     for (const p of BARS_PATH_CANDIDATES) {
-      const url = `${apiBase}${p}?${q}`;
+      const url = apiBase + p + "?" + q;
       try {
         const payload = await fetchJson(url);
         const bars = normalizeBars(payload);
         if (bars.length) return { payload, bars, urlUsed: url };
-        lastErr = new Error(`bars empty from ${url}`);
+        lastErr = new Error("bars empty from " + url);
       } catch (e) {
         lastErr = e;
       }
     }
-    throw new Error(`All bars endpoints failed. Last error: ${lastErr?.message || lastErr}`);
+    throw new Error("All bars endpoints failed. Last error: " + (lastErr && lastErr.message ? lastErr.message : String(lastErr)));
   }
 
   async function fetchOptionalSignals(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
-    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+    const q = "symbol=" + encodeURIComponent(sym) + "&tf=" + encodeURIComponent(tf);
 
     for (const p of SIGS_PATH_CANDIDATES) {
-      const url = `${apiBase}${p}?${q}`;
+      const url = apiBase + p + "?" + q;
       try {
         const payload = await fetchJson(url);
         return normalizeSignals(payload);
-      } catch (_) {
-        // silent
-      }
+      } catch (_) {}
     }
     return [];
   }
 
-  // -----------------------------
-  // Math: EMA / SMA / WMA / MA-on-array
-  // -----------------------------
+  // ===== Math =====
   function ema(values, period) {
     const k = 2 / (period + 1);
     let e = null;
     const out = new Array(values.length);
     for (let i = 0; i < values.length; i++) {
       const v = values[i];
-      if (!Number.isFinite(v)) {
-        out[i] = NaN;
-        continue;
-      }
+      if (!Number.isFinite(v)) { out[i] = NaN; continue; }
       e = e == null ? v : v * k + e * (1 - k);
       out[i] = e;
     }
@@ -271,9 +228,7 @@
   function wmaAt(values, endIdx, period) {
     const start = endIdx - period + 1;
     if (start < 0) return NaN;
-    let num = 0;
-    let den = 0;
-    // weights 1..period (oldest=1, newest=period)
+    let num = 0, den = 0;
     for (let i = start; i <= endIdx; i++) {
       const v = values[i];
       if (!Number.isFinite(v)) return NaN;
@@ -298,10 +253,7 @@
       let e = null;
       for (let i = 0; i < values.length; i++) {
         const v = values[i];
-        if (!Number.isFinite(v)) {
-          out[i] = NaN;
-          continue;
-        }
+        if (!Number.isFinite(v)) { out[i] = NaN; continue; }
         e = e == null ? v : v * k + e * (1 - k);
         out[i] = e;
       }
@@ -313,13 +265,11 @@
       return out;
     }
 
-    // default SMA
     for (let i = 0; i < values.length; i++) out[i] = smaAt(values, i, period);
     return out;
   }
 
   function buildLinePoints(bars, values) {
-    // Strict: value is finite => number, else null gap
     const pts = new Array(bars.length);
     for (let i = 0; i < bars.length; i++) {
       const t = bars[i].time;
@@ -329,15 +279,11 @@
     return pts;
   }
 
-  // -----------------------------
-  // AUX per your algorithm (HMA-like)
-  // -----------------------------
   function computeAuxByYourAlgo(closes, period, method) {
     const n = Math.max(2, Math.floor(period || 21));
     const half = Math.max(1, Math.floor(n / 2));
-    const p = Math.max(1, Math.round(Math.sqrt(n))); // p = sqrt(period)
+    const p = Math.max(1, Math.round(Math.sqrt(n)));
 
-    // vect[i] = 2*WMA(i, n/2) - WMA(i, n)
     const vect = new Array(closes.length).fill(NaN);
     for (let i = 0; i < closes.length; i++) {
       const w1 = wmaAt(closes, i, half);
@@ -345,22 +291,16 @@
       if (!Number.isFinite(w1) || !Number.isFinite(w2)) vect[i] = NaN;
       else vect[i] = 2 * w1 - w2;
     }
-
-    // ExtMapBuffer = MA_on_array(vect, p, method)
     return maOnArray(vect, p, method || "SMA");
   }
 
   function computeTrendFromAux(auxVals) {
-    // trend[i] = sign(aux[i] - aux[i-1]); keep last when equal/NaN
     const trend = new Array(auxVals.length).fill(0);
     let last = 0;
     for (let i = 1; i < auxVals.length; i++) {
       const a0 = auxVals[i - 1];
       const a1 = auxVals[i];
-      if (!Number.isFinite(a0) || !Number.isFinite(a1)) {
-        trend[i] = last;
-        continue;
-      }
+      if (!Number.isFinite(a0) || !Number.isFinite(a1)) { trend[i] = last; continue; }
       if (a1 > a0) last = 1;
       else if (a1 < a0) last = -1;
       trend[i] = last;
@@ -370,58 +310,47 @@
   }
 
   function colorizeBarsByTrend(bars, trend) {
-    // LightweightCharts candlestick data item can include:
-    // { time, open, high, low, close, color, wickColor, borderColor }
     return bars.map((b, i) => {
-      const up = (trend[i] ?? 0) >= 0; // default green for 0
+      const up = (trend[i] ?? 0) >= 0;
       const c = up ? UP_COLOR : DOWN_COLOR;
       return {
-        time: b.time,
-        open: b.open,
-        high: b.high,
-        low: b.low,
-        close: b.close,
-        color: c,
-        wickColor: c,
-        borderColor: c,
+        time: b.time, open: b.open, high: b.high, low: b.low, close: b.close,
+        color: c, wickColor: c, borderColor: c,
       };
     });
   }
 
-  // -----------------------------
-  // B/S: CROSS + INFLECTION CONFIRM
-  // -----------------------------
   function computeSignalsCrossPlusInflection(bars, emaPts, auxPts, confirmWindow) {
     const n = bars.length;
     if (n < 5) return [];
 
-    const emaV = emaPts.map((p) => p.value);
-    const auxV = auxPts.map((p) => p.value);
+    const emaV = emaPts.map(p => p.value);
+    const auxV = auxPts.map(p => p.value);
     const trend = computeTrendFromAux(auxV);
 
     const cw = Math.max(0, Math.floor(confirmWindow ?? 2));
     const sigs = [];
     const usedKey = new Set();
 
-    function addSig(i, side) {
-      const t = bars[i].time;
-      const key = `${typeof t === "object" ? `${t.year}-${t.month}-${t.day}` : t}:${side}`;
-      if (usedKey.has(key)) return;
-      usedKey.add(key);
-      sigs.push({ time: t, side });
+    function keyOfTime(t) {
+      return (typeof t === "object") ? (t.year + "-" + t.month + "-" + t.day) : String(t);
     }
 
-    // helper: check aux inflection within window
+    function addSig(i, side) {
+      const t = bars[i].time;
+      const key = keyOfTime(t) + ":" + side;
+      if (usedKey.has(key)) return;
+      usedKey.add(key);
+      sigs.push({ time: t, side: side });
+    }
+
     function findConfirmIndex(startIdx, wantTrend) {
-      // wantTrend: +1 for buy confirm, -1 for sell confirm
       for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
         const prev = trend[j - 1];
         const curr = trend[j];
         if (wantTrend > 0) {
-          // confirm UP: prev <=0 and curr >0
           if (prev <= 0 && curr > 0) return j;
         } else {
-          // confirm DOWN: prev >=0 and curr <0
           if (prev >= 0 && curr < 0) return j;
         }
       }
@@ -449,9 +378,6 @@
     return sigs;
   }
 
-  // -----------------------------
-  // Markers
-  // -----------------------------
   function applyMarkers(sigs) {
     if (!candleSeries) return;
     const arr = Array.isArray(sigs) ? sigs : [];
@@ -466,9 +392,6 @@
     );
   }
 
-  // -----------------------------
-  // Toggles
-  // -----------------------------
   function applyToggles() {
     const emaChecked = $("toggleEMA")?.checked ?? $("emaToggle")?.checked ?? $("emaCheck")?.checked;
     const auxChecked = $("toggleAUX")?.checked ?? $("auxToggle")?.checked ?? $("auxCheck")?.checked;
@@ -480,9 +403,6 @@
     if (auxSeries) auxSeries.applyOptions({ visible: !!showAUX });
   }
 
-  // -----------------------------
-  // Core load
-  // -----------------------------
   async function load() {
     if (!chart || !candleSeries) return;
 
@@ -495,63 +415,48 @@
     try {
       pack = await fetchBarsPack(sym, tf);
     } catch (e) {
-      if ($("hintText")) $("hintText").textContent = `加载失败：${e?.message || e}`;
+      if ($("hintText")) $("hintText").textContent = "加载失败：" + (e && e.message ? e.message : String(e));
       throw e;
     }
 
-    const { payload, bars } = pack;
+    const bars = pack.bars;
+    const payload = pack.payload;
+
     if (!bars || !bars.length) {
       if ($("hintText")) $("hintText").textContent = "加载失败：bars为空";
       return;
     }
 
     const closes = bars.map((b) => b.close);
-
-    // EMA (yellow)
     const emaVals = ema(closes, EMA_PERIOD);
-
-    // AUX (white) per your algorithm
     const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
 
     const emaPts = buildLinePoints(bars, emaVals);
     const auxPts = buildLinePoints(bars, auxVals);
 
-    // Candle color by AUX trend
     const trend = computeTrendFromAux(auxVals);
     const coloredBars = colorizeBarsByTrend(bars, trend);
 
-    // ✅ Set data
     candleSeries.setData(coloredBars);
+    emaSeries && emaSeries.setData(emaPts);
+    auxSeries && auxSeries.setData(auxPts);
 
-    // ✅ Lines (no spikes / no NaN)
-    if (emaSeries) emaSeries.setData(emaPts);
-    if (auxSeries) auxSeries.setData(auxPts);
-
-    // Signals:
-    // 1) payload embedded
-    // 2) optional endpoints
-    // 3) local CROSS + INFLECTION CONFIRM
     let sigs = normalizeSignals(payload);
     if (!sigs.length) sigs = await fetchOptionalSignals(sym, tf);
     if (!sigs.length) sigs = computeSignalsCrossPlusInflection(bars, emaPts, auxPts, CONFIRM_WINDOW);
 
     applyMarkers(sigs);
-
     chart.timeScale().fitContent();
 
     const last = bars[bars.length - 1];
     if ($("symText")) $("symText").textContent = sym;
     if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
-
-    if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${tf} · bars=${bars.length} · sigs=${sigs.length}）`;
+    if ($("hintText")) $("hintText").textContent = "Loaded · 已加载（TF=" + tf + " · bars=" + bars.length + " · sigs=" + sigs.length + ")";
 
     applyToggles();
     return { urlUsed: pack.urlUsed, bars: bars.length, sigs: sigs.length };
   }
 
-  // -----------------------------
-  // Export PNG
-  // -----------------------------
   function exportPNG() {
     try {
       if (!chart || typeof chart.takeScreenshot !== "function") {
@@ -561,16 +466,13 @@
       const canvas = chart.takeScreenshot();
       const a = document.createElement("a");
       a.href = canvas.toDataURL("image/png");
-      a.download = `DarriusAI_${getUiSymbol()}_${getUiTf()}.png`;
+      a.download = "DarriusAI_" + getUiSymbol() + "_" + getUiTf() + ".png";
       a.click();
     } catch (e) {
-      alert("导出失败：" + (e?.message || e));
+      alert("导出失败：" + (e && e.message ? e.message : String(e)));
     }
   }
 
-  // -----------------------------
-  // Init (idempotent)
-  // -----------------------------
   function init(opts) {
     opts = opts || {};
     const containerId = opts.containerId || "chart";
@@ -591,7 +493,6 @@
       crosshair: { mode: 1 },
     });
 
-    // Candles: series default options（单根K线颜色我们会在 setData 里覆盖）
     candleSeries = chart.addCandlestickSeries({
       upColor: UP_COLOR,
       downColor: DOWN_COLOR,
@@ -600,7 +501,6 @@
       borderVisible: false,
     });
 
-    // EMA: yellow
     emaSeries = chart.addLineSeries({
       color: "#FFD400",
       lineWidth: 2,
@@ -608,7 +508,6 @@
       lastValueVisible: false,
     });
 
-    // AUX: white
     auxSeries = chart.addLineSeries({
       color: "#FFFFFF",
       lineWidth: 2,
