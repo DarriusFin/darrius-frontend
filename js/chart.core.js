@@ -1,14 +1,14 @@
 /* =========================================================
  * DarriusAI · Chart Core (FINAL INTEGRATED COVER)
  * File: js/chart.core.js
- * Goals (per Perry):
- *  - Candles: green=up, red=down
- *  - Exactly TWO indicators on chart:
- *      1) EMA color-switch (green when EMA rising, red when EMA falling)
- *         Implementation: 2 line series + null to hide => visually ONE line
- *      2) AUX line (yellow)
- *  - Signals: B/S markers + optional overlay
- *  - Data: backend proxy /api/market/ohlc, demo fallback safe
+ * Role:
+ *  - Candlestick chart (up=green / down=red)
+ *  - EMA (color switch by two series + null (EMPTY_VALUE))
+ *  - AUX line
+ *  - Signal engine (EMA x AUX cross) -> B/S markers
+ *  - Overlay markers (optional)
+ *  - Market data from backend proxy (NO KEY on front-end)
+ *  - Demo fallback (always safe)
  *
  * Public:
  *  window.ChartCore = { init, load, applyToggles, exportPNG }
@@ -20,7 +20,9 @@
   /* -----------------------------
    * Utilities
    * ----------------------------- */
-  function $(id) { return document.getElementById(id); }
+  function $(id) {
+    return document.getElementById(id);
+  }
 
   function log() {
     if (window.console) console.log.apply(console, arguments);
@@ -38,9 +40,8 @@
     return (($("tf")?.value || "1d") + "").trim();
   }
 
-  function num(x) {
-    const v = Number(x);
-    return Number.isFinite(v) ? v : null;
+  function clamp(n, a, b) {
+    return Math.max(a, Math.min(b, n));
   }
 
   /* -----------------------------
@@ -48,7 +49,7 @@
    * ----------------------------- */
   const DEFAULT_BARS = 260;
 
-  // Your tuned params placeholder (you can adjust later)
+  // params per timeframe (adjustable)
   const TF_PARAMS = {
     "5m": { ema: 8, aux: 20, cooldown: 10 },
     "15m": { ema: 9, aux: 21, cooldown: 12 },
@@ -66,18 +67,18 @@
   let chart = null;
   let candleSeries = null;
 
-  // EMA color-switch: two series but only one visible segment at a time
-  let emaUp = null;     // green segment
-  let emaDown = null;   // red segment
+  // EMA color-switch: two series (only one is visible at each point)
+  let emaUp = null;
+  let emaDown = null;
 
   // AUX
   let auxSeries = null;
 
-  let containerEl = null;
-  let overlayEl = null;
-
   let CURRENT_BARS = [];
   let CURRENT_SIGS = [];
+
+  let containerEl = null;
+  let overlayEl = null;
 
   /* -----------------------------
    * Demo data (fallback)
@@ -100,34 +101,86 @@
     const now = Math.floor(Date.now() / 1000);
 
     let t = now - n * step;
-    let price = 100;
+    let price = 67000;
 
     const arr = [];
     for (let i = 0; i < n; i++) {
-      const wave1 = Math.sin(i / 14) * 2.2;
-      const wave2 = Math.sin(i / 33) * 4.2;
-      const wave3 = Math.sin(i / 85) * 7.0;
-      const noise = (Math.random() - 0.5) * 2.6;
-      const drift = Math.sin(i / 170) * 1.6;
+      const wave1 = Math.sin(i / 14) * 220;
+      const wave2 = Math.sin(i / 33) * 420;
+      const wave3 = Math.sin(i / 85) * 700;
+      const noise = (Math.random() - 0.5) * 260;
+      const drift = Math.sin(i / 170) * 160;
 
       const open = price;
       const close = open + wave1 + wave2 + wave3 + drift + noise;
-      const high = Math.max(open, close) + Math.random() * 2.2;
-      const low = Math.min(open, close) - Math.random() * 2.2;
+      const high = Math.max(open, close) + Math.random() * 220;
+      const low = Math.min(open, close) - Math.random() * 220;
 
       price = close;
 
       arr.push({
         time: t,
-        open: +open.toFixed(4),
-        high: +high.toFixed(4),
-        low: +low.toFixed(4),
-        close: +close.toFixed(4),
+        open: +open.toFixed(2),
+        high: +high.toFixed(2),
+        low: +low.toFixed(2),
+        close: +close.toFixed(2),
       });
 
       t += step;
     }
     return arr;
+  }
+
+  /* -----------------------------
+   * Data sanitize (IMPORTANT)
+   * - fix stock "straight line" / crazy scale caused by bad payload
+   * ----------------------------- */
+  function sanitizeBars(bars) {
+    if (!Array.isArray(bars)) return [];
+
+    // normalize & filter
+    let out = [];
+    for (const b of bars) {
+      const t = Number(b.time);
+      const o = Number(b.open);
+      const h = Number(b.high);
+      const l = Number(b.low);
+      const c = Number(b.close);
+
+      // basic validity
+      if (!Number.isFinite(t) || t <= 0) continue;
+      if (![o, h, l, c].every(Number.isFinite)) continue;
+
+      // price must be positive, and high/low consistent
+      if (o <= 0 || h <= 0 || l <= 0 || c <= 0) continue;
+      const hi = Math.max(o, h, l, c);
+      const lo = Math.min(o, h, l, c);
+
+      out.push({
+        time: t,
+        open: o,
+        high: hi,
+        low: lo,
+        close: c,
+      });
+    }
+
+    // sort by time asc
+    out.sort((a, b) => a.time - b.time);
+
+    // de-duplicate same timestamp (keep last)
+    const dedup = [];
+    for (let i = 0; i < out.length; i++) {
+      const cur = out[i];
+      const prev = dedup[dedup.length - 1];
+      if (!prev || prev.time !== cur.time) dedup.push(cur);
+      else dedup[dedup.length - 1] = cur;
+    }
+
+    // if too few bars, treat as invalid
+    if (dedup.length < 30) return [];
+
+    return dedup;
   }
 
   /* -----------------------------
@@ -141,194 +194,78 @@
     const out = [];
 
     for (let i = 0; i < bars.length; i++) {
-      const v = Number(bars[i].close);
+      const v = bars[i].close;
       prev = prev === null ? v : v * k + prev * (1 - k);
-      out.push({ time: bars[i].time, value: +prev.toFixed(6) });
+      out.push({ time: bars[i].time, value: +prev.toFixed(2) });
     }
     return out;
   }
 
-  /* ---------------------------------------------------------
-   * EMA color-switch (YOUR "EMPTY_VALUE" logic)
-   * - Uptrend[x] = EMA[x], Dntrend[x] = null (hide)
-   * - Downtrend[x] = EMA[x], Uptrend[x] = null (hide)
-   * - We use EMA SLOPE (rising vs falling) as trend
-   *   => green = rising, red = falling
-   * --------------------------------------------------------- */
+  /* -----------------------------
+   * EMA color-switch (your "EMPTY_VALUE" logic)
+   * - two series, only one visible at a time by setting null
+   * - improved: debounce confirm + bridge like your MQL (x+1)
+   * ----------------------------- */
   function buildColorSwitchEMA(emaArr) {
-  // ====== 防抖参数（可按感觉微调）======
-  const CONFIRM_BARS = 3;          // 连续确认几根才允许切换（建议 3~5）
-  const REL_EPS = 0.00015;         // 相对阈值：过滤极小斜率抖动（建议 0.00010~0.00030）
-  // ====================================
+    // tweakable:稳定、不乱跳
+    const CONFIRM_BARS = 3;      // 3~5 更稳
+    const REL_EPS = 0.00015;     // 过滤极小斜率抖动
 
-  const up = [];
-  const dn = [];
+    const up = [];
+    const dn = [];
 
-  let state = null;               // "UP" or "DN"
-  let pending = null;             // "UP" or "DN"
-  let pendingCount = 0;
+    let state = null;           // "UP" or "DN"
+    let pending = null;
+    let pendingCount = 0;
 
-  for (let i = 0; i < emaArr.length; i++) {
-    const cur = emaArr[i];
-    const prev = emaArr[i - 1];
+    for (let i = 0; i < emaArr.length; i++) {
+      const cur = emaArr[i];
+      const prev = emaArr[i - 1];
 
-    if (!prev) {
-      // 起点：先当作 UP
-      state = "UP";
-      up.push(cur);
-      dn.push({ time: cur.time, value: null });
-      continue;
-    }
-
-    // 用相对阈值过滤很小的斜率：避免一丁点波动就切换
-    const slope = cur.value - prev.value;
-    const eps = Math.max(Math.abs(cur.value) * REL_EPS, 1e-9);
-
-    let want = null;
-    if (slope > eps) want = "UP";
-    else if (slope < -eps) want = "DN";
-    else want = state; // 斜率太小：保持原趋势，不触发切换
-
-    // 初始化 state
-    if (!state) state = want;
-
-    // 防抖确认：want != state 时，必须连续 CONFIRM_BARS 次才切换
-    if (want !== state) {
-      if (pending === want) pendingCount++;
-      else {
-        pending = want;
-        pendingCount = 1;
-      }
-
-      if (pendingCount >= CONFIRM_BARS) {
-        // ====== 关键：切换发生，做桥接（像你 MQL 的 x+1 补点）======
-        // 1) 把“上一根(prev)”同时写入两条线，保证切换点连续
-        up[up.length - 1] = { time: prev.time, value: prev.value };
-        dn[dn.length - 1] = { time: prev.time, value: prev.value };
-
-        // 2) 切换状态
-        state = pending;
-        pending = null;
-        pendingCount = 0;
-      }
-    } else {
-      // want == state，清理 pending
-      pending = null;
-      pendingCount = 0;
-    }
-
-    // 输出：用 null 隐藏另一条（EMPTY_VALUE）
-    if (state === "UP") {
-      up.push(cur);
-      dn.push({ time: cur.time, value: null });
-    } else {
-      dn.push(cur);
-      up.push({ time: cur.time, value: null });
-    }
-  }
-
-  return { up, dn };
-}
-function buildColorSwitchEMA(emaArr) {
-  // ====== 防抖参数（可按感觉微调）======
-  const CONFIRM_BARS = 3;          // 连续确认几根才允许切换（建议 3~5）
-  const REL_EPS = 0.00015;         // 相对阈值：过滤极小斜率抖动（建议 0.00010~0.00030）
-  // ====================================
-
-  const up = [];
-  const dn = [];
-
-  let state = null;               // "UP" or "DN"
-  let pending = null;             // "UP" or "DN"
-  let pendingCount = 0;
-
-  for (let i = 0; i < emaArr.length; i++) {
-    const cur = emaArr[i];
-    const prev = emaArr[i - 1];
-
-    if (!prev) {
-      // 起点：先当作 UP
-      state = "UP";
-      up.push(cur);
-      dn.push({ time: cur.time, value: null });
-      continue;
-    }
-
-    // 用相对阈值过滤很小的斜率：避免一丁点波动就切换
-    const slope = cur.value - prev.value;
-    const eps = Math.max(Math.abs(cur.value) * REL_EPS, 1e-9);
-
-    let want = null;
-    if (slope > eps) want = "UP";
-    else if (slope < -eps) want = "DN";
-    else want = state; // 斜率太小：保持原趋势，不触发切换
-
-    // 初始化 state
-    if (!state) state = want;
-
-    // 防抖确认：want != state 时，必须连续 CONFIRM_BARS 次才切换
-    if (want !== state) {
-      if (pending === want) pendingCount++;
-      else {
-        pending = want;
-        pendingCount = 1;
-      }
-
-      if (pendingCount >= CONFIRM_BARS) {
-        // ====== 关键：切换发生，做桥接（像你 MQL 的 x+1 补点）======
-        // 1) 把“上一根(prev)”同时写入两条线，保证切换点连续
-        up[up.length - 1] = { time: prev.time, value: prev.value };
-        dn[dn.length - 1] = { time: prev.time, value: prev.value };
-
-        // 2) 切换状态
-        state = pending;
-        pending = null;
-        pendingCount = 0;
-      }
-    } else {
-      // want == state，清理 pending
-      pending = null;
-      pendingCount = 0;
-    }
-
-    // 输出：用 null 隐藏另一条（EMPTY_VALUE）
-    if (state === "UP") {
-      up.push(cur);
-      dn.push({ time: cur.time, value: null });
-    } else {
-      dn.push(cur);
-      up.push({ time: cur.time, value: null });
-    }
-  }
-
-  return { up, dn };
-}
-
-
-      const rising = cur.value >= prev.value;
-
-      if (rising) {
+      if (!prev) {
+        state = "UP";
         up.push(cur);
-        dn.push({ time: cur.time, value: null }); // EMPTY_VALUE
+        dn.push({ time: cur.time, value: null });
+        continue;
+      }
+
+      const slope = cur.value - prev.value;
+      const eps = Math.max(Math.abs(cur.value) * REL_EPS, 1e-9);
+
+      let want;
+      if (slope > eps) want = "UP";
+      else if (slope < -eps) want = "DN";
+      else want = state || "UP";
+
+      if (!state) state = want;
+
+      if (want !== state) {
+        if (pending === want) pendingCount++;
+        else {
+          pending = want;
+          pendingCount = 1;
+        }
+
+        if (pendingCount >= CONFIRM_BARS) {
+          // bridge at switch: make prev point visible on both series
+          up[up.length - 1] = { time: prev.time, value: prev.value };
+          dn[dn.length - 1] = { time: prev.time, value: prev.value };
+
+          state = pending;
+          pending = null;
+          pendingCount = 0;
+        }
+      } else {
+        pending = null;
+        pendingCount = 0;
+      }
+
+      if (state === "UP") {
+        up.push(cur);
+        dn.push({ time: cur.time, value: null });
       } else {
         dn.push(cur);
-        up.push({ time: cur.time, value: null }); // EMPTY_VALUE
-      }
-
-      // Optional: bridge one point on regime change (like your x+1 trick)
-      // This makes color switching visually continuous.
-      // If previous was falling and now rising -> keep dn at prev point
-      // If previous was rising and now falling -> keep up at prev point
-      // NOTE: lightweight-charts already handles null gaps well, but bridge helps.
-      const prevRising = prev.value >= (emaArr[i - 2]?.value ?? prev.value);
-      if (i >= 2 && prevRising !== rising) {
-        // On change, put previous point in both to reduce "gap" perception
-        const p = emaArr[i - 1];
-        if (rising) {
-          dn[dn.length - 2] = { time: p.time, value: p.value };
-        } else {
-          up[up.length - 2] = { time: p.time, value: p.value };
-        }
+        up.push({ time: cur.time, value: null });
       }
     }
 
@@ -336,17 +273,18 @@ function buildColorSwitchEMA(emaArr) {
   }
 
   /* -----------------------------
-   * Signals (EMA x AUX cross)
+   * Signal engine (EMA x AUX cross)
    * ----------------------------- */
   function detectSignals(bars, emaFast, auxSlow, cooldown) {
     const sigs = [];
     let lastIdx = -1e9;
+    const cd = Math.max(1, Number(cooldown) || 14);
 
     for (let i = 1; i < bars.length; i++) {
       const prevDiff = emaFast[i - 1].value - auxSlow[i - 1].value;
       const nowDiff = emaFast[i].value - auxSlow[i].value;
 
-      if (i - lastIdx < cooldown) continue;
+      if (i - lastIdx < cd) continue;
 
       if (prevDiff <= 0 && nowDiff > 0) {
         sigs.push({ time: bars[i].time, price: bars[i].low, side: "B" });
@@ -356,11 +294,12 @@ function buildColorSwitchEMA(emaArr) {
         lastIdx = i;
       }
     }
+
     return sigs.slice(-40);
   }
 
   /* -----------------------------
-   * Overlay (optional big B/S)
+   * Overlay (optional BIG B/S)
    * ----------------------------- */
   function repaintOverlay() {
     if (!overlayEl || !chart || !candleSeries) return;
@@ -378,6 +317,7 @@ function buildColorSwitchEMA(emaArr) {
       d.style.left = x + "px";
       d.style.top = (y + (s.side === "B" ? 14 : -14)) + "px";
       d.textContent = s.side;
+
       overlayEl.appendChild(d);
     }
   }
@@ -389,7 +329,7 @@ function buildColorSwitchEMA(emaArr) {
   }
 
   /* -----------------------------
-   * Toggles: EMA / AUX (UI checkboxes)
+   * Toggles (UI)
    * ----------------------------- */
   function applyToggles() {
     const showEMA = $("tgEMA") ? !!$("tgEMA").checked : true;
@@ -403,8 +343,8 @@ function buildColorSwitchEMA(emaArr) {
   }
 
   /* -----------------------------
-   * Market data fetch
-   * Endpoint:
+   * Market data from backend proxy
+   * Expected endpoint:
    *  GET /api/market/ohlc?symbol=...&tf=...&asset=stock|crypto
    * Response:
    *  { ok:true, bars:[{time,open,high,low,close}, ...] }
@@ -421,51 +361,36 @@ function buildColorSwitchEMA(emaArr) {
 
     const asset = isCrypto ? "crypto" : "stock";
 
-    const base = getApiBase();
-    const path =
-      `/api/market/ohlc?symbol=${encodeURIComponent(sym)}` +
-      `&tf=${encodeURIComponent(timeframe)}` +
-      `&asset=${encodeURIComponent(asset)}`;
-    const url = base ? `${base}${path}` : path;
-
     try {
+      const base = getApiBase();
+      const path =
+        `/api/market/ohlc?symbol=${encodeURIComponent(sym)}` +
+        `&tf=${encodeURIComponent(timeframe)}` +
+        `&asset=${encodeURIComponent(asset)}`;
+
+      const url = base ? `${base}${path}` : path;
+
       const resp = await fetch(url, { method: "GET" });
       if (!resp.ok) throw new Error("HTTP " + resp.status);
 
       const data = await resp.json();
-      if (!data || data.ok !== true || !Array.isArray(data.bars) || data.bars.length < 20) {
+      if (!data || data.ok !== true || !Array.isArray(data.bars) || data.bars.length === 0) {
         throw new Error("Invalid payload");
       }
 
-      // Normalize strictly: time must be seconds int; OHLC must be finite numbers
-      const out = [];
-      for (const b of data.bars) {
-        const t = Number(b.time);
-        const o = num(b.open);
-        const h = num(b.high);
-        const l = num(b.low);
-        const c = num(b.close);
+      const bars = sanitizeBars(
+        data.bars.map((b) => ({
+          time: Number(b.time),
+          open: +b.open,
+          high: +b.high,
+          low: +b.low,
+          close: +b.close,
+        }))
+      );
 
-        if (!Number.isFinite(t) || !o || !h || !l || !c) continue;
+      if (!bars.length) throw new Error("Sanitize failed");
 
-        // If backend accidentally returns ms timestamps, convert
-        const timeSec = t > 3e10 ? Math.floor(t / 1000) : Math.floor(t);
-
-        out.push({
-          time: timeSec,
-          open: o,
-          high: h,
-          low: l,
-          close: c,
-        });
-      }
-
-      if (out.length < 20) throw new Error("Not enough valid bars");
-
-      // Sort by time to avoid weird shapes
-      out.sort((a, b) => a.time - b.time);
-
-      return out;
+      return bars;
     } catch (e) {
       log("[chart] Market data failed -> demo fallback:", e.message || e);
       return genDemoCandles(DEFAULT_BARS, timeframe);
@@ -483,25 +408,22 @@ function buildColorSwitchEMA(emaArr) {
     const sym = (symbol || getUiSymbol()).trim().toUpperCase();
     const timeframe = (tf || getUiTf()).trim() || "1d";
 
+    const prm = TF_PARAMS[timeframe] || TF_PARAMS["1d"];
+
     const bars = await fetchMarketData(sym, timeframe);
     CURRENT_BARS = bars;
 
-    const prm = TF_PARAMS[timeframe] || TF_PARAMS["1d"];
-
     const emaArr = calcEMA(bars, prm.ema);
     const auxArr = calcEMA(bars, prm.aux);
-    const sw = buildColorSwitchEMA(emaArr);
+
+    const emaSplit = buildColorSwitchEMA(emaArr);
 
     candleSeries.setData(bars);
-
-    // IMPORTANT:
-    // This is your "EMPTY_VALUE" effect: we hide the other color by null.
-    emaUp.setData(sw.up);
-    emaDown.setData(sw.dn);
-
+    emaUp.setData(emaSplit.up);
+    emaDown.setData(emaSplit.dn);
     auxSeries.setData(auxArr);
 
-    // Signals
+    // signals
     const sigs = detectSignals(bars, emaArr, auxArr, prm.cooldown);
     CURRENT_SIGS = sigs;
 
@@ -509,7 +431,7 @@ function buildColorSwitchEMA(emaArr) {
       sigs.map((s) => ({
         time: s.time,
         position: s.side === "B" ? "belowBar" : "aboveBar",
-        color: s.side === "B" ? "#FFD400" : "#FFFFFF",  // B yellow, S white
+        color: s.side === "B" ? "#FFD400" : "#FFFFFF", // B yellow, S white
         shape: s.side === "B" ? "arrowUp" : "arrowDown",
         text: s.side,
       }))
@@ -518,14 +440,11 @@ function buildColorSwitchEMA(emaArr) {
     applyToggles();
     repaintOverlay();
 
-    // Top texts if present
+    // header text
     const last = bars[bars.length - 1];
     if ($("symText")) $("symText").textContent = sym;
     if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
     if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${timeframe} · sigs=${sigs.length}）`;
-
-    // Fit after data load to avoid "empty chart"
-    chart.timeScale().fitContent();
   }
 
   /* -----------------------------
@@ -552,8 +471,8 @@ function buildColorSwitchEMA(emaArr) {
    * ----------------------------- */
   function init(opts) {
     opts = opts || {};
-    const containerId = opts.containerId || "chart";
-    const overlayId = opts.overlayId || "sigOverlay";
+    const containerId = opts.containerId || opts.chartElId || "chart";
+    const overlayId = opts.overlayId || opts.overlayElId || "sigOverlay";
 
     containerEl = $(containerId);
     overlayEl = $(overlayId);
@@ -573,25 +492,23 @@ function buildColorSwitchEMA(emaArr) {
       crosshair: { mode: 1 },
     });
 
-    // Candles: green=up, red=down (your requirement)
+    // Candles: up=green, down=red
     candleSeries = chart.addCandlestickSeries({
       upColor: "#2BE2A6",
       downColor: "#FF5A5A",
       wickUpColor: "#2BE2A6",
       wickDownColor: "#FF5A5A",
       borderVisible: false,
-      priceLineVisible: true,
-      lastValueVisible: true,
     });
 
-    // EMA color-switch (visually ONE line)
-    // IMPORTANT: turn off priceLine/lastValue to avoid "looks like extra lines"
+    // EMA split series (only 2 series -> visually 1 color-switch EMA)
     emaUp = chart.addLineSeries({
       color: "#2BE2A6",
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
     });
+
     emaDown = chart.addLineSeries({
       color: "#FF5A5A",
       lineWidth: 2,
@@ -599,7 +516,7 @@ function buildColorSwitchEMA(emaArr) {
       lastValueVisible: false,
     });
 
-    // AUX (single yellow line, also no priceLine/lastValue)
+    // AUX (only 1 line)
     auxSeries = chart.addLineSeries({
       color: "rgba(255,184,108,.85)",
       lineWidth: 2,
@@ -615,6 +532,7 @@ function buildColorSwitchEMA(emaArr) {
         width: Math.max(1, Math.floor(r.width)),
         height: Math.max(1, Math.floor(r.height)),
       });
+      chart.timeScale().fitContent();
       repaintOverlay();
     };
 
@@ -624,10 +542,9 @@ function buildColorSwitchEMA(emaArr) {
       window.addEventListener("resize", resize);
     }
     window.addEventListener("resize", resize);
-
     resize();
 
-    // Auto load by default
+    // default auto-load (safe)
     if (opts.autoLoad !== false) {
       load().catch((e) => log("[chart] initial load failed:", e.message || e));
     }
@@ -636,5 +553,10 @@ function buildColorSwitchEMA(emaArr) {
   /* -----------------------------
    * Public API
    * ----------------------------- */
-  window.ChartCore = { init, load, applyToggles, exportPNG };
+  window.ChartCore = {
+    init,
+    load,
+    applyToggles,
+    exportPNG,
+  };
 })();
