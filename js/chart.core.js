@@ -1,11 +1,15 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (PRODUCTION FROZEN) v2026.01.19d
+ * DarriusAI - chart.core.js (PRODUCTION FROZEN) v2026.01.19e
  *
- * Implemented (per request):
- *  - EMA = 9
- *  - AUX = 34 (confidential HMA-like)
- *  - Candles colored by AUX slope (UP=green / DOWN=red)
- *  - B/S labels: HTML Overlay (BIG + GLOW) so it's instantly visible
+ * Preset 2 (Institutional / Cleaner):
+ *  - EMA = 14
+ *  - AUX = 40 (confidential HMA-like)
+ *  - Confirm window = 3
+ *  - Candle colors by EMA trend (stable, institutional)
+ *      UP  if EMA slope >= 0
+ *      DOWN if EMA slope < 0
+ *  - B/S labels: HTML Overlay (BIG + GLOW) for instant visibility
+ *  - Optional arrow markers kept (no tiny text dependency)
  *
  * Guarantees:
  *  1) NO BLANK CHART from wrong endpoints: bars must be non-empty
@@ -56,25 +60,23 @@
   ];
 
   // -----------------------------
-  // Indicator params (PRODUCTION)
+  // Indicator params (Preset 2)
   // -----------------------------
-  const EMA_PERIOD = 9;
-
-  // ✅ per your request:
-  const AUX_PERIOD = 34;
+  const EMA_PERIOD = 14;
+  const AUX_PERIOD = 40;
   const AUX_METHOD = "SMA";
-  const CONFIRM_WINDOW = 2;
+  const CONFIRM_WINDOW = 3;
 
   // Candle colors (trend based)
   const UP_COLOR = "#2BE2A6";
   const DOWN_COLOR = "#FF5A5A";
 
   // Overlay label style (BIG + GLOW)
-  const OVERLAY_FONT_PX = 18;        // big
-  const OVERLAY_FONT_WEIGHT = 900;   // bold
-  const OVERLAY_GLOW_PX = 14;        // stronger glow
+  const OVERLAY_FONT_PX = 18;
+  const OVERLAY_FONT_WEIGHT = 900;
+  const OVERLAY_GLOW_PX = 14;
 
-  // How far from candle high/low for label placement
+  // Label offset so it doesn't sit on wick
   const LABEL_PAD_PX = 14;
 
   // -----------------------------
@@ -91,9 +93,9 @@
   let showAUX = true;
 
   // Overlay
-  let overlayLayer = null;        // div
-  let overlayEnabled = true;      // always on for this build
-  let markerEnabled = true;       // keep arrow markers too
+  let overlayLayer = null;
+  const overlayEnabled = true;
+  const markerEnabled = true;
 
   // Cached current data for overlay placement
   let _lastBars = [];
@@ -339,7 +341,7 @@
   // AUX per your algorithm (HMA-like)
   // -----------------------------
   function computeAuxByYourAlgo(closes, period, method) {
-    const n = Math.max(2, Math.floor(period || 34));
+    const n = Math.max(2, Math.floor(period || 40));
     const half = Math.max(1, Math.floor(n / 2));
     const p = Math.max(1, Math.round(Math.sqrt(n))); // sqrt(period)
 
@@ -354,12 +356,13 @@
     return maOnArray(vect, p, method || "SMA");
   }
 
-  function computeTrendFromAux(auxVals) {
-    const trend = new Array(auxVals.length).fill(0);
+  function computeTrendFromSeries(vals) {
+    // trend[i] = sign(vals[i] - vals[i-1]); hold last on NaN/equal
+    const trend = new Array(vals.length).fill(0);
     let last = 0;
-    for (let i = 1; i < auxVals.length; i++) {
-      const a0 = auxVals[i - 1];
-      const a1 = auxVals[i];
+    for (let i = 1; i < vals.length; i++) {
+      const a0 = vals[i - 1];
+      const a1 = vals[i];
       if (!Number.isFinite(a0) || !Number.isFinite(a1)) {
         trend[i] = last;
         continue;
@@ -372,9 +375,13 @@
     return trend;
   }
 
-  function colorizeBarsByTrend(bars, trend) {
+  // -----------------------------
+  // Candles colored by EMA trend (Preset 2)
+  // -----------------------------
+  function colorizeBarsByEmaTrend(bars, emaVals) {
+    const t = computeTrendFromSeries(emaVals);
     return bars.map((b, i) => {
-      const up = (trend[i] ?? 0) >= 0;
+      const up = (t[i] ?? 0) >= 0;
       const c = up ? UP_COLOR : DOWN_COLOR;
       return {
         time: b.time,
@@ -390,7 +397,7 @@
   }
 
   // -----------------------------
-  // B/S: CROSS + INFLECTION CONFIRM
+  // B/S: CROSS + INFLECTION CONFIRM (with confirm window = 3)
   // -----------------------------
   function computeSignalsCrossPlusInflection(bars, emaPts, auxPts, confirmWindow) {
     const n = bars.length;
@@ -398,9 +405,9 @@
 
     const emaV = emaPts.map((p) => p.value);
     const auxV = auxPts.map((p) => p.value);
-    const trend = computeTrendFromAux(auxV);
+    const auxTrend = computeTrendFromSeries(auxV);
 
-    const cw = Math.max(0, Math.floor(confirmWindow ?? 2));
+    const cw = Math.max(0, Math.floor(confirmWindow ?? 3));
     const sigs = [];
     const usedKey = new Set();
 
@@ -414,8 +421,8 @@
 
     function findConfirmIndex(startIdx, wantTrend) {
       for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
-        const prev = trend[j - 1];
-        const curr = trend[j];
+        const prev = auxTrend[j - 1];
+        const curr = auxTrend[j];
         if (wantTrend > 0) {
           if (prev <= 0 && curr > 0) return j;
         } else {
@@ -458,7 +465,7 @@
         position: s.side === "B" ? "belowBar" : "aboveBar",
         color: s.side === "B" ? "#FFD400" : "#FFFFFF",
         shape: s.side === "B" ? "arrowUp" : "arrowDown",
-        text: "", // keep marker clean; big text handled by overlay
+        text: "",
       }))
     );
   }
@@ -470,7 +477,6 @@
     if (!containerEl) return null;
     if (overlayLayer) return overlayLayer;
 
-    // Ensure container is position: relative for absolute overlay
     const cs = window.getComputedStyle(containerEl);
     if (cs.position === "static") {
       containerEl.style.position = "relative";
@@ -484,7 +490,7 @@
     overlayLayer.style.right = "0";
     overlayLayer.style.bottom = "0";
     overlayLayer.style.pointerEvents = "none";
-    overlayLayer.style.zIndex = "6"; // above canvas
+    overlayLayer.style.zIndex = "6";
     containerEl.appendChild(overlayLayer);
     return overlayLayer;
   }
@@ -500,8 +506,6 @@
   }
 
   function isTimeInVisibleRange(t) {
-    // Best-effort filter: only render labels that have a coordinate on screen.
-    // If timeToCoordinate returns null, it's off-screen.
     if (!chart) return true;
     const x = chart.timeScale().timeToCoordinate(t);
     return Number.isFinite(x);
@@ -517,10 +521,9 @@
     const layer = ensureOverlayLayer();
     if (!layer) return;
 
-    // Rebuild all labels each time (simple + robust). For performance, we only render on-screen ones.
     clearOverlay();
 
-    const maxRender = 250; // safety cap
+    const maxRender = 250;
     let rendered = 0;
 
     for (const s of _lastSigs) {
@@ -535,7 +538,6 @@
       const x = chart.timeScale().timeToCoordinate(t);
       if (!Number.isFinite(x)) continue;
 
-      // Place Buy near low; Sell near high
       const price = s.side === "B" ? b.low : b.high;
       const y = candleSeries.priceToCoordinate(price);
       if (!Number.isFinite(y)) continue;
@@ -554,22 +556,18 @@
       node.style.padding = "4px 8px";
       node.style.borderRadius = "10px";
 
-      // Strong glow & high contrast
       if (s.side === "B") {
-        // Buy: gold glow
         node.style.color = "#0B0F14";
         node.style.background = "rgba(255, 212, 0, 0.95)";
         node.style.boxShadow =
           "0 0 " + OVERLAY_GLOW_PX + "px rgba(255,212,0,0.85), 0 0 " + (OVERLAY_GLOW_PX + 10) + "px rgba(255,212,0,0.35)";
       } else {
-        // Sell: white text on red glow
         node.style.color = "#FFFFFF";
         node.style.background = "rgba(255, 90, 90, 0.85)";
         node.style.boxShadow =
           "0 0 " + OVERLAY_GLOW_PX + "px rgba(255,90,90,0.85), 0 0 " + (OVERLAY_GLOW_PX + 10) + "px rgba(255,90,90,0.35)";
       }
 
-      // Small pixel offset so it doesn't sit exactly on wick
       node.style.marginTop = (s.side === "B" ? LABEL_PAD_PX : -LABEL_PAD_PX) + "px";
 
       layer.appendChild(node);
@@ -621,17 +619,15 @@
     // EMA (yellow)
     const emaVals = ema(closes, EMA_PERIOD);
 
-    // AUX (white)
+    // AUX (white) - confidential
     const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
 
     const emaPts = buildLinePoints(bars, emaVals);
     const auxPts = buildLinePoints(bars, auxVals);
 
-    // Candles colored by AUX trend
-    const trend = computeTrendFromAux(auxVals);
-    const coloredBars = colorizeBarsByTrend(bars, trend);
+    // Candles colored by EMA trend (Preset 2)
+    const coloredBars = colorizeBarsByEmaTrend(bars, emaVals);
 
-    // Set data
     candleSeries.setData(coloredBars);
     if (emaSeries) emaSeries.setData(emaPts);
     if (auxSeries) auxSeries.setData(auxPts);
@@ -646,7 +642,6 @@
     _lastSigs = sigs;
     buildBarIndexMap(bars);
 
-    // Apply markers (optional) + overlay (big glow)
     applyMarkers(sigs);
     renderSignalOverlays();
 
@@ -729,7 +724,6 @@
       lastValueVisible: false,
     });
 
-    // Overlay layer init now (so it stays above canvas)
     ensureOverlayLayer();
 
     const resize = () => {
@@ -738,7 +732,6 @@
         width: Math.max(1, Math.floor(r.width)),
         height: Math.max(1, Math.floor(r.height)),
       });
-      // After resize, overlays need re-layout
       renderSignalOverlays();
     };
 
@@ -749,12 +742,10 @@
     }
     resize();
 
-    // Re-render overlays on zoom/scroll
     chart.timeScale().subscribeVisibleTimeRangeChange(() => {
       renderSignalOverlays();
     });
 
-    // Also re-render when crosshair moves (covers some interactions)
     chart.subscribeCrosshairMove(() => {
       renderSignalOverlays();
     });
