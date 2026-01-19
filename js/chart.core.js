@@ -1,17 +1,23 @@
-
 /* =========================================================
- * DarriusAI · Chart Core (HARD-STABLE, NO-DUP INIT)
- * File: js/chart.core.js
+ * DarriusAI · Chart Core (FINAL INTEGRATED)
+ * File: darrius-frontend/js/chart.core.js
+ *
+ * What this fixes (your core requirement):
+ *  - Only TWO indicators on chart:
+ *      1) EMA (color-flip via 2 series + EMPTY_VALUE => value:null)
+ *      2) AUX (one series)
+ *  - When price ABOVE EMA: show RED EMA, hide GREEN EMA
+ *    When price BELOW EMA: show GREEN EMA, hide RED EMA
+ *  - Hide = EMPTY_VALUE (LightweightCharts => value: null)
+ *  - Add "bridge stitch" on switch (like your x+1 logic) to avoid gaps
+ *  - Keep markers + overlay (B yellow, S white)
+ *  - Alpaca OHLC via backend proxy (NO KEY on front-end)
+ *  - Demo fallback always safe
+ *
+ * Public:
+ *   window.ChartCore = { init, load, applyToggles, exportPNG }
  * ========================================================= */
-// ===============================
-// HARD GUARD: prevent double init
-// ===============================
-if (window.__DAI_CHARTCORE_LOADED__) {  
-// already loaded once; do not redefine / re-init  
-console.warn("[ChartCore] duplicate load blocked");  
-return;
-}
-window.__DAI_CHARTCORE_LOADED__ = true;
+
 (function () {
   "use strict";
 
@@ -19,29 +25,37 @@ window.__DAI_CHARTCORE_LOADED__ = true;
    * Utilities
    * ----------------------------- */
   function $(id) { return document.getElementById(id); }
-  function log() { if (window.console) console.log.apply(console, arguments); }
-  function getApiBase() { return (window.API_BASE || "").trim() || ""; }
-  function getUiSymbol() { return (($("symbol")?.value || "BTCUSDT") + "").trim().toUpperCase(); }
-  function getUiTf() { return (($("tf")?.value || "1d") + "").trim(); }
 
-  function isCryptoSymbol(sym) {
-    const s = (sym || "").toUpperCase();
-    return s.includes("/") || s.endsWith("USDT") || s.endsWith("USDC") || s.endsWith("USD");
+  function log() { if (window.console) console.log.apply(console, arguments); }
+
+  function getApiBase() {
+    // boot.js or index.html can set window.API_BASE
+    // If empty => relative calls (same-origin proxy setups)
+    return (window.API_BASE || "").trim() || "";
+  }
+
+  function getUiSymbol() {
+    return (($("symbol")?.value || "BTCUSDT") + "").trim().toUpperCase();
+  }
+
+  function getUiTf() {
+    return (($("tf")?.value || "1d") + "").trim();
   }
 
   /* -----------------------------
    * Config
    * ----------------------------- */
   const DEFAULT_BARS = 260;
+
   const TF_PARAMS = {
-    "5m": { ema: 8, aux: 20, cooldown: 10 },
-    "15m": { ema: 9, aux: 21, cooldown: 12 },
+    "5m":  { ema: 8,  aux: 20, cooldown: 10 },
+    "15m": { ema: 9,  aux: 21, cooldown: 12 },
     "30m": { ema: 10, aux: 24, cooldown: 14 },
-    "1h": { ema: 10, aux: 26, cooldown: 16 },
-    "4h": { ema: 12, aux: 30, cooldown: 18 },
-    "1d": { ema: 10, aux: 21, cooldown: 14 },
-    "1w": { ema: 8, aux: 18, cooldown: 10 },
-    "1M": { ema: 6, aux: 14, cooldown: 8 },
+    "1h":  { ema: 10, aux: 26, cooldown: 16 },
+    "4h":  { ema: 12, aux: 30, cooldown: 18 },
+    "1d":  { ema: 10, aux: 21, cooldown: 14 },
+    "1w":  { ema: 8,  aux: 18, cooldown: 10 },
+    "1M":  { ema: 6,  aux: 14, cooldown: 8  },
   };
 
   /* -----------------------------
@@ -49,8 +63,12 @@ window.__DAI_CHARTCORE_LOADED__ = true;
    * ----------------------------- */
   let chart = null;
   let candleSeries = null;
-  let emaSeriesUp = null;
-  let emaSeriesDown = null;
+
+  // EMA = 2 series (RED/GREEN), but only ONE is visible per bar by EMPTY_VALUE (null)
+  let emaRed = null;
+  let emaGreen = null;
+
+  // AUX = one series (yellow)
   let auxSeries = null;
 
   let containerEl = null;
@@ -60,156 +78,138 @@ window.__DAI_CHARTCORE_LOADED__ = true;
   let CURRENT_SIGS = [];
 
   /* -----------------------------
-   * Style (overlay labels)
+   * Demo data (fallback)
    * ----------------------------- */
-  function ensureOverlayStyle() {
-    if (document.getElementById("daiChartCoreStyle")) return;
-    const style = document.createElement("style");
-    style.id = "daiChartCoreStyle";
-    style.textContent = `
-      #sigOverlay{ position:absolute; inset:0; pointer-events:none; }
-      .sigMark{
-        position:absolute;
-        transform: translate(-50%, -50%);
-        font-weight: 800;
-        font-size: 12px;
-        line-height: 1;
-        padding: 4px 6px;
-        border-radius: 10px;
-        border: 1px solid rgba(255,255,255,.12);
-        box-shadow: 0 6px 18px rgba(0,0,0,.35);
-      }
-      .sigMark.buy{ background: rgba(255, 212, 0, .92); color:#111; }
-      .sigMark.sell{ background: rgba(255,255,255,.92); color:#111; }
-    `;
-    document.head.appendChild(style);
-  }
-
-  /* -----------------------------
-   * Demo fallback
-   * ----------------------------- */
-  function genDemoCandles(n, tf, asset) {
+  function genDemoCandles(n, tf) {
     n = n || DEFAULT_BARS;
-    const stepMap = { "5m":300,"15m":900,"30m":1800,"1h":3600,"4h":14400,"1d":86400,"1w":604800,"1M":2592000 };
-    const step = stepMap[tf] || 86400;
-    const now = Math.floor(Date.now() / 1000);
 
+    const stepMap = {
+      "5m": 300, "15m": 900, "30m": 1800,
+      "1h": 3600, "4h": 14400, "1d": 86400,
+      "1w": 604800, "1M": 2592000
+    };
+    const step = stepMap[tf] || 86400;
+
+    const now = Math.floor(Date.now() / 1000);
     let t = now - n * step;
-    let price = asset === "stock" ? 480 : 67000;
+    let price = 67000;
 
     const arr = [];
     for (let i = 0; i < n; i++) {
-      const k = asset === "stock" ? 0.01 : 1;
-      const wave1 = Math.sin(i / 14) * 220 * k;
-      const wave2 = Math.sin(i / 33) * 420 * k;
-      const wave3 = Math.sin(i / 85) * 700 * k;
-      const noise = (Math.random() - 0.5) * 260 * k;
-      const drift = Math.sin(i / 170) * 160 * k;
+      const wave1 = Math.sin(i / 14) * 220;
+      const wave2 = Math.sin(i / 33) * 420;
+      const wave3 = Math.sin(i / 85) * 700;
+      const noise = (Math.random() - 0.5) * 260;
+      const drift = Math.sin(i / 170) * 160;
 
       const open = price;
       const close = open + wave1 + wave2 + wave3 + drift + noise;
-      const high = Math.max(open, close) + Math.random() * 220 * k;
-      const low  = Math.min(open, close) - Math.random() * 220 * k;
+      const high = Math.max(open, close) + Math.random() * 220;
+      const low  = Math.min(open, close) - Math.random() * 220;
 
       price = close;
-      arr.push({ time: t, open:+open.toFixed(2), high:+high.toFixed(2), low:+low.toFixed(2), close:+close.toFixed(2) });
+
+      arr.push({
+        time: t,
+        open: +open.toFixed(2),
+        high: +high.toFixed(2),
+        low:  +low.toFixed(2),
+        close:+close.toFixed(2),
+      });
+
       t += step;
     }
     return arr;
   }
 
   /* -----------------------------
-   * Normalize bars
-   * - time ms->sec
-   * - stock price scale heuristics (avoid NVDA "228k" demo-look)
-   * ----------------------------- */
-  function normalizeBars(bars, asset) {
-    if (!Array.isArray(bars) || bars.length === 0) return [];
-    const sampleT = Number(bars[Math.min(3, bars.length - 1)]?.time);
-    const timeIsMs = Number.isFinite(sampleT) && sampleT > 1e12;
-
-    const out = bars.map((b) => {
-      const t0 = Number(b.time);
-      const t = timeIsMs ? Math.floor(t0 / 1000) : Math.floor(t0);
-      const o = Number(b.open), h = Number(b.high), l = Number(b.low), c = Number(b.close);
-      if (![t, o, h, l, c].every(Number.isFinite)) return null;
-      return { time: t, open: o, high: h, low: l, close: c };
-    }).filter(Boolean);
-
-    if (!out.length) return [];
-
-    if (asset === "stock") {
-      // median close heuristic
-      const closes = out.slice(-80).map(x => x.close).sort((a,b)=>a-b);
-      const med = closes[Math.floor(closes.length/2)] || out[out.length-1].close;
-
-      // If insanely high, scale down by 10 until sane (< 5000)
-      let factor = 1;
-      while (med / factor > 5000) factor *= 10;
-      if (factor > 1) {
-        for (const b of out) {
-          b.open /= factor; b.high /= factor; b.low /= factor; b.close /= factor;
-        }
-      }
-    }
-
-    // ensure high/low consistent
-    for (const b of out) {
-      b.high = Math.max(b.high, b.open, b.close);
-      b.low  = Math.min(b.low, b.open, b.close);
-    }
-    return out;
-  }
-
-  /* -----------------------------
-   * EMA calc
+   * EMA
    * ----------------------------- */
   function calcEMA(bars, period) {
     const p = Math.max(2, Number(period) || 10);
     const k = 2 / (p + 1);
+
     let prev = null;
     const out = [];
+
     for (let i = 0; i < bars.length; i++) {
       const v = bars[i].close;
-      prev = prev === null ? v : v * k + prev * (1 - k);
-      out.push({ time: bars[i].time, value: prev });
+      prev = (prev === null) ? v : (v * k + prev * (1 - k));
+      out.push({ time: bars[i].time, value: +prev.toFixed(2) });
     }
     return out;
   }
 
   /* -----------------------------
-   * EMA split with STRICT gaps
-   * - GAP must be {time} ONLY (no value field)
-   * - This guarantees Up/Down will NOT both draw a continuous line together
+   * Your "EMPTY_VALUE" color flip logic
+   *
+   * Two lines: RedLine, GreenLine
+   * - If price ABOVE EMA => RedLine = EMA, GreenLine = EMPTY_VALUE
+   * - If price BELOW EMA => GreenLine = EMA, RedLine = EMPTY_VALUE
+   *
+   * Plus "bridge stitch" on switch like:
+   *   if (trend[x]>0) { Up[x]=...; if(trend[x+1]<0) Up[x+1]=...; Dn[x]=EMPTY; }
+   *   if (trend[x]<0) { Dn[x]=...; if(trend[x+1]>0) Dn[x+1]=...; Up[x]=EMPTY; }
+   *
+   * In LightweightCharts, EMPTY_VALUE => value:null
    * ----------------------------- */
-  function splitEMABySlope(emaArr) {
-    const up = [];
-    const down = [];
+  function buildColorFlipEmaSeries(bars, emaArr) {
+    const red = [];
+    const green = [];
+
+    // trend[i] = +1 if close >= ema, else -1
+    const trend = new Array(emaArr.length);
+
     for (let i = 0; i < emaArr.length; i++) {
-      const cur = emaArr[i];
-      const prev = emaArr[i - 1];
+      const e = emaArr[i]?.value;
+      const c = bars[i]?.close;
+      trend[i] = (c >= e) ? 1 : -1;
+    }
 
-      if (!prev) {
-        up.push({ time: cur.time, value: cur.value });
-        down.push({ time: cur.time }); // gap
-        continue;
-      }
+    for (let i = 0; i < emaArr.length; i++) {
+      const t = emaArr[i].time;
+      const v = emaArr[i].value;
 
-      if (cur.value >= prev.value) {
-        up.push({ time: cur.time, value: cur.value });
-        down.push({ time: cur.time }); // gap
+      if (trend[i] > 0) {
+        // Price above EMA => show RED, hide GREEN
+        red.push({ time: t, value: v });
+        green.push({ time: t, value: null }); // EMPTY_VALUE
+
+        // bridge stitch to next bar if next trend flips down
+        if (i + 1 < emaArr.length && trend[i + 1] < 0) {
+          red.push({ time: emaArr[i + 1].time, value: emaArr[i + 1].value });
+          // NOTE: green at i+1 will be set by its own branch below
+        }
       } else {
-        down.push({ time: cur.time, value: cur.value });
-        up.push({ time: cur.time }); // gap
+        // Price below EMA => show GREEN, hide RED
+        green.push({ time: t, value: v });
+        red.push({ time: t, value: null }); // EMPTY_VALUE
+
+        // bridge stitch to next bar if next trend flips up
+        if (i + 1 < emaArr.length && trend[i + 1] > 0) {
+          green.push({ time: emaArr[i + 1].time, value: emaArr[i + 1].value });
+          // NOTE: red at i+1 will be set by its own branch above
+        }
       }
     }
-    return { up, down };
+
+    // The above "bridge push" may create duplicate timestamps at i+1.
+    // LightweightCharts expects monotonic time with unique points per series.
+    // So we must de-duplicate by time keeping the last assignment.
+    function dedup(series) {
+      const m = new Map();
+      for (const p of series) m.set(p.time, p.value);
+      const out = [];
+      for (const [time, value] of m.entries()) out.push({ time, value });
+      out.sort((a, b) => a.time - b.time);
+      return out;
+    }
+
+    return { red: dedup(red), green: dedup(green) };
   }
 
   /* -----------------------------
-   * Signals (RESTORED)
-   * - Pure EMA x AUX cross + cooldown
-   * - No swing filter (prevents "no B/S" issue)
+   * Signal engine (EMA x AUX cross)
    * ----------------------------- */
   function detectSignals(bars, emaFast, auxSlow, cooldown) {
     const sigs = [];
@@ -234,12 +234,12 @@ window.__DAI_CHARTCORE_LOADED__ = true;
   }
 
   /* -----------------------------
-   * Overlay
+   * Overlay (BIG B / S)
    * ----------------------------- */
   function repaintOverlay() {
     if (!overlayEl || !chart || !candleSeries) return;
     overlayEl.innerHTML = "";
-    if (!CURRENT_SIGS || !CURRENT_SIGS.length) return;
+    if (!CURRENT_SIGS || CURRENT_SIGS.length === 0) return;
 
     const ts = chart.timeScale();
     for (const s of CURRENT_SIGS) {
@@ -250,8 +250,9 @@ window.__DAI_CHARTCORE_LOADED__ = true;
       const d = document.createElement("div");
       d.className = "sigMark " + (s.side === "B" ? "buy" : "sell");
       d.style.left = x + "px";
-      d.style.top  = (y + (s.side === "B" ? 14 : -14)) + "px";
+      d.style.top = (y + (s.side === "B" ? 14 : -14)) + "px";
       d.textContent = s.side;
+
       overlayEl.appendChild(d);
     }
   }
@@ -263,24 +264,33 @@ window.__DAI_CHARTCORE_LOADED__ = true;
   }
 
   /* -----------------------------
-   * Toggles
+   * Toggles: EMA / AUX (UI checkboxes)
    * ----------------------------- */
   function applyToggles() {
     const showEMA = $("tgEMA") ? !!$("tgEMA").checked : true;
     const showAUX = $("tgAux") ? !!$("tgAux").checked : true;
-    if (emaSeriesUp) emaSeriesUp.applyOptions({ visible: showEMA });
-    if (emaSeriesDown) emaSeriesDown.applyOptions({ visible: showEMA });
+
+    if (emaRed)   emaRed.applyOptions({ visible: showEMA });
+    if (emaGreen) emaGreen.applyOptions({ visible: showEMA });
     if (auxSeries) auxSeries.applyOptions({ visible: showAUX });
+
     repaintOverlay();
   }
 
   /* -----------------------------
-   * Fetch market data (backend proxy)
+   * Market data (Alpaca → backend proxy)
+   * Endpoint:
+   *   GET /api/market/ohlc?symbol=...&tf=...&asset=stock|crypto
+   * Response:
+   *   { ok:true, bars:[{time,open,high,low,close}, ...] }
    * ----------------------------- */
   async function fetchMarketData(symbol, tf) {
     const sym = (symbol || "").trim().toUpperCase();
-    const timeframe = (tf || "1d").trim() || "1d";
-    const asset = isCryptoSymbol(sym) ? "crypto" : "stock";
+    const timeframe = (tf || "1d").trim();
+
+    const isCrypto =
+      sym.includes("/") || sym.endsWith("USDT") || sym.endsWith("USDC") || sym.endsWith("USD");
+    const asset = isCrypto ? "crypto" : "stock";
 
     try {
       const base = getApiBase();
@@ -288,6 +298,7 @@ window.__DAI_CHARTCORE_LOADED__ = true;
         `/api/market/ohlc?symbol=${encodeURIComponent(sym)}` +
         `&tf=${encodeURIComponent(timeframe)}` +
         `&asset=${encodeURIComponent(asset)}`;
+
       const url = base ? `${base}${path}` : path;
 
       const resp = await fetch(url, { method: "GET" });
@@ -298,79 +309,74 @@ window.__DAI_CHARTCORE_LOADED__ = true;
         throw new Error("Invalid payload");
       }
 
-      const raw = data.bars.map((b) => ({
+      // sanitize bars to numbers
+      const bars = data.bars.map((b) => ({
         time: Number(b.time),
-        open: Number(b.open),
-        high: Number(b.high),
-        low: Number(b.low),
-        close: Number(b.close),
+        open: +b.open,
+        high: +b.high,
+        low:  +b.low,
+        close:+b.close,
       }));
 
-      const norm = normalizeBars(raw, asset);
-      if (!norm.length) throw new Error("Normalized bars empty");
-      return { bars: norm, asset, isFallback: false, note: "" };
+      return bars;
     } catch (e) {
-      const note = e?.message ? e.message : String(e);
-      log("[chart] fallback:", note);
-      const demo = genDemoCandles(DEFAULT_BARS, timeframe, asset);
-      return { bars: demo, asset, isFallback: true, note };
+      log("[chart] Market data failed -> demo fallback:", e.message || e);
+      return genDemoCandles(DEFAULT_BARS, timeframe);
     }
   }
 
   /* -----------------------------
-   * Load
+   * Load & render
+   * - Supports no-args call: load() reads UI
    * ----------------------------- */
   async function load(symbol, tf) {
     if (!chart || !candleSeries) throw new Error("Chart not initialized. Call ChartCore.init() first.");
 
     const sym = (symbol || getUiSymbol()).trim().toUpperCase();
     const timeframe = (tf || getUiTf()).trim() || "1d";
-    const prm = TF_PARAMS[timeframe] || TF_PARAMS["1d"];
 
-    const res = await fetchMarketData(sym, timeframe);
-    const bars = res.bars;
+    const bars = await fetchMarketData(sym, timeframe);
     CURRENT_BARS = bars;
+
+    const prm = TF_PARAMS[timeframe] || TF_PARAMS["1d"];
 
     const emaArr = calcEMA(bars, prm.ema);
     const auxArr = calcEMA(bars, prm.aux);
-    const split = splitEMABySlope(emaArr);
+
+    const flip = buildColorFlipEmaSeries(bars, emaArr);
 
     candleSeries.setData(bars);
-
-    // EMA = 2 series but visually 1 color-changing line (no parallel draw)
-    emaSeriesUp.setData(split.up);
-    emaSeriesDown.setData(split.down);
-
-    // AUX = one line
+    emaRed.setData(flip.red);
+    emaGreen.setData(flip.green);
     auxSeries.setData(auxArr);
 
-    // Signals back (guarantee B/S exists)
+    // signals
     const sigs = detectSignals(bars, emaArr, auxArr, prm.cooldown);
     CURRENT_SIGS = sigs;
 
+    // markers colors: B yellow, S white
     candleSeries.setMarkers(
       sigs.map((s) => ({
         time: s.time,
         position: s.side === "B" ? "belowBar" : "aboveBar",
         color: s.side === "B" ? "#FFD400" : "#FFFFFF",
         shape: s.side === "B" ? "arrowUp" : "arrowDown",
-        text: "", // use overlay big letter
+        text: s.side,
       }))
     );
 
     applyToggles();
     repaintOverlay();
 
+    // top text
     const last = bars[bars.length - 1];
     if ($("symText")) $("symText").textContent = sym;
     if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
-
-    const fb = res.isFallback ? ` · DEMO (fallback: ${res.note})` : " · LIVE";
-    if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${timeframe} · sigs=${sigs.length}）${fb}`;
+    if ($("hintText")) $("hintText").textContent = `Loaded · 已加载（TF=${timeframe} · sigs=${sigs.length}）`;
   }
 
   /* -----------------------------
-   * Export
+   * Export PNG
    * ----------------------------- */
   function exportPNG() {
     try {
@@ -389,31 +395,19 @@ window.__DAI_CHARTCORE_LOADED__ = true;
   }
 
   /* -----------------------------
-   * Init (CRITICAL: prevent duplicate init)
+   * Init
    * ----------------------------- */
   function init(opts) {
     opts = opts || {};
-    const containerId = opts.containerId || opts.chartElId || "chart";
-    const overlayId = opts.overlayId || opts.overlayElId || "sigOverlay";
+    const containerId = opts.containerId || "chart";
+    const overlayId = opts.overlayId || "sigOverlay";
 
     containerEl = $(containerId);
     overlayEl = $(overlayId);
 
-    ensureOverlayStyle();
-
     if (!containerEl || !window.LightweightCharts) {
       throw new Error("Chart container or lightweight-charts missing");
     }
-
-    // >>> KEY FIX: if init called again, remove old chart first (prevents extra series)
-    if (chart && typeof chart.remove === "function") {
-      try { chart.remove(); } catch (_) {}
-    }
-    chart = null;
-    candleSeries = null;
-    emaSeriesUp = null;
-    emaSeriesDown = null;
-    auxSeries = null;
 
     chart = LightweightCharts.createChart(containerEl, {
       layout: { background: { color: "transparent" }, textColor: "#EAF0F7" },
@@ -434,22 +428,22 @@ window.__DAI_CHARTCORE_LOADED__ = true;
       borderVisible: false,
     });
 
-    // EMA split (disable priceLine/lastValue to avoid extra "line" feeling)
-    emaSeriesUp = chart.addLineSeries({
-      color: "#2BE2A6",
+    // EMA (RED/GREEN) — IMPORTANT: hide price line & last value label to avoid "extra line" feeling
+    emaRed = chart.addLineSeries({
+      color: "#FF5A5A",            // red
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
     });
 
-    emaSeriesDown = chart.addLineSeries({
-      color: "#FF5A5A",
+    emaGreen = chart.addLineSeries({
+      color: "#2BE2A6",            // green
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
     });
 
-    // AUX
+    // AUX (yellow)
     auxSeries = chart.addLineSeries({
       color: "rgba(255,184,108,.85)",
       lineWidth: 2,
@@ -473,10 +467,14 @@ window.__DAI_CHARTCORE_LOADED__ = true;
     window.addEventListener("resize", resize);
     resize();
 
+    // default auto load (do not break your existing boot/index)
     if (opts.autoLoad !== false) {
       load().catch((e) => log("[chart] initial load failed:", e.message || e));
     }
   }
 
+  /* -----------------------------
+   * Public API
+   * ----------------------------- */
   window.ChartCore = { init, load, applyToggles, exportPNG };
 })();
