@@ -1,6 +1,15 @@
 /* =========================================================
- * DarriusAI · Chart Core (FIXED + MORE REALISTIC)
+ * DarriusAI · Chart Core (FINAL COVER VERSION)
  * File: js/chart.core.js
+ * Role:
+ *  - Candlestick chart
+ *  - EMA (ONE line visually, color change via split series)
+ *  - AUX line
+ *  - Signal engine (EMA x AUX cross)
+ *  - Markers + big overlay
+ *  - Alpaca OHLC via backend proxy (NO KEY on front-end)
+ *  - Demo fallback (always safe)
+ *
  * Public:
  *  window.ChartCore = { init, load, applyToggles, exportPNG }
  * ========================================================= */
@@ -8,34 +17,52 @@
 (function () {
   "use strict";
 
-  function $(id) { return document.getElementById(id); }
-  function log() { if (window.console) console.log.apply(console, arguments); }
+  /* -----------------------------
+   * Utilities
+   * ----------------------------- */
+  function $(id) {
+    return document.getElementById(id);
+  }
+
+  function log() {
+    if (window.console) console.log.apply(console, arguments);
+  }
 
   function getApiBase() {
     return (window.API_BASE || "").trim() || "";
   }
+
   function getUiSymbol() {
     return (($("symbol")?.value || "BTCUSDT") + "").trim().toUpperCase();
   }
+
   function getUiTf() {
-    return (($("tf")?.value || "1d") + "").trim() || "1d";
+    return (($("tf")?.value || "1d") + "").trim();
   }
 
+  /* -----------------------------
+   * Config
+   * ----------------------------- */
   const DEFAULT_BARS = 260;
 
   const TF_PARAMS = {
-    "5m": { ema: 8,  aux: 20, cooldown: 10, pivot: 3 },
-    "15m":{ ema: 9,  aux: 21, cooldown: 12, pivot: 3 },
-    "30m":{ ema: 10, aux: 24, cooldown: 14, pivot: 3 },
-    "1h": { ema: 10, aux: 26, cooldown: 16, pivot: 4 },
-    "4h": { ema: 12, aux: 30, cooldown: 18, pivot: 4 },
-    "1d": { ema: 10, aux: 21, cooldown: 14, pivot: 5 },
-    "1w": { ema: 8,  aux: 18, cooldown: 10, pivot: 5 },
-    "1M": { ema: 6,  aux: 14, cooldown: 8,  pivot: 5 },
+    "5m": { ema: 8, aux: 20, cooldown: 10 },
+    "15m": { ema: 9, aux: 21, cooldown: 12 },
+    "30m": { ema: 10, aux: 24, cooldown: 14 },
+    "1h": { ema: 10, aux: 26, cooldown: 16 },
+    "4h": { ema: 12, aux: 30, cooldown: 18 },
+    "1d": { ema: 10, aux: 21, cooldown: 14 },
+    "1w": { ema: 8, aux: 18, cooldown: 10 },
+    "1M": { ema: 6, aux: 14, cooldown: 8 },
   };
 
+  /* -----------------------------
+   * State
+   * ----------------------------- */
   let chart = null;
   let candleSeries = null;
+
+  // IMPORTANT: your current code uses emaUp / emaDown (not emaSeriesUp/Down)
   let emaUp = null;
   let emaDown = null;
   let auxSeries = null;
@@ -47,18 +74,25 @@
   let overlayEl = null;
 
   /* -----------------------------
-   * Demo fallback
+   * Demo data (fallback)
    * ----------------------------- */
   function genDemoCandles(n, tf) {
     n = n || DEFAULT_BARS;
-    const stepMap = {
-      "5m": 300, "15m": 900, "30m": 1800,
-      "1h": 3600, "4h": 14400, "1d": 86400,
-      "1w": 604800, "1M": 2592000,
-    };
-    const step = stepMap[tf] || 86400;
 
+    const stepMap = {
+      "5m": 300,
+      "15m": 900,
+      "30m": 1800,
+      "1h": 3600,
+      "4h": 14400,
+      "1d": 86400,
+      "1w": 604800,
+      "1M": 2592000,
+    };
+
+    const step = stepMap[tf] || 86400;
     const now = Math.floor(Date.now() / 1000);
+
     let t = now - n * step;
     let price = 67000;
 
@@ -73,7 +107,8 @@
       const open = price;
       const close = open + wave1 + wave2 + wave3 + drift + noise;
       const high = Math.max(open, close) + Math.random() * 220;
-      const low  = Math.min(open, close) - Math.random() * 220;
+      const low = Math.min(open, close) - Math.random() * 220;
+
       price = close;
 
       arr.push({
@@ -83,61 +118,10 @@
         low: +low.toFixed(2),
         close: +close.toFixed(2),
       });
+
       t += step;
     }
     return arr;
-  }
-
-  /* -----------------------------
-   * Data sanitization (CRITICAL)
-   * - fix ms timestamps
-   * - drop invalid OHLC (0/NaN/high<low/etc.)
-   * ----------------------------- */
-  function normalizeBars(rawBars) {
-    if (!Array.isArray(rawBars)) return [];
-
-    const out = [];
-    for (const b of rawBars) {
-      if (!b) continue;
-
-      let t = Number(b.time);
-      let o = Number(b.open);
-      let h = Number(b.high);
-      let l = Number(b.low);
-      let c = Number(b.close);
-
-      if (!Number.isFinite(t) || !Number.isFinite(o) || !Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c)) continue;
-
-      // ms -> s auto-fix
-      if (t > 1e12) t = Math.floor(t / 1000);
-
-      // reject unrealistic time (before 2000 or too far future)
-      if (t < 946684800 || t > 4102444800) continue;
-
-      // reject zeros / negatives for stock/crypto
-      if (o <= 0 || h <= 0 || l <= 0 || c <= 0) continue;
-
-      // enforce OHLC integrity
-      const hi = Math.max(o, h, l, c);
-      const lo = Math.min(o, h, l, c);
-      if (hi < lo) continue;
-
-      h = hi;
-      l = lo;
-
-      out.push({ time: t, open: o, high: h, low: l, close: c });
-    }
-
-    // sort & de-dup by time
-    out.sort((a, b) => a.time - b.time);
-    const dedup = [];
-    let lastT = -1;
-    for (const x of out) {
-      if (x.time === lastT) continue;
-      lastT = x.time;
-      dedup.push(x);
-    }
-    return dedup;
   }
 
   /* -----------------------------
@@ -146,185 +130,105 @@
   function calcEMA(bars, period) {
     const p = Math.max(2, Number(period) || 10);
     const k = 2 / (p + 1);
+
     let prev = null;
     const out = [];
-    for (const b of bars) {
-      const v = b.close;
-      prev = (prev === null) ? v : (v * k + prev * (1 - k));
-      out.push({ time: b.time, value: +prev.toFixed(6) });
+    for (let i = 0; i < bars.length; i++) {
+      const v = Number(bars[i].close);
+      prev = prev === null ? v : v * k + prev * (1 - k);
+      out.push({ time: bars[i].time, value: +prev.toFixed(2) });
     }
     return out;
   }
 
   /* -----------------------------
-   * EMA color split (REAL gap using undefined)
+   * EMA split with REAL gaps (NULL)
+   * - This is key to "ONE EMA visually changing color"
    * ----------------------------- */
-function splitEMABySlope(emaArr) {
-  const up = [];
-  const down = [];
+  function splitEMABySlope(emaArr) {
+    const up = [];
+    const down = [];
 
-  for (let i = 0; i < emaArr.length; i++) {
-    const cur = emaArr[i];
-    const prev = emaArr[i - 1];
+    for (let i = 0; i < emaArr.length; i++) {
+      const cur = emaArr[i];
+      const prev = emaArr[i - 1];
 
-    if (!prev) {
-      // first point: show as up by default
-      up.push({ time: cur.time, value: cur.value });
-      down.push({ time: cur.time, value: null });
-      continue;
-    }
+      if (!prev) {
+        up.push({ time: cur.time, value: cur.value });
+        down.push({ time: cur.time, value: null });
+        continue;
+      }
 
-    if (cur.value >= prev.value) {
-      up.push({ time: cur.time, value: cur.value });
-      down.push({ time: cur.time, value: null });
-    } else {
-      down.push({ time: cur.time, value: cur.value });
-      up.push({ time: cur.time, value: null });
-    }
-  }
-
-  return { up, down };
-}
-
-
-  /* -----------------------------
-   * More realistic signals:
-   * 1) EMA x AUX cross -> pending
-   * 2) confirm on next bar by EMA slope direction
-   * 3) pivot fallback (optional) for obvious peaks/valleys
-   * ----------------------------- */
-  function detectCrossConfirmSignals(bars, emaFast, auxSlow, cooldownBars) {
-    const sigs = [];
-    let lastSigIdx = -1e9;
-    let pending = null; // {side:'B'|'S', idxCross:number}
-
-    for (let i = 2; i < bars.length; i++) {
-      const diffPrev = (emaFast[i - 1]?.value ?? bars[i - 1].close) - (auxSlow[i - 1]?.value ?? bars[i - 1].close);
-      const diffNow  = (emaFast[i]?.value ?? bars[i].close)     - (auxSlow[i]?.value ?? bars[i].close);
-
-      const crossUp = (diffPrev <= 0 && diffNow > 0);
-      const crossDn = (diffPrev >= 0 && diffNow < 0);
-
-      if (!pending) {
-        if (crossUp) pending = { side: "B", idxCross: i };
-        else if (crossDn) pending = { side: "S", idxCross: i };
+      if (cur.value >= prev.value) {
+        up.push({ time: cur.time, value: cur.value });
+        down.push({ time: cur.time, value: null });
       } else {
-        // confirm at idxCross + 1
-        if (i === pending.idxCross + 1) {
-          const eNow = emaFast[i]?.value ?? bars[i].close;
-          const ePrev = emaFast[i - 1]?.value ?? bars[i - 1].close;
-          const slope = eNow - ePrev;
-
-          const ok =
-            (pending.side === "B" && slope >= 0) ||
-            (pending.side === "S" && slope <= 0);
-
-          if (ok && (i - lastSigIdx >= cooldownBars)) {
-            sigs.push({
-              time: bars[i].time,
-              price: pending.side === "B" ? bars[i].low : bars[i].high,
-              side: pending.side,
-              src: "cross",
-            });
-            lastSigIdx = i;
-          }
-          pending = null;
-        }
-
-        // timeout
-        if (pending && (i - pending.idxCross) > 6) pending = null;
+        down.push({ time: cur.time, value: cur.value });
+        up.push({ time: cur.time, value: null });
       }
     }
-    return sigs;
-  }
 
-  function detectPivotSignals(bars, leftRight, cooldownBars) {
-    const sigs = [];
-    let last = -1e9;
-    const L = Math.max(2, Number(leftRight) || 4);
-
-    for (let i = L; i < bars.length - L; i++) {
-      if (i - last < cooldownBars) continue;
-
-      let isHigh = true;
-      let isLow = true;
-      const hi = bars[i].high;
-      const lo = bars[i].low;
-
-      for (let k = 1; k <= L; k++) {
-        if (bars[i - k].high >= hi || bars[i + k].high >= hi) isHigh = false;
-        if (bars[i - k].low  <= lo || bars[i + k].low  <= lo) isLow = false;
-        if (!isHigh && !isLow) break;
-      }
-
-      if (isHigh) {
-        sigs.push({ time: bars[i].time, price: bars[i].high, side: "S", src: "pivot" });
-        last = i;
-      } else if (isLow) {
-        sigs.push({ time: bars[i].time, price: bars[i].low, side: "B", src: "pivot" });
-        last = i;
-      }
-    }
-    return sigs;
-  }
-
-  function mergeSignals(primary, secondary, maxCount) {
-    const map = new Map();
-    for (const s of primary) map.set(`${s.side}_${s.time}`, s);
-    for (const s of secondary) {
-      const key = `${s.side}_${s.time}`;
-      if (!map.has(key)) map.set(key, s);
-    }
-    const arr = Array.from(map.values()).sort((a, b) => a.time - b.time);
-    return arr.slice(Math.max(0, arr.length - (maxCount || 30)));
+    return { up, down };
   }
 
   /* -----------------------------
-   * Overlay
+   * Signal engine (EMA x AUX cross)
+   * ----------------------------- */
+  function detectSignals(bars, emaFast, auxSlow, cooldown) {
+    const sigs = [];
+    let lastIdx = -1e9;
+
+    for (let i = 1; i < bars.length; i++) {
+      const prevDiff = emaFast[i - 1].value - auxSlow[i - 1].value;
+      const nowDiff = emaFast[i].value - auxSlow[i].value;
+
+      if (i - lastIdx < cooldown) continue;
+
+      if (prevDiff <= 0 && nowDiff > 0) {
+        sigs.push({ time: bars[i].time, price: bars[i].low, side: "B" });
+        lastIdx = i;
+      } else if (prevDiff >= 0 && nowDiff < 0) {
+        sigs.push({ time: bars[i].time, price: bars[i].high, side: "S" });
+        lastIdx = i;
+      }
+    }
+
+    return sigs.slice(-30);
+  }
+
+  /* -----------------------------
+   * Overlay (BIG B / S) — smaller font per your request
    * ----------------------------- */
   function repaintOverlay() {
-  if (!overlayEl || !chart || !candleSeries) return;
+    if (!overlayEl || !chart || !candleSeries) return;
 
-  overlayEl.innerHTML = "";
-  if (!CURRENT_SIGS || CURRENT_SIGS.length === 0) return;
+    overlayEl.innerHTML = "";
+    if (!CURRENT_SIGS || CURRENT_SIGS.length === 0) return;
 
-  const ts = chart.timeScale();
+    const ts = chart.timeScale();
 
-  for (const s of CURRENT_SIGS) {
-    const x = ts.timeToCoordinate(s.time);
-    const y = candleSeries.priceToCoordinate(s.price);
-    if (x == null || y == null) continue;
+    for (const s of CURRENT_SIGS) {
+      const x = ts.timeToCoordinate(s.time);
+      const y = candleSeries.priceToCoordinate(s.price);
+      if (x == null || y == null) continue;
 
-    const d = document.createElement("div");
-    d.className = "sigMark " + (s.side === "B" ? "buy" : "sell");
-    d.style.left = x + "px";
-    d.style.top = (y + (s.side === "B" ? 12 : -12)) + "px";
-    d.textContent = s.side;
+      const d = document.createElement("div");
+      d.className = "sigMark " + (s.side === "B" ? "buy" : "sell");
 
-    // smaller than before
-    d.style.width = "18px";
-    d.style.height = "18px";
-    d.style.lineHeight = "18px";
-    d.style.fontSize = "11px";     // 小一号
-    d.style.fontWeight = "700";
-    d.style.borderRadius = "10px";
-    d.style.textAlign = "center";
+      // small size (one notch down)
+      d.style.fontSize = "12px";
+      d.style.width = "22px";
+      d.style.height = "22px";
+      d.style.lineHeight = "22px";
+      d.style.borderRadius = "8px";
 
-    // FORCE colors: B yellow, S white
-    if (s.side === "B") {
-      d.style.background = "#FFD400";
-      d.style.color = "#111";
-      d.style.border = "1px solid rgba(255,212,0,.55)";
-    } else {
-      d.style.background = "#FFFFFF";
-      d.style.color = "#111";
-      d.style.border = "1px solid rgba(255,255,255,.55)";
+      d.style.left = x + "px";
+      d.style.top = (y + (s.side === "B" ? 14 : -14)) + "px";
+      d.textContent = s.side;
+
+      overlayEl.appendChild(d);
     }
-
-    overlayEl.appendChild(d);
   }
-}
-
 
   function bindOverlay() {
     if (!chart) return;
@@ -333,7 +237,7 @@ function splitEMABySlope(emaArr) {
   }
 
   /* -----------------------------
-   * Toggles
+   * Toggles: EMA / AUX (UI checkboxes)
    * ----------------------------- */
   function applyToggles() {
     const showEMA = $("tgEMA") ? !!$("tgEMA").checked : true;
@@ -347,17 +251,19 @@ function splitEMABySlope(emaArr) {
   }
 
   /* -----------------------------
-   * Market data via backend proxy
+   * Market data (Alpaca → backend proxy)
+   * GET /api/market/ohlc?symbol=...&tf=...&asset=stock|crypto
+   * { ok:true, bars:[{time,open,high,low,close}, ...] }
    * ----------------------------- */
   async function fetchMarketData(symbol, tf) {
     const sym = (symbol || "").trim().toUpperCase();
     const timeframe = (tf || "1d").trim();
 
-    // IMPORTANT: don't over-detect crypto; treat only obvious cases as crypto
     const isCrypto =
       sym.includes("/") ||
       sym.endsWith("USDT") ||
-      sym.endsWith("USDC");
+      sym.endsWith("USDC") ||
+      sym.endsWith("USD");
 
     const asset = isCrypto ? "crypto" : "stock";
 
@@ -374,14 +280,17 @@ function splitEMABySlope(emaArr) {
       if (!resp.ok) throw new Error("HTTP " + resp.status);
 
       const data = await resp.json();
-      if (!data || data.ok !== true || !Array.isArray(data.bars)) {
+      if (!data || data.ok !== true || !Array.isArray(data.bars) || data.bars.length === 0) {
         throw new Error("Invalid payload");
       }
 
-      const bars = normalizeBars(data.bars);
-      if (bars.length < 30) throw new Error("Too few valid bars");
-
-      return bars;
+      return data.bars.map((b) => ({
+        time: Number(b.time),
+        open: +b.open,
+        high: +b.high,
+        low: +b.low,
+        close: +b.close,
+      }));
     } catch (e) {
       log("[chart] Market data failed -> demo fallback:", e.message || e);
       return genDemoCandles(DEFAULT_BARS, timeframe);
@@ -392,7 +301,9 @@ function splitEMABySlope(emaArr) {
    * Load & render
    * ----------------------------- */
   async function load(symbol, tf) {
-    if (!chart || !candleSeries) throw new Error("Chart not initialized");
+    if (!chart || !candleSeries) {
+      throw new Error("Chart not initialized. Call ChartCore.init() first.");
+    }
 
     const sym = (symbol || getUiSymbol()).trim().toUpperCase();
     const timeframe = (tf || getUiTf()).trim() || "1d";
@@ -407,18 +318,19 @@ function splitEMABySlope(emaArr) {
     const split = splitEMABySlope(emaArr);
 
     candleSeries.setData(bars);
+
+    // EMA: two series forming ONE EMA visually
     emaUp.setData(split.up);
     emaDown.setData(split.down);
+
+    // AUX: one line
     auxSeries.setData(auxArr);
 
-    // signals: cross-confirm + pivot fallback
-    const crossSigs = detectCrossConfirmSignals(bars, emaArr, auxArr, prm.cooldown);
-    const pivotSigs = detectPivotSignals(bars, prm.pivot, prm.cooldown);
-
-    const sigs = mergeSignals(crossSigs, pivotSigs, 30);
+    // signals
+    const sigs = detectSignals(bars, emaArr, auxArr, prm.cooldown);
     CURRENT_SIGS = sigs;
 
-    // markers colors per your request: B yellow, S white
+    // markers colors: B yellow, S white
     candleSeries.setMarkers(
       sigs.map((s) => ({
         time: s.time,
@@ -462,6 +374,10 @@ function splitEMABySlope(emaArr) {
     opts = opts || {};
     const containerId = opts.containerId || "chart";
     const overlayId = opts.overlayId || "sigOverlay";
+
+    // prevent double-init (creates duplicate series => looks like extra lines)
+    if (chart) return;
+
     containerEl = $(containerId);
     overlayEl = $(overlayId);
 
@@ -488,27 +404,51 @@ function splitEMABySlope(emaArr) {
       borderVisible: false,
     });
 
-    // EMA split series (this is ONE EMA visually, with color change)
-    emaUp = chart.addLineSeries({ color: "#2BE2A6", lineWidth: 2 });
-    emaDown = chart.addLineSeries({ color: "#FF5A5A", lineWidth: 2 });
+    // EMA split series (ONE EMA visually)
+    // IMPORTANT: hide priceLine/lastValue to avoid "extra horizontal lines"
+    emaUp = chart.addLineSeries({
+      color: "#2BE2A6",
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+
+    emaDown = chart.addLineSeries({
+      color: "#FF5A5A",
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
 
     // AUX only one line
-    auxSeries = chart.addLineSeries({ color: "rgba(255,184,108,.85)", lineWidth: 2 });
+    auxSeries = chart.addLineSeries({
+      color: "rgba(255,184,108,.85)",
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
 
     bindOverlay();
 
     const resize = () => {
       const r = containerEl.getBoundingClientRect();
-      chart.applyOptions({ width: Math.max(1, Math.floor(r.width)), height: Math.max(1, Math.floor(r.height)) });
+      chart.applyOptions({
+        width: Math.max(1, Math.floor(r.width)),
+        height: Math.max(1, Math.floor(r.height)),
+      });
       chart.timeScale().fitContent();
       repaintOverlay();
     };
 
-    try { new ResizeObserver(resize).observe(containerEl); } catch (_) {}
+    try {
+      new ResizeObserver(resize).observe(containerEl);
+    } catch (_) {
+      // ignore
+    }
     window.addEventListener("resize", resize);
     resize();
 
-    // IMPORTANT: default auto load (do not break existing boot/index)
+    // default auto load
     if (opts.autoLoad !== false) {
       load().catch((e) => log("[chart] initial load failed:", e.message || e));
     }
