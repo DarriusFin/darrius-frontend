@@ -913,5 +913,34 @@
       setInterval(function(){ tryRefresh(); }, 1200);
     })();
   </script>
+  <script>
+(function () {
+  function findButtonByText(txt) {
+    const buttons = Array.from(document.querySelectorAll("button"));
+    return buttons.find(b => (b.textContent || "").trim().includes(txt));
+  }
+
+  const startBtn  = findButtonByText("Start")  || findButtonByText("开通");
+  const manageBtn = findButtonByText("Manage") || findButtonByText("管理");
+
+  if (!startBtn) console.error("[SUB] Start button not found");
+  if (!manageBtn) console.warn("[SUB] Manage button not found");
+
+  if (startBtn) {
+    startBtn.addEventListener("click", () => {
+      console.log("[SUB] Start clicked");
+      // TODO: 这里后面再接你的 checkout 请求
+    }, { capture: true });
+  }
+
+  if (manageBtn) {
+    manageBtn.addEventListener("click", () => {
+      console.log("[SUB] Manage clicked");
+      // TODO: 这里后面再接你的 portal 请求
+    }, { capture: true });
+  }
+})();
+</script>
+
 </body>
 </html>
