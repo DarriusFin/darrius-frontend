@@ -384,7 +384,17 @@ if (manageBtn) {
 
     // bind buttons
     $(IDS.subscribeBtn)?.addEventListener("click", subscribe);
-    $(IDS.manageBtn)?.addEventListener("click", openCustomerPortal);
+    // bind buttons (HARD BIND)
+const subBtn = $(IDS.subscribeBtn);
+if (subBtn) {
+  subBtn.onclick = subscribe;
+}
+
+const m = $(IDS.manageBtn);
+if (m) {
+  m.disabled = false;              // ⭐ attach 跑起来就别再锁
+  m.onclick = openCustomerPortal;  // ⭐ 用 onclick 覆盖，防止被其他脚本覆盖
+}
 
     // userId typing triggers status refresh (non-blocking)
     $(IDS.userId)?.addEventListener("input", scheduleRefreshStatus);
