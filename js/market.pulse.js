@@ -582,16 +582,23 @@
         el.style.letterSpacing = '0.5px';
 
         if (s.side === 'B') {
-          el.style.color = '#2BE2A6';
-          el.style.border = '1px solid rgba(43,226,166,.70)';
-          el.style.background = 'rgba(10, 30, 25, .35)';
-          el.style.boxShadow = '0 0 10px rgba(43,226,166,.35), 0 0 22px rgba(43,226,166,.22)';
-        } else {
-          el.style.color = '#FF5A5A';
-          el.style.border = '1px solid rgba(255,90,90,.70)';
-          el.style.background = 'rgba(40, 10, 10, .35)';
-          el.style.boxShadow = '0 0 10px rgba(255,90,90,.35), 0 0 22px rgba(255,90,90,.22)';
-        }
+  // BUY：亮绿色实心 + 白字
+  el.style.color = '#FFFFFF';
+  el.style.background = 'rgba(43,226,166,0.95)';        // 亮绿底
+  el.style.border = '1px solid rgba(255,255,255,0.65)'; // 白色描边
+  el.style.boxShadow =
+    '0 0 10px rgba(43,226,166,0.55), 0 0 26px rgba(43,226,166,0.35)';
+  el.style.textShadow = '0 1px 2px rgba(0,0,0,0.35)';
+} else {
+  // SELL：亮红色实心 + 白字
+  el.style.color = '#FFFFFF';
+  el.style.background = 'rgba(255,90,90,0.95)';         // 亮红底
+  el.style.border = '1px solid rgba(255,255,255,0.65)'; // 白色描边
+  el.style.boxShadow =
+    '0 0 10px rgba(255,90,90,0.55), 0 0 26px rgba(255,90,90,0.35)';
+  el.style.textShadow = '0 1px 2px rgba(0,0,0,0.35)';
+}
+
 
         layer.appendChild(el);
       }
