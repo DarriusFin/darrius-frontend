@@ -290,11 +290,22 @@
 
       setSubStatusText(`${status}${has ? " · Access ON" : " · Access OFF"}`);
 
-      const hasPortal = !!data?.customer_portal;
-      if (manageBtn) {
-        manageBtn.disabled = !hasPortal;
-        manageBtn.textContent = hasPortal ? "Manage · 管理" : "Manage · (pending)";
-      }
+     const portalFlag = data?.customer_portal; // may be boolean OR url OR object
+const portalUrl =
+  data?.portal_url ||
+  data?.customer_portal_url ||
+  (typeof portalFlag === "string" ? portalFlag : "") ||
+  portalFlag?.url ||
+  portalFlag?.portal_url ||
+  "";
+
+const hasPortal = (portalFlag === true) || (typeof portalUrl === "string" && portalUrl.startsWith("http"));
+
+if (manageBtn) {
+  manageBtn.disabled = !hasPortal;
+  manageBtn.textContent = hasPortal ? "Manage · 管理" : "Manage · (pending)";
+}
+
 
       if (isAdmin()) log(`✅ sub status: ${JSON.stringify(data).slice(0, 260)}`);
     } catch (e) {
