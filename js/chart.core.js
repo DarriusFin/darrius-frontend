@@ -417,6 +417,9 @@
   function applyMarkers(sigs) {
     safeRun("applyMarkers", () => {
       if (!candleSeries) return;
+
+      if (window.__OVERLAY_BIG_SIGS__ === true) { candleSeries.setMarkers([]); return; }
+
       const arr = Array.isArray(sigs) ? sigs : [];
       candleSeries.setMarkers(
         arr.map((s) => ({
