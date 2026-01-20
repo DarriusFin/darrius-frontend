@@ -552,6 +552,97 @@
       if ($("hintText")) $("hintText").textContent = `Loaded · TF=${tf} · bars=${bars.length} · sigs=${sigs.length}`;
     });
 
+    // ===== Snapshot: export for market.pulse.js (READ-ONLY) =====
+  safeRun("setSnapshotForUI", () => {
+  try {
+    const snapMeta = {
+      symbol: sym || null,
+      timeframe: tf || null,
+      bars: Array.isArray(bars) ? bars.length : 0,
+      source: (window.__DATA_SOURCE__ || "demo"),
+      emaPeriod: EMA_PERIOD || 14,
+      auxPeriod: AUX_PERIOD || 40,
+      confirmWindow: CONFIRM_WINDOW || 3,
+    };
+
+    // 注意：你的 sigs 只有 {time, side}，没有 price
+    // 这里用“该 time 对应的 close”补齐 price（用于 overlay 定位）
+    const closeByTime = new Map();
+    for (const b of bars) closeByTime.set(b.time, b.close);
+
+    const snapSignals = (Array.isArray(sigs) ? sigs : [])
+      .map((s, idx) => {
+        const t = s.time ?? s.t ?? null;
+        const sideRaw = (s.side || s.type || s.signal || "").toString().toUpperCase();
+        const side = (sideRaw === "S" ? "S" : "B");
+        const price = Number.isFinite(s.price) ? s.price : closeByTime.get(t);
+        return {
+          time: t,
+          price: Number.isFinite(price) ? price : null,
+          side,
+          i: (typeof s.i === "number" ? s.i : (typeof s.index === "number" ? s.index : idx)),
+          reason: s.reason || s.note || null,
+          strength: (typeof s.strength === "number" ? s.strength : null),
+        };
+      })
+      .filter(x => x.time != null && x.price != null);
+
+    // 趋势信息：你主图是按 EMA slope 给蜡烛底色
+    // 这里给出一个“最近 10 根”的 slope 估计 + regime
+    const n = Math.min(10, emaVals.length - 1);
+    let emaSlope = null;
+    let emaRegime = null;
+    let emaColor = null;
+
+    if (n >= 2) {
+      const eNow = emaVals[emaVals.length - 1];
+      const ePrev = emaVals[emaVals.length - 1 - n];
+      if (Number.isFinite(eNow) && Number.isFinite(ePrev)) {
+        emaSlope = (eNow - ePrev) / n;
+        if (emaSlope > 0) emaRegime = "UP";
+        else if (emaSlope < 0) emaRegime = "DOWN";
+        else emaRegime = "FLAT";
+      }
+    }
+    if (emaRegime === "UP") emaColor = "GREEN";
+    else if (emaRegime === "DOWN") emaColor = "RED";
+    else emaColor = "NEUTRAL";
+
+    const snapTrend = {
+      emaSlope,
+      emaRegime,   // 'UP'|'DOWN'|'FLAT'
+      emaColor,    // 'GREEN'|'RED'|'NEUTRAL'
+      flipCount: null,
+    };
+
+    // 风险信息：你当前 chart.core.js 没有 risk 计算，先留空
+    const snapRisk = {
+      entry: null,
+      stop: null,
+      targets: null,
+      confidence: null,
+      winrate: null,
+    };
+
+    if (window.DarriusChart && typeof window.DarriusChart.__setSnapshot === "function") {
+      window.DarriusChart.__setSnapshot({
+        meta: snapMeta,
+        candles: Array.isArray(bars) ? bars : [],
+        // 这里“对齐你的 market.pulse.js”：它期望 ema/aux 是数组
+        // 你现在 snapshot export IIFE 里注释写的是 [{time,value}]
+        // 但 market.pulse.js 多半兼容 number[]；为了稳，给两份都行：
+        ema: Array.isArray(emaPts) ? emaPts : [],
+        aux: Array.isArray(auxPts) ? auxPts : [],
+        signals: snapSignals,
+        trend: snapTrend,
+        risk: snapRisk,
+      });
+    }
+  } catch (e) {
+    // 永不影响主图
+  }
+});
+
     // -------- SNAPSHOT OUTPUT (consumer only) --------
     // Keep snapshot compact but sufficient. We expose last N arrays for MP usage.
     const N = Math.min(200, bars.length);
