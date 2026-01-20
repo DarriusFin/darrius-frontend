@@ -274,14 +274,40 @@
 
   // -------- Optional: subscription status --------
   async function refreshSubscriptionStatus() {
-    const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
-    const manageBtn = $(IDS.manageBtn);
+  const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
+  const manageBtn = $(IDS.manageBtn);
 
-    if (!user_id) {
-      setSubStatusText("Unknown");
-      if (manageBtn) manageBtn.disabled = true;
-      return;
+  // 1) 没 user_id：保持 Unknown + 禁用 Manage
+  if (!user_id) {
+    setSubStatusText("Unknown");
+    if (manageBtn) manageBtn.disabled = true;
+    return;
+  }
+
+  // 2) 有 user_id：先“乐观启用” Manage（因为 portal 接口你已验证可用）
+  if (manageBtn) manageBtn.disabled = false;
+  setSubStatusText("Checking...");
+
+  // 3) 再尝试拉 status（失败也不影响 Manage）
+  try {
+    const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
+
+    const status = data?.status || "unknown";
+    const has = !!data?.has_access;
+    setSubStatusText(`${status}${has ? " · Access ON" : " · Access OFF"}`);
+
+    // 只做文案，不再用它来锁按钮
+    if (manageBtn) {
+      manageBtn.textContent = "Manage · 管理";
     }
+
+    if (isAdmin()) log(`✅ sub status: ${JSON.stringify(data).slice(0, 260)}`);
+  } catch (e) {
+    // status 端点失败也没关系，Manage 仍可用
+    setSubStatusText("Unknown");
+    if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
+  }
+}
 
     try {
       const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
