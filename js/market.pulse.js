@@ -409,16 +409,101 @@ window.__OVERLAY_BIG_SIGS__ = true;   // 告诉 chart.core.js：不要画小 mar
   // UI: BIG glowing B/S overlay (independent from chart markers)
   // This fixes your "B/S small and no glow" permanently.
   // -----------------------------
-  function renderOverlaySignals(snap) {
-    return safe(() => {
-      if (!DOM.sigOverlay || !DOM.chartWrap) return;
+ function renderOverlaySignals() {
+  safe(() => {
+    // ===============================
+    // 0) 基础校验
+    // ===============================
+    const snap =
+      (window.DarriusChart && window.DarriusChart.getSnapshot && window.DarriusChart.getSnapshot()) ||
+      (typeof window.getChartSnapshot === 'function' ? window.getChartSnapshot() : null);
 
-      const candles = pickCandles(snap);
-      const sigsRaw = pickSignals(snap);
-      if (!candles || candles.length < 10) {
-        DOM.sigOverlay.innerHTML = '';
-        return;
-      }
+    if (!snap || !Array.isArray(snap.signals) || snap.signals.length === 0) return;
+
+    // chart / series 必须存在（只读）
+    const chart = window.chart || window._chart || window.ChartCore?._chart;
+    const candleSeries = window.candleSeries || window._candleSeries;
+
+    if (!chart || !chart.timeScale || !candleSeries || !candleSeries.priceToCoordinate) return;
+
+    // ===============================
+    // 1) 找 overlay 父容器（自动兜底）
+    // ===============================
+    const host =
+      document.getElementById('chartWrap') ||
+      document.getElementById('chart');
+
+    if (!host) return;
+
+    // overlay 层（唯一）
+    let layer = document.getElementById('bsOverlayLayer');
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.id = 'bsOverlayLayer';
+      layer.style.position = 'absolute';
+      layer.style.left = '0';
+      layer.style.top = '0';
+      layer.style.width = '100%';
+      layer.style.height = '100%';
+      layer.style.pointerEvents = 'none';
+      layer.style.zIndex = '30';
+      host.style.position = 'relative'; // 确保定位基准
+      host.appendChild(layer);
+    }
+
+    // 清空旧节点
+    layer.innerHTML = '';
+
+    // ===============================
+    // 2) 只取“最近 N 个有效信号”
+    // ===============================
+    const MAX_SIGS = 12;
+    const sigs = snap.signals.slice(-MAX_SIGS);
+
+    // ===============================
+    // 3) 渲染每一个大字发光 B / S
+    // ===============================
+    sigs.forEach(sig => {
+      if (!sig || sig.time == null || sig.price == null) return;
+
+      const x = chart.timeScale().timeToCoordinate(sig.time);
+      const y = candleSeries.priceToCoordinate(sig.price);
+
+      if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) return;
+
+      const el = document.createElement('div');
+      el.textContent = sig.side === 'S' ? 'S' : 'B';
+
+      const isBuy = sig.side !== 'S';
+
+      el.style.position = 'absolute';
+      el.style.left = `${Math.round(x)}px`;
+      el.style.top  = `${Math.round(y)}px`;
+      el.style.transform = 'translate(-50%, -50%)';
+
+      el.style.width = '34px';
+      el.style.height = '34px';
+      el.style.lineHeight = '34px';
+      el.style.borderRadius = '50%';
+
+      el.style.fontSize = '16px';
+      el.style.fontWeight = '700';
+      el.style.textAlign = 'center';
+
+      el.style.color = isBuy ? '#2BE2A6' : '#FF5A5A';
+      el.style.border = `2px solid ${isBuy ? '#2BE2A6' : '#FF5A5A'}`;
+      el.style.background = 'rgba(0,0,0,0.45)';
+
+      // 发光（关键）
+      el.style.boxShadow = isBuy
+        ? '0 0 10px rgba(43,226,166,0.85), 0 0 18px rgba(43,226,166,0.55)'
+        : '0 0 10px rgba(255,90,90,0.85), 0 0 18px rgba(255,90,90,0.55)';
+
+      layer.appendChild(el);
+    });
+  });
+}
+
 
       // Normalize signals to {idx, side, price}
       // We try multiple shapes and fallback to mapping by nearest time
