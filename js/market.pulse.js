@@ -530,6 +530,50 @@
     }, 'ensureOverlayLayer');
   }
 
+  function ensurePulseKeyframes() {
+  safe(() => {
+    if (document.getElementById('bsPulseKeyframes')) return;
+
+    const style = document.createElement('style');
+    style.id = 'bsPulseKeyframes';
+    style.textContent = `
+      @keyframes darriusPulseGold {
+        0%   { transform: translate(-50%, -50%) scale(1.00); filter: brightness(1); }
+        35%  { transform: translate(-50%, -50%) scale(1.18); filter: brightness(1.25); }
+        70%  { transform: translate(-50%, -50%) scale(1.06); filter: brightness(1.10); }
+        100% { transform: translate(-50%, -50%) scale(1.00); filter: brightness(1); }
+      }
+
+      /* 额外加一个“光晕扩散”的伪元素（很高级） */
+      .darrius-pulse-b {
+        position: absolute;
+      }
+      .darrius-pulse-b::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+        background: rgba(255,193,7,0.18);
+        box-shadow: 0 0 18px rgba(255,193,7,0.55), 0 0 44px rgba(255,193,7,0.30);
+        opacity: 0;
+        animation: darriusPulseGoldRing 1.2s ease-out 0s 1 both;
+        pointer-events: none;
+        z-index: -1;
+      }
+      @keyframes darriusPulseGoldRing {
+        0%   { transform: translate(-50%, -50%) scale(0.95); opacity: 0.0; }
+        25%  { opacity: 0.8; }
+        100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0.0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }, 'ensurePulseKeyframes');
+}
+
   function renderOverlaySignals(snap) {
     safe(() => {
       const host = getOverlayHost();
@@ -552,6 +596,13 @@
       if (!timeToX || !priceToY) return;
 
       const sigs = normalizeOverlaySignals(snap);
+      ensurePulseKeyframes();
+
+// only pulse the last BUY
+let lastBIndex = -1;
+for (let i = sigs.length - 1; i >= 0; i--) {
+  if (sigs[i] && sigs[i].side === 'B') { lastBIndex = i; break; }
+}
       if (!sigs.length) return;
 
       // draw last N (avoid overcrowding)
@@ -565,6 +616,12 @@
 
         const el = document.createElement('div');
         el.textContent = s.side;
+        
+const isLastBuy = (i === lastBIndex && s.side === 'B');
+if (isLastBuy) {
+  el.classList.add('darrius-pulse-b');                 // 给 ::after 用
+  el.style.animation = 'darriusPulseGold 1.2s ease-out 0s 1 both';
+}
 
         el.style.position = 'absolute';
         el.style.transform = 'translate(-50%, -50%)';
