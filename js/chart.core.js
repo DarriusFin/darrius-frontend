@@ -1,25 +1,42 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (PRODUCTION FROZEN) v2026.01.19e
+ * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.01.19-PRESET2-SNAPSHOT
  *
- * Preset 2 (Institutional / Cleaner):
- *  - EMA = 14
- *  - AUX = 40 (confidential HMA-like)
- *  - Confirm window = 3
- *  - Candle colors by EMA trend (stable, institutional)
- *      UP  if EMA slope >= 0
- *      DOWN if EMA slope < 0
- *  - B/S labels: HTML Overlay (BIG + GLOW) for instant visibility
- *  - Optional arrow markers kept (no tiny text dependency)
+ * Role:
+ *  - Render main chart (candles + EMA + AUX + signals)
+ *  - Output a read-only snapshot to window.__DARRIUS_CHART_STATE__
+ *  - Emit event "darrius:chartUpdated" with snapshot detail
+ *
+ * Preset 2:
+ *  - EMA 14
+ *  - AUX 40 (HMA-like)
+ *  - confirm window 3
+ *  - Candles colored by EMA trend (EMA slope)
  *
  * Guarantees:
- *  1) NO BLANK CHART from wrong endpoints: bars must be non-empty
- *  2) NO bottom spikes: line points are {time, value: finite} or {time, value: null}
- *  3) EMA yellow, AUX white
- *  4) NO billing/subscription touch
+ *  1) Main chart render is highest priority and will not be broken by UI
+ *  2) Non-critical parts (snapshot/event/markers) are wrapped in no-throw safe zones
+ *  3) No billing/subscription code touched
  * ========================================================================= */
 
 (() => {
   "use strict";
+
+  // -----------------------------
+  // Global diagnostic (never throw)
+  // -----------------------------
+  const DIAG = (window.__DARRIUS_DIAG__ = window.__DARRIUS_DIAG__ || {
+    lastError: null,
+    chartError: null,
+  });
+
+  function safeRun(tag, fn) {
+    try {
+      return fn();
+    } catch (e) {
+      DIAG.lastError = { tag, message: String(e?.message || e), stack: String(e?.stack || "") };
+      return undefined;
+    }
+  }
 
   // -----------------------------
   // DOM helpers
@@ -60,24 +77,23 @@
   ];
 
   // -----------------------------
-  // Indicator params (Preset 2)
+  // Preset 2 params
   // -----------------------------
   const EMA_PERIOD = 14;
   const AUX_PERIOD = 40;
   const AUX_METHOD = "SMA";
   const CONFIRM_WINDOW = 3;
 
-  // Candle colors (trend based)
-  const UP_COLOR = "#2BE2A6";
-  const DOWN_COLOR = "#FF5A5A";
+  // -----------------------------
+  // Colors
+  // -----------------------------
+  const COLOR_UP = "#2BE2A6";
+  const COLOR_DN = "#FF5A5A";
+  const COLOR_UP_WICK = "#2BE2A6";
+  const COLOR_DN_WICK = "#FF5A5A";
 
-  // Overlay label style (BIG + GLOW)
-  const OVERLAY_FONT_PX = 18;
-  const OVERLAY_FONT_WEIGHT = 900;
-  const OVERLAY_GLOW_PX = 14;
-
-  // Label offset so it doesn't sit on wick
-  const LABEL_PAD_PX = 14;
+  const COLOR_EMA = "#FFD400";
+  const COLOR_AUX = "#FFFFFF";
 
   // -----------------------------
   // State
@@ -85,22 +101,11 @@
   let containerEl = null;
   let chart = null;
   let candleSeries = null;
-
-  let emaSeries = null; // yellow
-  let auxSeries = null; // white
+  let emaSeries = null;
+  let auxSeries = null;
 
   let showEMA = true;
   let showAUX = true;
-
-  // Overlay
-  let overlayLayer = null;
-  const overlayEnabled = true;
-  const markerEnabled = true;
-
-  // Cached current data for overlay placement
-  let _lastBars = [];
-  let _lastSigs = [];
-  let _barByTimeKey = new Map();
 
   // -----------------------------
   // UI readers
@@ -114,7 +119,7 @@
       qs("#symbol") ||
       qs("#sym");
     const v = el && (el.value || el.textContent);
-    return (v || "BTCUSDT").trim();
+    return (v || "TSLA").trim();
   }
 
   function getUiTf() {
@@ -135,7 +140,7 @@
     const r = await fetch(url, { method: "GET", credentials: "omit" });
     if (!r.ok) {
       const text = await r.text().catch(() => "");
-      const err = new Error("HTTP " + r.status);
+      const err = new Error(`HTTP ${r.status}`);
       err.status = r.status;
       err.body = text;
       throw err;
@@ -145,26 +150,17 @@
 
   function toUnixTime(t) {
     if (t == null) return null;
-
     if (typeof t === "number") {
       if (t > 2e10) return Math.floor(t / 1000);
       return t;
     }
-
     if (typeof t === "string") {
       const ms = Date.parse(t);
       if (!Number.isFinite(ms)) return null;
       return Math.floor(ms / 1000);
     }
-
-    // BusinessDay object
-    if (typeof t === "object" && t.year && t.month && t.day) return t;
-
+    if (typeof t === "object" && t.year && t.month && t.day) return t; // business day
     return null;
-  }
-
-  function timeKey(t) {
-    return typeof t === "object" ? (t.year + "-" + t.month + "-" + t.day) : String(t);
   }
 
   function normalizeBars(payload) {
@@ -182,22 +178,19 @@
         const high = Number(b.high ?? b.h ?? b.High);
         const low  = Number(b.low  ?? b.l ?? b.Low);
         const close= Number(b.close?? b.c ?? b.Close);
-
-        if (time == null) return null;
-        if (!Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) return null;
+        if (!time) return null;
+        if (![open, high, low, close].every(Number.isFinite)) return null;
         return { time, open, high, low, close };
       })
       .filter(Boolean);
 
     bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
 
-    // de-dup time
     const out = [];
-    let lastK = null;
+    let lastT = null;
     for (const b of bars) {
-      const k = timeKey(b.time);
-      if (k === lastK) continue;
-      lastK = k;
+      if (b.time === lastT) continue;
+      lastT = b.time;
       out.push(b);
     }
     return out;
@@ -215,37 +208,37 @@
       .map((s) => {
         const time = toUnixTime(s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date);
         const side = String(s.side ?? s.type ?? s.action ?? "").toUpperCase();
-        if (time == null || (side !== "B" && side !== "S")) return null;
+        if (!time || (side !== "B" && side !== "S")) return null;
         return { time, side };
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
   }
 
   async function fetchBarsPack(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
-    const q = "symbol=" + encodeURIComponent(sym) + "&tf=" + encodeURIComponent(tf);
+    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
 
     let lastErr = null;
     for (const p of BARS_PATH_CANDIDATES) {
-      const url = apiBase + p + "?" + q;
+      const url = `${apiBase}${p}?${q}`;
       try {
         const payload = await fetchJson(url);
         const bars = normalizeBars(payload);
         if (bars.length) return { payload, bars, urlUsed: url };
-        lastErr = new Error("bars empty from " + url);
+        lastErr = new Error(`bars empty from ${url}`);
       } catch (e) {
         lastErr = e;
       }
     }
-    throw new Error("All bars endpoints failed. Last error: " + (lastErr?.message || String(lastErr)));
+    throw new Error(`All bars endpoints failed. Last error: ${lastErr?.message || lastErr}`);
   }
 
   async function fetchOptionalSignals(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
-    const q = "symbol=" + encodeURIComponent(sym) + "&tf=" + encodeURIComponent(tf);
-
+    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
     for (const p of SIGS_PATH_CANDIDATES) {
-      const url = apiBase + p + "?" + q;
+      const url = `${apiBase}${p}?${q}`;
       try {
         const payload = await fetchJson(url);
         return normalizeSignals(payload);
@@ -255,8 +248,10 @@
   }
 
   // -----------------------------
-  // Math: EMA / SMA / WMA / MA-on-array
+  // Math
   // -----------------------------
+  const sgn = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
+
   function ema(values, period) {
     const k = 2 / (period + 1);
     let e = null;
@@ -285,8 +280,7 @@
   function wmaAt(values, endIdx, period) {
     const start = endIdx - period + 1;
     if (start < 0) return NaN;
-    let num = 0;
-    let den = 0;
+    let num = 0, den = 0;
     for (let i = start; i <= endIdx; i++) {
       const v = values[i];
       if (!Number.isFinite(v)) return NaN;
@@ -337,36 +331,27 @@
     return pts;
   }
 
-  // -----------------------------
-  // AUX per your algorithm (HMA-like)
-  // -----------------------------
   function computeAuxByYourAlgo(closes, period, method) {
     const n = Math.max(2, Math.floor(period || 40));
     const half = Math.max(1, Math.floor(n / 2));
-    const p = Math.max(1, Math.round(Math.sqrt(n))); // sqrt(period)
+    const p = Math.max(1, Math.round(Math.sqrt(n)));
 
     const vect = new Array(closes.length).fill(NaN);
     for (let i = 0; i < closes.length; i++) {
       const w1 = wmaAt(closes, i, half);
       const w2 = wmaAt(closes, i, n);
-      if (!Number.isFinite(w1) || !Number.isFinite(w2)) vect[i] = NaN;
-      else vect[i] = 2 * w1 - w2;
+      vect[i] = (Number.isFinite(w1) && Number.isFinite(w2)) ? (2 * w1 - w2) : NaN;
     }
-
     return maOnArray(vect, p, method || "SMA");
   }
 
-  function computeTrendFromSeries(vals) {
-    // trend[i] = sign(vals[i] - vals[i-1]); hold last on NaN/equal
-    const trend = new Array(vals.length).fill(0);
+  function computeTrendFromAux(auxVals) {
+    const trend = new Array(auxVals.length).fill(0);
     let last = 0;
-    for (let i = 1; i < vals.length; i++) {
-      const a0 = vals[i - 1];
-      const a1 = vals[i];
-      if (!Number.isFinite(a0) || !Number.isFinite(a1)) {
-        trend[i] = last;
-        continue;
-      }
+    for (let i = 1; i < auxVals.length; i++) {
+      const a0 = auxVals[i - 1];
+      const a1 = auxVals[i];
+      if (!Number.isFinite(a0) || !Number.isFinite(a1)) { trend[i] = last; continue; }
       if (a1 > a0) last = 1;
       else if (a1 < a0) last = -1;
       trend[i] = last;
@@ -375,54 +360,30 @@
     return trend;
   }
 
-  // -----------------------------
-  // Candles colored by EMA trend (Preset 2)
-  // -----------------------------
-  function colorizeBarsByEmaTrend(bars, emaVals) {
-    const t = computeTrendFromSeries(emaVals);
-    return bars.map((b, i) => {
-      const up = (t[i] ?? 0) >= 0;
-      const c = up ? UP_COLOR : DOWN_COLOR;
-      return {
-        time: b.time,
-        open: b.open,
-        high: b.high,
-        low: b.low,
-        close: b.close,
-        color: c,
-        wickColor: c,
-        borderColor: c,
-      };
-    });
-  }
-
-  // -----------------------------
-  // B/S: CROSS + INFLECTION CONFIRM (with confirm window = 3)
-  // -----------------------------
   function computeSignalsCrossPlusInflection(bars, emaPts, auxPts, confirmWindow) {
     const n = bars.length;
     if (n < 5) return [];
 
-    const emaV = emaPts.map((p) => p.value);
-    const auxV = auxPts.map((p) => p.value);
-    const auxTrend = computeTrendFromSeries(auxV);
+    const emaV = emaPts.map(p => p.value);
+    const auxV = auxPts.map(p => p.value);
+    const trend = computeTrendFromAux(auxV);
 
     const cw = Math.max(0, Math.floor(confirmWindow ?? 3));
     const sigs = [];
-    const usedKey = new Set();
+    const used = new Set();
 
     function addSig(i, side) {
       const t = bars[i].time;
-      const key = timeKey(t) + ":" + side;
-      if (usedKey.has(key)) return;
-      usedKey.add(key);
+      const key = `${t}:${side}`;
+      if (used.has(key)) return;
+      used.add(key);
       sigs.push({ time: t, side });
     }
 
     function findConfirmIndex(startIdx, wantTrend) {
       for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
-        const prev = auxTrend[j - 1];
-        const curr = auxTrend[j];
+        const prev = trend[j - 1];
+        const curr = trend[j];
         if (wantTrend > 0) {
           if (prev <= 0 && curr > 0) return j;
         } else {
@@ -435,7 +396,7 @@
     for (let i = 1; i < n; i++) {
       const e0 = emaV[i - 1], e1 = emaV[i];
       const a0 = auxV[i - 1], a1 = auxV[i];
-      if (!Number.isFinite(e0) || !Number.isFinite(e1) || !Number.isFinite(a0) || !Number.isFinite(a1)) continue;
+      if (![e0, e1, a0, a1].every(Number.isFinite)) continue;
 
       const crossUp = (e0 <= a0 && e1 > a1);
       const crossDn = (e0 >= a0 && e1 < a1);
@@ -453,144 +414,91 @@
     return sigs;
   }
 
-  // -----------------------------
-  // Markers (small arrows) - optional
-  // -----------------------------
   function applyMarkers(sigs) {
-    if (!candleSeries || !markerEnabled) return;
-    const arr = Array.isArray(sigs) ? sigs : [];
-    candleSeries.setMarkers(
-      arr.map((s) => ({
-        time: s.time,
-        position: s.side === "B" ? "belowBar" : "aboveBar",
-        color: s.side === "B" ? "#FFD400" : "#FFFFFF",
-        shape: s.side === "B" ? "arrowUp" : "arrowDown",
-        text: "",
-      }))
-    );
+    safeRun("applyMarkers", () => {
+      if (!candleSeries) return;
+      const arr = Array.isArray(sigs) ? sigs : [];
+      candleSeries.setMarkers(
+        arr.map((s) => ({
+          time: s.time,
+          position: s.side === "B" ? "belowBar" : "aboveBar",
+          color: s.side === "B" ? "#FFD400" : "#FF5A5A",
+          shape: s.side === "B" ? "arrowUp" : "arrowDown",
+          text: s.side,
+        }))
+      );
+    });
   }
 
-  // -----------------------------
-  // Overlay labels (BIG + GLOW)
-  // -----------------------------
-  function ensureOverlayLayer() {
-    if (!containerEl) return null;
-    if (overlayLayer) return overlayLayer;
+  function colorCandlesByEMATrend(bars, emaVals) {
+    const out = new Array(bars.length);
+    let lastSlope = 0;
 
-    const cs = window.getComputedStyle(containerEl);
-    if (cs.position === "static") {
-      containerEl.style.position = "relative";
-    }
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i];
+      const e0 = emaVals[i - 1];
+      const e1 = emaVals[i];
+      let slope = 0;
 
-    overlayLayer = document.createElement("div");
-    overlayLayer.setAttribute("data-darrius-overlay", "signals");
-    overlayLayer.style.position = "absolute";
-    overlayLayer.style.left = "0";
-    overlayLayer.style.top = "0";
-    overlayLayer.style.right = "0";
-    overlayLayer.style.bottom = "0";
-    overlayLayer.style.pointerEvents = "none";
-    overlayLayer.style.zIndex = "6";
-    containerEl.appendChild(overlayLayer);
-    return overlayLayer;
-  }
-
-  function clearOverlay() {
-    if (!overlayLayer) return;
-    overlayLayer.innerHTML = "";
-  }
-
-  function buildBarIndexMap(bars) {
-    _barByTimeKey = new Map();
-    for (const b of bars) _barByTimeKey.set(timeKey(b.time), b);
-  }
-
-  function isTimeInVisibleRange(t) {
-    if (!chart) return true;
-    const x = chart.timeScale().timeToCoordinate(t);
-    return Number.isFinite(x);
-  }
-
-  function renderSignalOverlays() {
-    if (!overlayEnabled) return;
-    if (!chart || !candleSeries || !_lastSigs || !_lastSigs.length) {
-      clearOverlay();
-      return;
-    }
-
-    const layer = ensureOverlayLayer();
-    if (!layer) return;
-
-    clearOverlay();
-
-    const maxRender = 250;
-    let rendered = 0;
-
-    for (const s of _lastSigs) {
-      if (rendered >= maxRender) break;
-
-      const t = s.time;
-      if (!isTimeInVisibleRange(t)) continue;
-
-      const b = _barByTimeKey.get(timeKey(t));
-      if (!b) continue;
-
-      const x = chart.timeScale().timeToCoordinate(t);
-      if (!Number.isFinite(x)) continue;
-
-      const price = s.side === "B" ? b.low : b.high;
-      const y = candleSeries.priceToCoordinate(price);
-      if (!Number.isFinite(y)) continue;
-
-      const node = document.createElement("div");
-      node.textContent = s.side;
-
-      node.style.position = "absolute";
-      node.style.left = x + "px";
-      node.style.top = y + "px";
-      node.style.transform = "translate(-50%, -50%)";
-      node.style.fontSize = OVERLAY_FONT_PX + "px";
-      node.style.fontWeight = String(OVERLAY_FONT_WEIGHT);
-      node.style.letterSpacing = "0.5px";
-      node.style.lineHeight = "1";
-      node.style.padding = "4px 8px";
-      node.style.borderRadius = "10px";
-
-      if (s.side === "B") {
-        node.style.color = "#0B0F14";
-        node.style.background = "rgba(255, 212, 0, 0.95)";
-        node.style.boxShadow =
-          "0 0 " + OVERLAY_GLOW_PX + "px rgba(255,212,0,0.85), 0 0 " + (OVERLAY_GLOW_PX + 10) + "px rgba(255,212,0,0.35)";
-      } else {
-        node.style.color = "#FFFFFF";
-        node.style.background = "rgba(255, 90, 90, 0.85)";
-        node.style.boxShadow =
-          "0 0 " + OVERLAY_GLOW_PX + "px rgba(255,90,90,0.85), 0 0 " + (OVERLAY_GLOW_PX + 10) + "px rgba(255,90,90,0.35)";
+      if (i >= 1 && Number.isFinite(e0) && Number.isFinite(e1)) {
+        slope = e1 - e0;
+        if (slope !== 0) lastSlope = slope;
+        else slope = lastSlope;
       }
 
-      node.style.marginTop = (s.side === "B" ? LABEL_PAD_PX : -LABEL_PAD_PX) + "px";
+      const isUp = slope > 0;
+      const isDn = slope < 0;
+      const fallbackUp = (b.close >= b.open);
+      const useUp = isUp ? true : isDn ? false : fallbackUp;
 
-      layer.appendChild(node);
-      rendered++;
+      out[i] = {
+        ...b,
+        color: useUp ? COLOR_UP : COLOR_DN,
+        wickColor: useUp ? COLOR_UP_WICK : COLOR_DN_WICK,
+        borderColor: useUp ? COLOR_UP : COLOR_DN,
+      };
     }
+    return out;
+  }
+
+  // -----------------------------
+  // Snapshot output (read-only)
+  // -----------------------------
+  function publishSnapshot(snapshot) {
+    safeRun("publishSnapshot", () => {
+      // Freeze shallowly (consumer should treat as read-only)
+      const s = Object.freeze(snapshot);
+
+      // global
+      window.__DARRIUS_CHART_STATE__ = s;
+
+      // event
+      try {
+        window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: s }));
+      } catch (_) {
+        // very old browsers: ignore
+      }
+    });
   }
 
   // -----------------------------
   // Toggles
   // -----------------------------
   function applyToggles() {
-    const emaChecked = $("toggleEMA")?.checked ?? $("emaToggle")?.checked ?? $("emaCheck")?.checked;
-    const auxChecked = $("toggleAUX")?.checked ?? $("auxToggle")?.checked ?? $("auxCheck")?.checked;
+    safeRun("applyToggles", () => {
+      const emaChecked = $("toggleEMA")?.checked ?? $("emaToggle")?.checked ?? $("emaCheck")?.checked;
+      const auxChecked = $("toggleAUX")?.checked ?? $("auxToggle")?.checked ?? $("auxCheck")?.checked;
 
-    if (typeof emaChecked === "boolean") showEMA = emaChecked;
-    if (typeof auxChecked === "boolean") showAUX = auxChecked;
+      if (typeof emaChecked === "boolean") showEMA = emaChecked;
+      if (typeof auxChecked === "boolean") showAUX = auxChecked;
 
-    if (emaSeries) emaSeries.applyOptions({ visible: !!showEMA });
-    if (auxSeries) auxSeries.applyOptions({ visible: !!showAUX });
+      if (emaSeries) emaSeries.applyOptions({ visible: !!showEMA });
+      if (auxSeries) auxSeries.applyOptions({ visible: !!showAUX });
+    });
   }
 
   // -----------------------------
-  // Core load
+  // Core load (MAIN FIRST)
   // -----------------------------
   async function load() {
     if (!chart || !candleSeries) return;
@@ -598,89 +506,84 @@
     const sym = getUiSymbol();
     const tf = getUiTf();
 
-    if ($("hintText")) $("hintText").textContent = "Loading...";
+    safeRun("hintLoading", () => {
+      if ($("hintText")) $("hintText").textContent = "Loading...";
+    });
 
     let pack;
     try {
       pack = await fetchBarsPack(sym, tf);
     } catch (e) {
-      if ($("hintText")) $("hintText").textContent = "加载失败：" + (e?.message || String(e));
+      safeRun("hintFail", () => {
+        if ($("hintText")) $("hintText").textContent = `加载失败：${e.message || e}`;
+      });
       throw e;
     }
 
-    const { payload, bars } = pack;
-    if (!bars || !bars.length) {
-      if ($("hintText")) $("hintText").textContent = "加载失败：bars为空";
-      return;
-    }
+    const { payload, bars, urlUsed } = pack;
+    if (!bars.length) throw new Error("bars empty after normalization");
 
-    const closes = bars.map((b) => b.close);
-
-    // EMA (yellow)
+    // -------- MAIN CHART: never let UI break this --------
+    const closes = bars.map(b => b.close);
     const emaVals = ema(closes, EMA_PERIOD);
-
-    // AUX (white) - confidential
     const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
+
+    const coloredBars = colorCandlesByEMATrend(bars, emaVals);
+    candleSeries.setData(coloredBars);
 
     const emaPts = buildLinePoints(bars, emaVals);
     const auxPts = buildLinePoints(bars, auxVals);
+    emaSeries.setData(emaPts);
+    auxSeries.setData(auxPts);
 
-    // Candles colored by EMA trend (Preset 2)
-    const coloredBars = colorizeBarsByEmaTrend(bars, emaVals);
-
-    candleSeries.setData(coloredBars);
-    if (emaSeries) emaSeries.setData(emaPts);
-    if (auxSeries) auxSeries.setData(auxPts);
-
-    // Signals:
+    // signals
     let sigs = normalizeSignals(payload);
     if (!sigs.length) sigs = await fetchOptionalSignals(sym, tf);
     if (!sigs.length) sigs = computeSignalsCrossPlusInflection(bars, emaPts, auxPts, CONFIRM_WINDOW);
 
-    // Cache for overlay
-    _lastBars = bars;
-    _lastSigs = sigs;
-    buildBarIndexMap(bars);
-
     applyMarkers(sigs);
-    renderSignalOverlays();
 
-    chart.timeScale().fitContent();
+    safeRun("fitContent", () => chart.timeScale().fitContent());
 
-    const last = bars[bars.length - 1];
-    if ($("symText")) $("symText").textContent = sym;
-    if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
+    safeRun("topText", () => {
+      const last = bars[bars.length - 1];
+      if ($("symText")) $("symText").textContent = sym;
+      if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
+      if ($("hintText")) $("hintText").textContent = `Loaded · TF=${tf} · bars=${bars.length} · sigs=${sigs.length}`;
+    });
 
-    if ($("hintText")) {
-      $("hintText").textContent =
-        "Loaded · 已加载（TF=" + tf + " · bars=" + bars.length + " · sigs=" + sigs.length + ")";
-    }
+    // -------- SNAPSHOT OUTPUT (consumer only) --------
+    // Keep snapshot compact but sufficient. We expose last N arrays for MP usage.
+    const N = Math.min(200, bars.length);
+    const start = bars.length - N;
+
+    const snapshot = {
+      version: "2026.01.19-PRESET2",
+      ts: Date.now(),
+      apiBase: DEFAULT_API_BASE,
+      urlUsed,
+      symbol: sym,
+      tf,
+      params: { EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW },
+      barsCount: bars.length,
+      // last N bars for derived computations
+      bars: bars.slice(start),
+      ema: emaVals.slice(start),
+      aux: auxVals.slice(start),
+      // all signals (or last 100)
+      sigs: sigs.slice(Math.max(0, sigs.length - 200)),
+      // helpful last price
+      lastClose: bars[bars.length - 1].close,
+    };
+
+    publishSnapshot(snapshot);
 
     applyToggles();
-    return { urlUsed: pack.urlUsed, bars: bars.length, sigs: sigs.length };
+    return { urlUsed, bars: bars.length, sigs: sigs.length };
   }
 
   // -----------------------------
-  // Export PNG
-  // -----------------------------
-  function exportPNG() {
-    try {
-      if (!chart || typeof chart.takeScreenshot !== "function") {
-        alert("当前图表版本不支持导出（takeScreenshot 不可用）。");
-        return;
-      }
-      const canvas = chart.takeScreenshot();
-      const a = document.createElement("a");
-      a.href = canvas.toDataURL("image/png");
-      a.download = "DarriusAI_" + getUiSymbol() + "_" + getUiTf() + ".png";
-      a.click();
-    } catch (e) {
-      alert("导出失败：" + (e?.message || String(e)));
-    }
-  }
-
-  // -----------------------------
-  // Init (idempotent)
+  // Init
   // -----------------------------
   function init(opts) {
     opts = opts || {};
@@ -703,52 +606,43 @@
     });
 
     candleSeries = chart.addCandlestickSeries({
-      upColor: UP_COLOR,
-      downColor: DOWN_COLOR,
-      wickUpColor: UP_COLOR,
-      wickDownColor: DOWN_COLOR,
+      upColor: COLOR_UP,
+      downColor: COLOR_DN,
+      wickUpColor: COLOR_UP_WICK,
+      wickDownColor: COLOR_DN_WICK,
       borderVisible: false,
     });
 
     emaSeries = chart.addLineSeries({
-      color: "#FFD400",
+      color: COLOR_EMA,
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
     });
 
     auxSeries = chart.addLineSeries({
-      color: "#FFFFFF",
+      color: COLOR_AUX,
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
     });
 
-    ensureOverlayLayer();
-
-    const resize = () => {
+    const resize = () => safeRun("resize", () => {
       const r = containerEl.getBoundingClientRect();
       chart.applyOptions({
         width: Math.max(1, Math.floor(r.width)),
         height: Math.max(1, Math.floor(r.height)),
       });
-      renderSignalOverlays();
-    };
+    });
 
-    try {
-      new ResizeObserver(resize).observe(containerEl);
-    } catch (_) {
-      window.addEventListener("resize", resize);
-    }
+    safeRun("observeResize", () => {
+      try {
+        new ResizeObserver(resize).observe(containerEl);
+      } catch (_) {
+        window.addEventListener("resize", resize);
+      }
+    });
     resize();
-
-    chart.timeScale().subscribeVisibleTimeRangeChange(() => {
-      renderSignalOverlays();
-    });
-
-    chart.subscribeCrosshairMove(() => {
-      renderSignalOverlays();
-    });
 
     $("toggleEMA")?.addEventListener("change", applyToggles);
     $("emaToggle")?.addEventListener("change", applyToggles);
@@ -758,8 +652,10 @@
     $("auxToggle")?.addEventListener("change", applyToggles);
     $("auxCheck")?.addEventListener("change", applyToggles);
 
-    if (opts.autoLoad !== false) load().catch(() => {});
+    if (opts.autoLoad !== false) load().catch((e) => {
+      DIAG.chartError = { message: String(e?.message || e), stack: String(e?.stack || "") };
+    });
   }
 
-  window.ChartCore = { init, load, applyToggles, exportPNG };
+  window.ChartCore = { init, load, applyToggles };
 })();
