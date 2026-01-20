@@ -181,20 +181,24 @@
     }
 
     // ---- Subscription wiring ----
-    const hasSub = !!window.Subscription;
-    if (!hasSub) {
-      log("⚠️ Subscription module not found. Did you include /js/subscription.js ?");
-      // don't mark page bad; chart may still run
+if (!window.Subscription) {
+  log("⚠ Subscription module not found. Did you include /js/subscription.js ?");
+  // don't mark page bad; chart may still run
+} else {
+  try {
+    if (typeof window.Subscription.attach === "function") {
+      window.Subscription.attach();           // ✅ 核心：必须 attach 才会绑按钮+拉 plans
+      log("✅ Subscription.attach()");
+    } else if (typeof window.Subscription.init === "function") {
+      window.Subscription.init();             // 兼容旧版
+      log("✅ Subscription.init()");
     } else {
-      try {
-        if (typeof window.Subscription.init === "function") {
-          window.Subscription.init();
-          log("✅ Subscription.init()");
-        }
-      } catch (e) {
-        log("❌ Subscription.init error: " + e.message);
-      }
+      log("⚠ Subscription has no attach/init");
     }
+  } catch (e) {
+    log("❌ Subscription wiring error: " + e.message);
+  }
+}
 
     // --- Subscription bootstrap (must run after UI rendered) ---
 (function bootstrapSubscription(){
