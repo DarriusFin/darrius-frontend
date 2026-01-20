@@ -581,14 +581,14 @@
         el.style.fontSize = '16px';
         el.style.letterSpacing = '0.5px';
 
-        if (s.side === 'B') {
-  // BUY：亮绿色实心 + 白字
+    if (s.side === 'B') {
+  // BUY：金黄色实心 + 白字
   el.style.color = '#FFFFFF';
-  el.style.background = 'rgba(43,226,166,0.95)';        // 亮绿底
-  el.style.border = '1px solid rgba(255,255,255,0.65)'; // 白色描边
+  el.style.background = 'rgba(255,193,7,0.95)';          // 金黄色（Bootstrap Gold）
+  el.style.border = '1px solid rgba(255,255,255,0.75)'; // 更亮白边
   el.style.boxShadow =
-    '0 0 10px rgba(43,226,166,0.55), 0 0 26px rgba(43,226,166,0.35)';
-  el.style.textShadow = '0 1px 2px rgba(0,0,0,0.35)';
+    '0 0 10px rgba(255,193,7,0.65), 0 0 26px rgba(255,193,7,0.40)';
+  el.style.textShadow = '0 1px 2px rgba(0,0,0,0.45)';
 } else {
   // SELL：亮红色实心 + 白字
   el.style.color = '#FFFFFF';
