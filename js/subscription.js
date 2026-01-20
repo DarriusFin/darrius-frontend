@@ -345,16 +345,20 @@
     // init plans now
     initPlans();
 
-    // bind buttons
-    $(IDS.subscribeBtn)?.addEventListener("click", subscribe);
-    $(IDS.manageBtn)?.addEventListener("click", openCustomerPortal);
+   // bind buttons (FIXED: always bind, avoid Unknown deadlock)
+const startBtn  = $(IDS.subscribeBtn);
+const manageBtn = $(IDS.manageBtn);
 
-    // userId typing triggers status refresh (non-blocking)
-    $(IDS.userId)?.addEventListener("input", scheduleRefreshStatus);
+if (!startBtn || !manageBtn) {
+  console.error("[SUB] buttons not found", IDS);
+} else {
+  startBtn.addEventListener("click", subscribe);
+  manageBtn.addEventListener("click", openCustomerPortal);
+}
 
-    // initial status
-    refreshSubscriptionStatus();
-  }
+// UI init: Unknown should allow Start
+updateSubscriptionUI("unknown");
+
 
   // Expose module
   window.Subscription = {
