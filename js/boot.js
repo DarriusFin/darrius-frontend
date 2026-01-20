@@ -196,6 +196,37 @@
       }
     }
 
+    // --- Subscription bootstrap (must run after UI rendered) ---
+(function bootstrapSubscription(){
+  function tryAttach(){
+    try{
+      if (!window.Subscription || !window.Subscription.attach) return false;
+
+      // DOM 元素必须存在，否则 attach 可能找不到按钮/下拉
+      var hasBtn = document.getElementById("subscribeBtn");
+      var hasPlan = document.getElementById("planSelect") || document.querySelector("select"); // 你可换成真实id
+      if (!hasBtn) return false;
+
+      window.Subscription.attach();
+      console.log("[BOOT] Subscription.attach() ✅");
+      return true;
+    }catch(e){
+      console.error("[BOOT] Subscription.attach() failed ❌", e);
+      return false;
+    }
+  }
+
+  // 立即尝试一次
+  if (tryAttach()) return;
+
+  // 失败就重试几次（处理“按钮晚出现/异步渲染”）
+  var n = 0;
+  var t = setInterval(function(){
+    n++;
+    if (tryAttach() || n >= 20) clearInterval(t); // 最多重试 20 次（约 4 秒）
+  }, 200);
+})();
+
     // Other UI utilities
     $("copyLinkBtn")?.addEventListener("click", copyShareLink);
     $("exportBtn")?.addEventListener("click", exportPNG);
