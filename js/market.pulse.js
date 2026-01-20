@@ -6,7 +6,9 @@
  * - Renders BIG glowing B/S overlay (independent from chart markers)
  */
 (() => {
+  
   'use strict';
+window.__OVERLAY_BIG_SIGS__ = true;   // 告诉 chart.core.js：不要画小 markers
 
   // -----------------------------
   // Absolute no-throw safe zone
