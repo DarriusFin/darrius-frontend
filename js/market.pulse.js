@@ -1,314 +1,428 @@
-/* =========================================================================
- * DarriusAI - market.pulse.js (UI LAYER) v2026.01.19-MP-ONLY
- *
- * Role:
- *  - Read snapshot from window.__DARRIUS_CHART_STATE__ (derived-only)
- *  - Render Market Pulse UI (Bullish/Neutral/Bearish + ring strength)
- *  - Must NEVER throw and must NEVER affect main chart
- *
- * Hard Rules:
- *  1) If EMA trend is Up (green regime), MP cannot be Bearish (only Neutral/Bullish)
- *     If EMA trend is Down (red regime), MP cannot be Bullish (only Neutral/Bearish)
- *  2) If recent confirmed B appears within confirm window (or recent bars), MP must bias bullish (no contradiction)
- *     Same for S -> bearish bias (no contradiction)
- *  3) If AUX is flat/unclear slope, ring strength must shrink (uncertainty = low participation)
- * ========================================================================= */
-
-(() => {
+/* darrius-frontend/js/market.pulse.js
+ * UI-only layer:
+ * - derive Market Pulse from main-chart snapshot (best-effort)
+ * - render B/S markers (best-effort) WITHOUT touching chart.core.js
+ * - absolutely never throw
+ */
+(function () {
   "use strict";
 
-  const DIAG = (window.__DARRIUS_DIAG__ = window.__DARRIUS_DIAG__ || {});
-  DIAG.mp = DIAG.mp || { lastError: null, lastRender: null };
-
-  function safeRun(tag, fn) {
-    try {
-      return fn();
-    } catch (e) {
-      DIAG.mp.lastError = { tag, message: String(e?.message || e), stack: String(e?.stack || "") };
-      return undefined;
-    }
+  function safe(fn) {
+    try { return fn(); } catch (e) { /* swallow */ return undefined; }
   }
 
-  const $ = (id) => document.getElementById(id);
-  const qs = (sel) => document.querySelector(sel);
-  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
-  const sign = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
+  function $(id) { return document.getElementById(id); }
 
-  // ---- Tunables (kept stable) ----
-  const MP_N = 60;
-  const L1 = 12;
-  const TH = 0.20;
-
-  const M = 12;
-  const TAU = 6;
-  const RECENT_SIG_MAXDIST = 8;
-
-  const RANGE_K = 1.5;
-  const AUX_C1 = 0.35;
-  const FLIP_DEN = 0.35;
-  const AUX_FLAT_ENERGY_TH = 0.15;
-  const FLAT_SHRINK = 0.55;
-
-  function mean(arr) {
-    if (!arr.length) return NaN;
-    let s = 0;
-    for (const x of arr) s += x;
-    return s / arr.length;
+  // ---------- 1) Detect chart / series / snapshot (best-effort) ----------
+  function detectChart() {
+    // common names you may have
+    return (
+      window.__DARRIUS_CHART__ ||
+      window.DARRIUS_CHART ||
+      window.chart ||
+      window._chart ||
+      null
+    );
   }
 
-  function computePulse(snapshot) {
-    const bars = snapshot?.bars || [];
-    const ema = snapshot?.ema || [];
-    const aux = snapshot?.aux || [];
-    const sigs = snapshot?.sigs || [];
+  function detectCandleSeries() {
+    // common names you may have
+    const direct =
+      window.__DARRIUS_CANDLE_SERIES__ ||
+      window.candlestickSeries ||
+      window.candleSeries ||
+      window.mainSeries ||
+      window.seriesCandles ||
+      window._candleSeries ||
+      null;
+    if (direct && typeof direct.setMarkers === "function") return direct;
 
-    const nAll = bars.length;
-    if (nAll < 10 || ema.length !== nAll || aux.length !== nAll) {
-      return { side: "Neutral", strength: 0, TR_dir: 0, meta: { reason: "insufficient" } };
-    }
-
-    const N = Math.min(MP_N, nAll);
-    const start = nAll - N;
-
-    const sliceBars = bars.slice(start);
-    const sliceEMA = ema.slice(start);
-    const sliceAUX = aux.slice(start);
-
-    // avg range
-    const L2 = Math.min(20, sliceBars.length);
-    const ranges = [];
-    for (let i = sliceBars.length - L2; i < sliceBars.length; i++) {
-      const b = sliceBars[i];
-      ranges.push(Math.max(0, (b.high - b.low)));
-    }
-    const rangeAvg = Math.max(1e-9, mean(ranges));
-
-    // Trend Regime (EMA slope voting + dist to EMA)
-    const l1 = Math.min(L1, sliceEMA.length - 1);
-    let upCnt = 0, dnCnt = 0;
-    for (let i = sliceEMA.length - l1; i < sliceEMA.length; i++) {
-      const e0 = sliceEMA[i - 1], e1 = sliceEMA[i];
-      if (!Number.isFinite(e0) || !Number.isFinite(e1)) continue;
-      const s = e1 - e0;
-      if (s > 0) upCnt++;
-      else if (s < 0) dnCnt++;
-    }
-    const denom = Math.max(1, l1);
-    const upRatio = upCnt / denom;
-    const dnRatio = dnCnt / denom;
-
-    let TR_dir = 0;
-    if (upRatio >= 0.67) TR_dir = +1;
-    else if (dnRatio >= 0.67) TR_dir = -1;
-
-    const lastClose = sliceBars[sliceBars.length - 1].close;
-    const lastEMA = sliceEMA[sliceEMA.length - 1];
-    const dist = (Number.isFinite(lastClose) && Number.isFinite(lastEMA)) ? (lastClose - lastEMA) : 0;
-    const distNorm = clamp(dist / (rangeAvg * RANGE_K), -1, +1);
-
-    let TR = clamp(0.6 * TR_dir + 0.4 * distNorm, -1, +1);
-
-    // Inflection Bias from recent confirmed signals
-    // build time->idx within snapshot bars
-    const timeToIdx = new Map(bars.map((b, i) => [String(b.time), i]));
-
-    const lookback = Math.min(M, nAll);
-    const sigStartIdx = nAll - lookback;
-
-    let Bscore = 0, Sscore = 0;
-    let recentSig = null;
-
-    for (let k = sigs.length - 1; k >= 0; k--) {
-      const s = sigs[k];
-      const idx = timeToIdx.get(String(s.time));
-      if (idx == null) continue;
-      if (idx < sigStartIdx) break;
-
-      const d = (nAll - 1) - idx;
-      const w = Math.exp(-d / TAU);
-
-      if (s.side === "B") Bscore += w;
-      else if (s.side === "S") Sscore += w;
-
-      if (!recentSig || d < recentSig.dist) recentSig = { side: s.side, dist: d };
-    }
-
-    let IB_raw = 0;
-    const denom2 = (Bscore + Sscore);
-    if (denom2 > 1e-9) IB_raw = (Bscore - Sscore) / (denom2 + 1e-9);
-
-    let IB = IB_raw;
-    // damp counter-trend
-    if (TR_dir === +1 && IB_raw < 0) IB = 0.5 * IB_raw;
-    if (TR_dir === -1 && IB_raw > 0) IB = 0.5 * IB_raw;
-    IB = clamp(IB, -1, +1);
-
-    // Stability (AUX energy + flip stability + EMA flip stability)
-    const L3 = Math.min(20, sliceAUX.length - 1);
-    let auxAbsSum = 0, auxAbsCnt = 0, auxFlip = 0, prevAuxS = 0;
-
-    for (let i = sliceAUX.length - L3; i < sliceAUX.length; i++) {
-      const a0 = sliceAUX[i - 1], a1 = sliceAUX[i];
-      if (!Number.isFinite(a0) || !Number.isFinite(a1)) continue;
-      const s = a1 - a0;
-      auxAbsSum += Math.abs(s);
-      auxAbsCnt++;
-      const ss = sign(s);
-      if (i === sliceAUX.length - L3) prevAuxS = ss;
-      else {
-        if (ss !== 0 && prevAuxS !== 0 && ss !== prevAuxS) auxFlip++;
-        if (ss !== 0) prevAuxS = ss;
-      }
-    }
-
-    const auxAbs = auxAbsCnt ? (auxAbsSum / auxAbsCnt) : 0;
-    const auxFlipRate = L3 > 1 ? (auxFlip / (L3 - 1)) : 0;
-    const auxEnergy = clamp(auxAbs / (rangeAvg * AUX_C1), 0, 1);
-    const auxStab = 1 - clamp(auxFlipRate / FLIP_DEN, 0, 1);
-    const ST_aux = clamp(0.5 * auxEnergy + 0.5 * auxStab, 0, 1);
-
-    const L4 = Math.min(20, sliceEMA.length - 1);
-    let emaFlip = 0, prevE = 0;
-    for (let i = sliceEMA.length - L4; i < sliceEMA.length; i++) {
-      const e0 = sliceEMA[i - 1], e1 = sliceEMA[i];
-      if (!Number.isFinite(e0) || !Number.isFinite(e1)) continue;
-      const s = sign(e1 - e0);
-      if (i === sliceEMA.length - L4) prevE = s;
-      else {
-        if (s !== 0 && prevE !== 0 && s !== prevE) emaFlip++;
-        if (s !== 0) prevE = s;
-      }
-    }
-    const emaFlipRate = L4 > 1 ? (emaFlip / (L4 - 1)) : 0;
-    const ST_ema = 1 - clamp(emaFlipRate / FLIP_DEN, 0, 1);
-
-    const ST = clamp(0.6 * ST_aux + 0.4 * ST_ema, 0, 1);
-
-    // Side + Strength
-    const absTR = Math.abs(TR);
-    const agree = 1 - 0.5 * Math.abs(sign(TR) - sign(IB)); // 1,0.5,0
-
-    let strength = 100 * clamp(0.55 * absTR + 0.25 * agree + 0.20 * ST, 0, 1);
-
-    // Rule 3: AUX flat => shrink
-    if (auxEnergy < AUX_FLAT_ENERGY_TH) strength *= FLAT_SHRINK;
-    strength = clamp(strength, 0, 100);
-
-    // Direction score
-    let D = 0.7 * TR + 0.3 * IB;
-
-    let side = "Neutral";
-    if (D >= TH) side = "Bullish";
-    else if (D <= -TH) side = "Bearish";
-
-    // Rule 1: no contradiction with EMA regime
-    if (TR_dir === +1 && side === "Bearish") side = "Neutral";
-    if (TR_dir === -1 && side === "Bullish") side = "Neutral";
-
-    // Rule 2: recent signal must bias (no contradiction)
-    if (recentSig && recentSig.dist <= RECENT_SIG_MAXDIST) {
-      if (recentSig.side === "B" && side === "Bearish") side = "Neutral";
-      if (recentSig.side === "S" && side === "Bullish") side = "Neutral";
-
-      // If EMA regime is neutral and we saw a recent signal, nudge the side to that signal
-      if (side === "Neutral" && TR_dir === 0) {
-        side = (recentSig.side === "B") ? "Bullish" : "Bearish";
-      }
-    }
-
-    return {
-      side,
-      strength,
-      TR_dir,
-      meta: { TR, IB, ST, auxEnergy, agree, recentSig },
-    };
-  }
-
-  // ---- UI bindings (safe, best-effort) ----
-  function renderUI(mp, snapshot) {
-    safeRun("renderUI", () => {
-      // Try flexible selectors; you can later lock them down to exact ids
-      const labelEl =
-        $("marketPulseLabel") ||
-        $("mpLabel") ||
-        qs("[data-mp-label]") ||
-        qs(".mp-label") ||
-        qs("#marketPulse .label");
-
-      const ringEl =
-        $("marketPulseRing") ||
-        $("mpRing") ||
-        qs("[data-mp-ring]") ||
-        qs(".mp-ring") ||
-        qs("#marketPulse .ring");
-
-      const valEl =
-        $("marketPulseValue") ||
-        $("mpValue") ||
-        qs("[data-mp-value]") ||
-        qs(".mp-value");
-
-      if (labelEl) labelEl.textContent = mp.side;
-      if (valEl) valEl.textContent = `${Math.round(mp.strength)}%`;
-
-      if (ringEl) {
-        const pct = clamp(mp.strength, 0, 100);
-        const deg = pct * 3.6;
-        const mainColor =
-          mp.side === "Bullish" ? "rgba(43,226,166,1)" :
-          mp.side === "Bearish" ? "rgba(255,90,90,1)" :
-          "rgba(180,195,210,1)";
-
-        ringEl.style.background =
-          `conic-gradient(${mainColor} 0deg ${deg}deg, rgba(255,255,255,0.10) ${deg}deg 360deg)`;
-        ringEl.style.borderRadius = "999px";
-        ringEl.style.boxShadow =
-          mp.side === "Bullish" ? "0 0 18px rgba(43,226,166,0.25)" :
-          mp.side === "Bearish" ? "0 0 18px rgba(255,90,90,0.25)" :
-          "0 0 18px rgba(200,210,220,0.18)";
-      }
-
-      // Optional: if you have a small debug line area
-      const dbg = $("mpDebug") || qs("[data-mp-debug]");
-      if (dbg) {
-        const sym = snapshot?.symbol || "";
-        const tf = snapshot?.tf || "";
-        dbg.textContent = `${sym} ${tf} · ${mp.side} ${Math.round(mp.strength)}%`;
-      }
-
-      DIAG.mp.lastRender = { at: Date.now(), side: mp.side, strength: mp.strength, symbol: snapshot?.symbol, tf: snapshot?.tf };
-    });
-  }
-
-  function onSnapshot(snapshot) {
-    safeRun("onSnapshot", () => {
-      const mp = computePulse(snapshot);
-      renderUI(mp, snapshot);
-    });
-  }
-
-  // ---- Wiring: event first, fallback polling ----
-  safeRun("wire", () => {
-    window.addEventListener("darrius:chartUpdated", (e) => {
-      onSnapshot(e?.detail);
-    });
-
-    // If chart already loaded before this script, render once
-    if (window.__DARRIUS_CHART_STATE__) {
-      onSnapshot(window.__DARRIUS_CHART_STATE__);
-    }
-
-    // Fallback polling (lightweight) in case events are blocked
-    let lastTs = 0;
-    setInterval(() => {
-      safeRun("poll", () => {
-        const s = window.__DARRIUS_CHART_STATE__;
-        const ts = Number(s?.ts || 0);
-        if (ts && ts !== lastTs) {
-          lastTs = ts;
-          onSnapshot(s);
+    // heuristic: scan window keys for an object that looks like a series
+    return safe(() => {
+      for (const k in window) {
+        const v = window[k];
+        if (!v || typeof v !== "object") continue;
+        // series usually has priceScale() and setData() or setMarkers()
+        if (typeof v.priceScale === "function" && (typeof v.setData === "function" || typeof v.setMarkers === "function")) {
+          if (typeof v.setMarkers === "function") return v;
         }
+      }
+      return null;
+    }) || null;
+  }
+
+  function detectSnapshot() {
+    // try many possible snapshot locations/names
+    const s =
+      window.__DARRIUS_CHART_STATE__ ||
+      window.__DARRIUS_SNAPSHOT__ ||
+      window.DARRIUS_SNAPSHOT ||
+      window.__chartSnapshot ||
+      null;
+
+    // optional getter-based exports (if chart.core.js ever exposes a function)
+    if (!s) {
+      const alt = safe(() => {
+        if (window.DarriusChartCore && typeof window.DarriusChartCore.getSnapshot === "function") {
+          return window.DarriusChartCore.getSnapshot();
+        }
+        if (window.chartCore && typeof window.chartCore.getSnapshot === "function") {
+          return window.chartCore.getSnapshot();
+        }
+        return null;
       });
-    }, 1000);
+      return alt || null;
+    }
+    return s;
+  }
+
+  // ---------- 2) Market Pulse (derived only) ----------
+  // Your discipline rules (hard constraints):
+  // - If EMA regime is UP -> pulse cannot be Bearish.
+  // - If recent confirm window has valid B -> direction must bias to Bullish.
+  // - If AUX flat/unclear -> tradability shrinks (not bearish).
+  function computePulse(snapshot) {
+    // Default: conservative "derived only / waiting"
+    const out = {
+      label: "Neutral",
+      score: 0,           // 0..100 tradability
+      bull: 0,
+      bear: 0,
+      neu: 100,
+      netInflow: "—",
+      reason: "Derived only · waiting for snapshot",
+    };
+
+    if (!snapshot || typeof snapshot !== "object") return out;
+
+    // We support multiple snapshot shapes.
+    // Try to locate signals, emaRegime, auxSlope, etc.
+    const emaRegime =
+      snapshot.emaRegime ||
+      snapshot.trendRegime ||
+      snapshot.regime ||
+      null; // "UP" | "DOWN" | "FLAT" (best effort)
+
+    const confirmWindow = Number(snapshot.confirmWindow || snapshot.confirm || 3) || 3;
+
+    const signals =
+      snapshot.signals ||
+      snapshot.bsSignals ||
+      snapshot.markers ||
+      [];
+
+    // take last confirmWindow signals that are "confirmed"
+    const recent = Array.isArray(signals) ? signals.slice(-Math.max(1, confirmWindow * 2)) : [];
+
+    const lastConfirmed = (arr) => {
+      for (let i = arr.length - 1; i >= 0; i--) {
+        const s = arr[i];
+        if (!s) continue;
+        // accept s.side or s.type, and allow confirmed flags
+        const side = (s.side || s.type || s.signal || "").toString().toUpperCase();
+        const ok = (s.confirmed === true) || (s.isConfirmed === true) || (s.confirm === true) || (s.confirmed == null);
+        if ((side === "B" || side === "BUY" || side === "S" || side === "SELL") && ok) return { side, s };
+      }
+      return null;
+    };
+
+    const last = lastConfirmed(recent);
+
+    // AUX stability / smoothness (best-effort)
+    // If snapshot has auxSlope or auxFlat flag, use it; otherwise infer "unknown" -> treat as low tradability, not bearish
+    const auxFlat =
+      snapshot.auxFlat === true ||
+      snapshot.auxIsFlat === true ||
+      (typeof snapshot.auxSlope === "number" && Math.abs(snapshot.auxSlope) < 1e-9) ||
+      false;
+
+    // EMA flip frequency (best-effort)
+    const emaChop =
+      snapshot.emaChop === true ||
+      snapshot.emaFrequentFlip === true ||
+      false;
+
+    // --- Determine direction with hard rules ---
+    let dir = "Neutral"; // Bullish | Neutral | Bearish
+    let reason = [];
+
+    // Rule 2: if last confirmed is B within confirm window -> bias bullish
+    if (last && (last.side === "B" || last.side === "BUY")) {
+      dir = "Bullish";
+      reason.push("Recent confirmed B → bias long");
+    } else if (last && (last.side === "S" || last.side === "SELL")) {
+      dir = "Bearish";
+      reason.push("Recent confirmed S → bias short");
+    }
+
+    // Rule 1: EMA green/up cannot be Bearish
+    const regime = (emaRegime || "").toString().toUpperCase();
+    if (regime === "UP" || regime === "BULL" || regime === "GREEN") {
+      if (dir === "Bearish") {
+        dir = "Neutral";
+        reason.push("EMA up → cannot be Bearish (clamped to Neutral)");
+      } else {
+        reason.push("EMA up regime");
+      }
+    } else if (regime === "DOWN" || regime === "BEAR" || regime === "RED") {
+      reason.push("EMA down regime");
+    } else if (regime) {
+      reason.push("EMA flat/unclear regime");
+    } else {
+      reason.push("EMA regime unknown");
+    }
+
+    // --- Tradability score (0..100) ---
+    // Institution-style: uncertainty = low participation, NOT bearish.
+    let score = 55;
+
+    // increase if regime clear + not choppy
+    if (regime === "UP" || regime === "DOWN") score += 10;
+    if (emaChop) score -= 18;
+
+    // AUX flat reduces tradability (Rule 3)
+    if (auxFlat) score -= 22;
+
+    // recent confirmed signal adds some tradability (but not too much)
+    if (last) score += 8;
+
+    // clamp
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    // Convert score into bull/bear/neutral percents (UI-friendly)
+    // We keep it simple and consistent:
+    // - Direction controls which side gets most of the "active" share.
+    // - Neutral always keeps a base.
+    let bull = 0, bear = 0, neu = 100;
+
+    const active = Math.round(score * 0.9);         // active confidence bucket
+    const baseNeutral = 100 - active;               // uncertainty bucket (institution style)
+    neu = baseNeutral;
+
+    if (dir === "Bullish") {
+      bull = Math.round(active * 0.75);
+      bear = active - bull;
+    } else if (dir === "Bearish") {
+      bear = Math.round(active * 0.75);
+      bull = active - bear;
+    } else {
+      // Neutral: split active evenly (or keep small directional)
+      bull = Math.round(active * 0.5);
+      bear = active - bull;
+    }
+
+    out.label = dir;
+    out.score = score;
+    out.bull = bull;
+    out.bear = bear;
+    out.neu = neu;
+    out.reason = reason.join(" · ");
+
+    // optional: if snapshot has any flow metric
+    out.netInflow = (snapshot.netInflow != null) ? String(snapshot.netInflow) : "—";
+
+    // Final hard constraints again (safety)
+    if (regime === "UP" && out.label === "Bearish") out.label = "Neutral";
+
+    return out;
+  }
+
+  function paintGauge(pulse) {
+    const scoreEl = $("pulseScore");
+    const bullEl = $("bullPct");
+    const bearEl = $("bearPct");
+    const neuEl  = $("neuPct");
+    const inflowEl = $("netInflow");
+    const maskEl = $("pulseGaugeMask");
+
+    if (!scoreEl || !maskEl) return;
+
+    // Score number
+    scoreEl.textContent = (pulse && typeof pulse.score === "number") ? String(pulse.score) : "—";
+
+    if (bullEl) bullEl.textContent = pulse ? (pulse.bull + "%") : "—";
+    if (bearEl) bearEl.textContent = pulse ? (pulse.bear + "%") : "—";
+    if (neuEl)  neuEl.textContent  = pulse ? (pulse.neu  + "%") : "—";
+    if (inflowEl) inflowEl.textContent = pulse ? String(pulse.netInflow) : "—";
+
+    // Gauge mask: we show "tradability" as filled portion.
+    const score = pulse && typeof pulse.score === "number" ? pulse.score : 0;
+    const deg = Math.round((score / 100) * 360);
+
+    // Conic mask trick: first segment = transparent hole, second = dark ring
+    // We keep color in CSS ring, and mask by dark overlay.
+    maskEl.style.background = `conic-gradient(rgba(10,15,23,.92) ${deg}deg, rgba(10,15,23,.92) 360deg)`;
+
+    // Optional: update label under gauge (Sentiment/Tradability)
+    const lbl = document.querySelector("#pulseGauge .gaugeCenter .lbl");
+    if (lbl) lbl.textContent = "Tradability";
+
+    // Optional: tag text
+    const tag = $("pulseTag");
+    if (tag) tag.textContent = "LIVE";
+
+    // Optional: small status badge
+    const statusText = $("statusText");
+    if (statusText && pulse) {
+      statusText.textContent = `Ready · Pulse: ${pulse.label} (${pulse.score}%)`;
+    }
+  }
+
+  // ---------- 3) Restore B/S markers (best-effort) ----------
+  function normalizeSignals(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return [];
+    const arr = snapshot.signals || snapshot.bsSignals || snapshot.markers || snapshot.BS || [];
+    if (!Array.isArray(arr)) return [];
+    // normalize to { time, side, price }
+    return arr.map(s => {
+      const sideRaw = (s.side || s.type || s.signal || s.text || "").toString().toUpperCase();
+      const side = (sideRaw === "BUY") ? "B" : (sideRaw === "SELL") ? "S" : (sideRaw === "B" || sideRaw === "S") ? sideRaw : null;
+      const time = s.time ?? s.t ?? s.timestamp ?? null;
+      const price = s.price ?? s.p ?? s.value ?? null;
+      const confirmed = (s.confirmed === true) || (s.isConfirmed === true) || (s.confirm === true) || (s.confirmed == null);
+      return { time, side, price, confirmed };
+    }).filter(x => x.side && x.time != null);
+  }
+
+  // Preferred: use LightweightCharts series markers (stable, no CSS dependency)
+  function renderMarkersOnSeries(series, signals) {
+    if (!series || typeof series.setMarkers !== "function") return false;
+    if (!Array.isArray(signals) || signals.length === 0) {
+      // clear markers if no signals (optional)
+      safe(() => series.setMarkers([]));
+      return true;
+    }
+
+    const markers = signals
+      .filter(s => s && s.confirmed !== false)
+      .map(s => ({
+        time: s.time,
+        position: (s.side === "B") ? "belowBar" : "aboveBar",
+        color: (s.side === "B") ? "#2BE2A6" : "#FF5A5A",
+        shape: (s.side === "B") ? "circle" : "circle",
+        text: s.side
+      }));
+
+    safe(() => series.setMarkers(markers));
+    return true;
+  }
+
+  // Fallback: DOM overlay (needs chart + series coordinate functions)
+  function renderDomOverlay(chart, series, signals) {
+    const overlay = $("sigOverlay");
+    if (!overlay) return false;
+
+    // clear
+    overlay.innerHTML = "";
+    if (!chart || !series || !signals || signals.length === 0) return false;
+
+    const timeScale = safe(() => chart.timeScale && chart.timeScale()) || null;
+    const priceScale = safe(() => series.priceScale && series.priceScale()) || null;
+
+    if (!timeScale || !priceScale) return false;
+    if (typeof timeScale.timeToCoordinate !== "function") return false;
+    if (typeof priceScale.priceToCoordinate !== "function") return false;
+
+    // draw a limited number to keep clean
+    const maxDraw = 120;
+    const tail = signals.slice(-maxDraw);
+
+    for (const s of tail) {
+      const x = safe(() => timeScale.timeToCoordinate(s.time));
+      const y = safe(() => priceScale.priceToCoordinate(s.price));
+      if (x == null || y == null || !isFinite(x) || !isFinite(y)) continue;
+
+      const div = document.createElement("div");
+      div.className = "sigMark " + (s.side === "B" ? "buy" : "sell");
+      div.textContent = s.side;
+      div.style.left = x + "px";
+      div.style.top = y + "px";
+      overlay.appendChild(div);
+    }
+    return true;
+  }
+
+  // Public safe APIs requested earlier
+  function renderOverlaySignals() {
+    safe(() => {
+      const snap = detectSnapshot();
+      const sigs = normalizeSignals(snap);
+
+      // 1) best: series markers
+      const series = detectCandleSeries();
+      if (series && renderMarkersOnSeries(series, sigs)) return;
+
+      // 2) fallback: DOM overlay (only if we can locate chart+series)
+      const chart = detectChart();
+      const anySeries = series || detectCandleSeries();
+      renderDomOverlay(chart, anySeries, sigs);
+    });
+  }
+
+  function updateMarketPulseUI() {
+    safe(() => {
+      const snap = detectSnapshot();
+      const pulse = computePulse(snap);
+      paintGauge(pulse);
+
+      // Also update left "signal box" (optional, safe)
+      safe(() => {
+        const sigs = normalizeSignals(snap);
+        const last = sigs.length ? sigs[sigs.length - 1] : null;
+        const sideEl = $("signalSide");
+        const metaEl = $("signalMeta");
+        const pxEl = $("signalPx");
+        const tfEl = $("signalTf");
+        const rowEl = $("signalRow");
+
+        if (!sideEl || !metaEl || !rowEl) return;
+
+        if (!last) {
+          sideEl.textContent = "Waiting…";
+          metaEl.textContent = "Waiting for confirmation…\n等待确认…";
+          if (pxEl) pxEl.textContent = "—";
+          if (tfEl) tfEl.textContent = "TF: —";
+          rowEl.classList.remove("buy","sell");
+          rowEl.classList.add("neutral");
+          return;
+        }
+
+        const isBuy = last.side === "B";
+        sideEl.textContent = isBuy ? "BUY / B" : "SELL / S";
+        metaEl.textContent = (pulse ? pulse.reason : "Derived only");
+        if (pxEl) pxEl.textContent = (last.price != null) ? String(last.price) : "—";
+        if (tfEl) tfEl.textContent = snap && snap.tf ? ("TF: " + snap.tf) : "TF: —";
+
+        rowEl.classList.remove("neutral","buy","sell");
+        rowEl.classList.add(isBuy ? "buy" : "sell");
+      });
+    });
+  }
+
+  // expose globals (as you要求的“绝对不抛错安全区”)
+  window.renderOverlaySignals = function () { return safe(renderOverlaySignals); };
+  window.updateMarketPulseUI  = function () { return safe(updateMarketPulseUI); };
+
+  // automatic refresh loop (safe)
+  function tick() {
+    safe(() => updateMarketPulseUI());
+    safe(() => renderOverlaySignals());
+  }
+
+  // start after DOM ready
+  safe(() => {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () {
+        tick();
+        setInterval(tick, 1200);
+      });
+    } else {
+      tick();
+      setInterval(tick, 1200);
+    }
   });
-})();
+
+  // if chart.core.js dispatches events, we listen (optional)
+  safe(() => {
+    window.addEventListener("darrius:chartUpdated", tick);
+    window.addEventLis
