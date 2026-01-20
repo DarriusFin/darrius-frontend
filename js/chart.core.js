@@ -556,95 +556,95 @@
     });
 
     // ===== Snapshot: export for market.pulse.js (READ-ONLY) =====
-  safeRun("setSnapshotForUI", () => {
-  try {
-    const snapMeta = {
-      symbol: sym || null,
-      timeframe: tf || null,
-      bars: Array.isArray(bars) ? bars.length : 0,
-      source: (window.__DATA_SOURCE__ || "demo"),
-      emaPeriod: EMA_PERIOD || 14,
-      auxPeriod: AUX_PERIOD || 40,
-      confirmWindow: CONFIRM_WINDOW || 3,
-    };
-
-    // 注意：你的 sigs 只有 {time, side}，没有 price
-    // 这里用“该 time 对应的 close”补齐 price（用于 overlay 定位）
-    const closeByTime = new Map();
-    for (const b of bars) closeByTime.set(b.time, b.close);
-
-    const snapSignals = (Array.isArray(sigs) ? sigs : [])
-      .map((s, idx) => {
-        const t = s.time ?? s.t ?? null;
-        const sideRaw = (s.side || s.type || s.signal || "").toString().toUpperCase();
-        const side = (sideRaw === "S" ? "S" : "B");
-        const price = Number.isFinite(s.price) ? s.price : closeByTime.get(t);
-        return {
-          time: t,
-          price: Number.isFinite(price) ? price : null,
-          side,
-          i: (typeof s.i === "number" ? s.i : (typeof s.index === "number" ? s.index : idx)),
-          reason: s.reason || s.note || null,
-          strength: (typeof s.strength === "number" ? s.strength : null),
+    safeRun("setSnapshotForUI", () => {
+      try {
+        const snapMeta = {
+          symbol: sym || null,
+          timeframe: tf || null,
+          bars: Array.isArray(bars) ? bars.length : 0,
+          source: (window.__DATA_SOURCE__ || "demo"),
+          emaPeriod: EMA_PERIOD || 14,
+          auxPeriod: AUX_PERIOD || 40,
+          confirmWindow: CONFIRM_WINDOW || 3,
         };
-      })
-      .filter(x => x.time != null && x.price != null);
 
-    // 趋势信息：你主图是按 EMA slope 给蜡烛底色
-    // 这里给出一个“最近 10 根”的 slope 估计 + regime
-    const n = Math.min(10, emaVals.length - 1);
-    let emaSlope = null;
-    let emaRegime = null;
-    let emaColor = null;
+        // 注意：你的 sigs 只有 {time, side}，没有 price
+        // 这里用“该 time 对应的 close”补齐 price（用于 overlay 定位）
+        const closeByTime = new Map();
+        for (const b of bars) closeByTime.set(b.time, b.close);
 
-    if (n >= 2) {
-      const eNow = emaVals[emaVals.length - 1];
-      const ePrev = emaVals[emaVals.length - 1 - n];
-      if (Number.isFinite(eNow) && Number.isFinite(ePrev)) {
-        emaSlope = (eNow - ePrev) / n;
-        if (emaSlope > 0) emaRegime = "UP";
-        else if (emaSlope < 0) emaRegime = "DOWN";
-        else emaRegime = "FLAT";
+        const snapSignals = (Array.isArray(sigs) ? sigs : [])
+          .map((s, idx) => {
+            const t = s.time ?? s.t ?? null;
+            const sideRaw = (s.side || s.type || s.signal || "").toString().toUpperCase();
+            const side = (sideRaw === "S" ? "S" : "B");
+            const price = Number.isFinite(s.price) ? s.price : closeByTime.get(t);
+            return {
+              time: t,
+              price: Number.isFinite(price) ? price : null,
+              side,
+              i: (typeof s.i === "number" ? s.i : (typeof s.index === "number" ? s.index : idx)),
+              reason: s.reason || s.note || null,
+              strength: (typeof s.strength === "number" ? s.strength : null),
+            };
+          })
+          .filter(x => x.time != null && x.price != null);
+
+        // 趋势信息：你主图是按 EMA slope 给蜡烛底色
+        // 这里给出一个“最近 10 根”的 slope 估计 + regime
+        const n = Math.min(10, emaVals.length - 1);
+        let emaSlope = null;
+        let emaRegime = null;
+        let emaColor = null;
+
+        if (n >= 2) {
+          const eNow = emaVals[emaVals.length - 1];
+          const ePrev = emaVals[emaVals.length - 1 - n];
+          if (Number.isFinite(eNow) && Number.isFinite(ePrev)) {
+            emaSlope = (eNow - ePrev) / n;
+            if (emaSlope > 0) emaRegime = "UP";
+            else if (emaSlope < 0) emaRegime = "DOWN";
+            else emaRegime = "FLAT";
+          }
+        }
+        if (emaRegime === "UP") emaColor = "GREEN";
+        else if (emaRegime === "DOWN") emaColor = "RED";
+        else emaColor = "NEUTRAL";
+
+        const snapTrend = {
+          emaSlope,
+          emaRegime,   // 'UP'|'DOWN'|'FLAT'
+          emaColor,    // 'GREEN'|'RED'|'NEUTRAL'
+          flipCount: null,
+        };
+
+        // 风险信息：你当前 chart.core.js 没有 risk 计算，先留空
+        const snapRisk = {
+          entry: null,
+          stop: null,
+          targets: null,
+          confidence: null,
+          winrate: null,
+        };
+
+        if (window.DarriusChart && typeof window.DarriusChart.__setSnapshot === "function") {
+          window.DarriusChart.__setSnapshot({
+            meta: snapMeta,
+            candles: Array.isArray(bars) ? bars : [],
+            // 这里“对齐你的 market.pulse.js”：它期望 ema/aux 是数组
+            // 你现在 snapshot export IIFE 里注释写的是 [{time,value}]
+            // 但 market.pulse.js 多半兼容 number[]；为了稳，给两份都行：
+            ema: Array.isArray(emaPts) ? emaPts : [],
+            aux: Array.isArray(auxPts) ? auxPts : [],
+            signals: snapSignals,
+            trend: snapTrend,
+            risk: snapRisk,
+          });
+        }
+      } catch (e) {
+        // 永不影响主图
       }
-    }
-    if (emaRegime === "UP") emaColor = "GREEN";
-    else if (emaRegime === "DOWN") emaColor = "RED";
-    else emaColor = "NEUTRAL";
-
-    const snapTrend = {
-      emaSlope,
-      emaRegime,   // 'UP'|'DOWN'|'FLAT'
-      emaColor,    // 'GREEN'|'RED'|'NEUTRAL'
-      flipCount: null,
-    };
-
-    // 风险信息：你当前 chart.core.js 没有 risk 计算，先留空
-    const snapRisk = {
-      entry: null,
-      stop: null,
-      targets: null,
-      confidence: null,
-      winrate: null,
-    };
-
-    if (window.DarriusChart && typeof window.DarriusChart.__setSnapshot === "function") {
-      window.DarriusChart.__setSnapshot({
-        meta: snapMeta,
-        candles: Array.isArray(bars) ? bars : [],
-        // 这里“对齐你的 market.pulse.js”：它期望 ema/aux 是数组
-        // 你现在 snapshot export IIFE 里注释写的是 [{time,value}]
-        // 但 market.pulse.js 多半兼容 number[]；为了稳，给两份都行：
-        ema: Array.isArray(emaPts) ? emaPts : [],
-        aux: Array.isArray(auxPts) ? auxPts : [],
-        signals: snapSignals,
-        trend: snapTrend,
-        risk: snapRisk,
-      });
-    }
-  } catch (e) {
-    // 永不影响主图
-  }
-});
+    });
 
     // -------- SNAPSHOT OUTPUT (consumer only) --------
     // Keep snapshot compact but sufficient. We expose last N arrays for MP usage.
@@ -722,23 +722,29 @@
     });
 
     // -----------------------------
-// Read-only coordinate bridge (for market.pulse.js overlay)
-// - DO NOT expose chart object to UI layer
-// - Only expose time->x and price->y mapping (safe, read-only)
-// -----------------------------
-safeRun("exposeCoordBridge", () => {
-  window.DarriusChart = window.DarriusChart || {};
+    // Read-only coordinate bridge (for market.pulse.js overlay)
+    // - DO NOT expose chart object to UI layer
+    // - Only expose time->x and price->y mapping (safe, read-only)
+    // - Also expose __hostId so overlay knows the real chart container
+    // -----------------------------
+    safeRun("bridgeExpose", () => {
+      window.DarriusChart = window.DarriusChart || {};
 
-  window.DarriusChart.timeToX = (t) => safeRun("timeToX", () => {
-    if (!chart || !chart.timeScale) return null;
-    return chart.timeScale().timeToCoordinate(t);
-  });
+      // time -> x(px)
+      window.DarriusChart.timeToX = (t) => safeRun("timeToX", () => {
+        if (!chart || !chart.timeScale) return null;
+        return chart.timeScale().timeToCoordinate(t);
+      });
 
-  window.DarriusChart.priceToY = (p) => safeRun("priceToY", () => {
-    if (!candleSeries || !candleSeries.priceToCoordinate) return null;
-    return candleSeries.priceToCoordinate(p);
-  });
-});
+      // price -> y(px)
+      window.DarriusChart.priceToY = (p) => safeRun("priceToY", () => {
+        if (!candleSeries || !candleSeries.priceToCoordinate) return null;
+        return candleSeries.priceToCoordinate(p);
+      });
+
+      // optional: tell UI which host is the real chart container
+      window.DarriusChart.__hostId = containerId || "chart";
+    });
 
     const resize = () => safeRun("resize", () => {
       const r = containerEl.getBoundingClientRect();
@@ -772,6 +778,7 @@ safeRun("exposeCoordBridge", () => {
 
   window.ChartCore = { init, load, applyToggles };
 })();
+
 /* =========================
  * Snapshot Export (READ-ONLY)
  * - UI层（market.pulse.js）只读这里
@@ -779,18 +786,18 @@ safeRun("exposeCoordBridge", () => {
  * ========================= */
 
 (function () {
-  'use strict';
+  "use strict";
 
   // 1) 单例快照容器（只存“最新一次计算/渲染后的结果”）
   const __SNAPSHOT = {
-    version: 'snapshot_v1',
+    version: "snapshot_v1",
     ts: 0,
 
     meta: {
       symbol: null,
       timeframe: null,
       bars: 0,
-      source: 'demo',
+      source: "demo",
       emaPeriod: null,
       auxPeriod: null,
       confirmWindow: null,
@@ -828,10 +835,9 @@ safeRun("exposeCoordBridge", () => {
   //    注意：只拷贝必要字段，避免把巨大对象/series引用泄漏出去
   function __setSnapshot(patch) {
     try {
-      if (!patch || typeof patch !== 'object') return;
-      // 深拷贝：只处理我们需要的数组（浅拷贝即可，元素是 plain object）
-      const now = Date.now();
-      __SNAPSHOT.ts = now;
+      if (!patch || typeof patch !== "object") return;
+
+      __SNAPSHOT.ts = Date.now();
 
       if (patch.meta) {
         __SNAPSHOT.meta = Object.assign({}, __SNAPSHOT.meta, patch.meta);
@@ -877,11 +883,10 @@ safeRun("exposeCoordBridge", () => {
   window.DarriusChart.getSnapshot = __getSnapshot;
 
   // 兼容另一种命名（你 market.pulse.js 也会尝试这个）
-  if (typeof window.getChartSnapshot !== 'function') {
+  if (typeof window.getChartSnapshot !== "function") {
     window.getChartSnapshot = __getSnapshot;
   }
 
   // 5) 提供给 chart.core.js 内部调用（不暴露到 UI 层也行；但暴露给自己更方便）
   window.DarriusChart.__setSnapshot = __setSnapshot;
-
 })();
