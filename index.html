@@ -1,393 +1,708 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DarriusAI · Inflection Hunter</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DarriusAI · Inflection Hunter | AI 拐点决策系统</title>
+
+  <!-- ✅ Pin v4: chart.core.js 使用 addCandlestickSeries 等 v4 API -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
   <style>
     :root{
-      --bg:#0b1220;
-      --panel:#0f1a2e;
-      --panel2:#0d172a;
-      --text:#eaf0f7;
-      --muted:rgba(234,240,247,.68);
-      --line:rgba(255,255,255,.08);
-      --shadow:0 12px 40px rgba(0,0,0,.35);
-      --radius:16px;
+      --bg:#0B0F17;
+      --bg2:#0A1220;
+
+      --panel:#121A28;
+      --panel2:#0F1726;
+
+      --border:rgba(255,255,255,.08);
+      --border2:rgba(255,255,255,.10);
+
+      --text:#EAF0F7;
+      --muted:#A2B0C2;
+
+      --brand1:#2BE2A6;
+      --brand2:#4CC2FF;
+      --warn:#FFB86C;
+      --danger:#FF5A5A;
+
+      --shadow: 0 18px 45px rgba(0,0,0,.40);
+      --shadow2: 0 10px 25px rgba(0,0,0,.28);
+
+      --r12:12px;
+      --r14:14px;
+      --r18:18px;
+
+      --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
+      --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
     }
+
     *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+
     body{
       margin:0;
-      background: radial-gradient(1200px 800px at 20% -10%, rgba(65,105,225,.18), transparent 60%),
-                  radial-gradient(900px 700px at 110% 0%, rgba(255,212,0,.10), transparent 55%),
-                  var(--bg);
       color:var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
-    }
-
-    /* Layout */
-    .app{
-      min-height:100vh;
-      display:flex;
-      flex-direction:column;
-    }
-    .topbar{
-      height:58px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding:0 18px;
-      border-bottom:1px solid var(--line);
-      background: rgba(10,16,28,.55);
-      backdrop-filter: blur(10px);
-      position: sticky;
-      top: 0;
-      z-index: 50;
-    }
-    .brand{
-      display:flex; gap:10px; align-items:center;
-      font-weight:800;
-      letter-spacing:.3px;
-    }
-    .brand .dot{
-      width:10px;height:10px;border-radius:999px;
-      background: rgba(255,212,0,.95);
-      box-shadow: 0 0 12px rgba(255,212,0,.55);
-    }
-    .topbar .meta{
-      display:flex; align-items:center; gap:14px;
-      font-size:13px;
-      color:var(--muted);
-    }
-    .pill{
-      padding:6px 10px;
-      border:1px solid var(--line);
-      border-radius:999px;
-      background: rgba(255,255,255,.04);
-    }
-
-    .content{
-      display:grid;
-      grid-template-columns: 320px 1fr 320px;
-      gap:14px;
-      padding:14px;
-      flex:1;
-    }
-
-    .card{
-      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
-      border:1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
+      background:
+        radial-gradient(900px 500px at 12% 10%, rgba(76,194,255,.10), transparent 60%),
+        radial-gradient(900px 520px at 88% 12%, rgba(43,226,166,.10), transparent 62%),
+        radial-gradient(700px 420px at 50% 92%, rgba(255,184,108,.06), transparent 60%),
+        linear-gradient(180deg, var(--bg), var(--bg2));
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "PingFang SC","Microsoft YaHei", sans-serif;
       overflow:hidden;
     }
-    .card-hd{
-      padding:12px 14px;
-      border-bottom:1px solid var(--line);
+
+    a{ color: rgba(76,194,255,.95); text-decoration:none; }
+    a:hover{ text-decoration:underline; }
+
+    /* ===== Header ===== */
+    #topbar{
+      height:78px;
+      padding:0 18px;
       display:flex;
       align-items:center;
       justify-content:space-between;
-      background: rgba(255,255,255,.02);
+      border-bottom:1px solid var(--border);
+      background: rgba(10,15,23,.55);
+      backdrop-filter: blur(10px);
     }
-    .card-hd .title{
-      font-weight:800;
-      font-size:13px;
-      letter-spacing:.2px;
-      color: rgba(234,240,247,.92);
-    }
-    .card-bd{ padding:14px; }
 
-    /* Market Pulse UI */
-    .mp-wrap{ display:flex; gap:14px; align-items:center; }
-    .mp-ring{
-      width:86px; height:86px;
-      border-radius:999px;
-      background: conic-gradient(rgba(180,195,210,1) 0deg 0deg, rgba(255,255,255,.10) 0deg 360deg);
-      border: 1px solid rgba(255,255,255,.10);
-      box-shadow: 0 0 18px rgba(200,210,220,0.18);
-      position:relative;
-      flex:0 0 auto;
-    }
-    .mp-ring::after{
-      content:"";
-      position:absolute;
-      inset:10px;
-      border-radius:999px;
-      background: rgba(11,18,32,.85);
-      border:1px solid rgba(255,255,255,.06);
-    }
-    .mp-center{
-      position:absolute;
-      inset:0;
+    #brand{
       display:flex;
       align-items:center;
-      justify-content:center;
-      font-weight:900;
-      z-index:1;
-      color: rgba(234,240,247,.90);
-      font-size:14px;
-    }
-    .mp-col{
-      display:flex;
-      flex-direction:column;
-      gap:6px;
-      min-width:0;
-    }
-    .mp-label{
-      font-weight:900;
-      font-size:16px;
-      letter-spacing:.2px;
-    }
-    .mp-sub{
-      color: var(--muted);
-      font-size:12px;
-      line-height:1.35;
-    }
-    .mp-value{
-      display:inline-block;
-      margin-top:2px;
-      padding:4px 8px;
-      border-radius:999px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.04);
-      color: rgba(234,240,247,.86);
-      font-weight:800;
-      font-size:12px;
-      width: fit-content;
+      gap:14px;
+      min-width:420px;
     }
 
-    /* Main chart area */
-    .main{
-      display:flex;
-      flex-direction:column;
-      min-height: 0;
+    .logo{
+      width:46px;height:46px;border-radius:16px;
+      background: var(--gradBrandSoft);
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow: 0 14px 30px rgba(0,0,0,.30);
+      position:relative;
+      overflow:hidden;
+      flex:0 0 auto;
     }
-    .main-top{
+    .logo::after{
+      content:"";
+      position:absolute; inset:-65%;
+      background: conic-gradient(from 180deg,
+        rgba(43,226,166,0),
+        rgba(43,226,166,.70),
+        rgba(76,194,255,.70),
+        rgba(255,90,90,.55),
+        rgba(43,226,166,0));
+      animation: spin 6.5s linear infinite;
+      filter: blur(0.2px);
+    }
+    @keyframes spin{ to{ transform: rotate(360deg);} }
+
+    #brandText{ line-height:1.08; }
+    #brandLine1{
+      font-weight:950;
+      letter-spacing:.3px;
+      font-size:24px;
+    }
+    #brandLine1 .accent{
+      background: var(--gradBrand);
+      -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;
+    }
+    #brandLine2{
+      margin-top:7px;
+      color:var(--muted);
+      font-size:13px;
       display:flex;
       gap:10px;
       align-items:center;
       flex-wrap:wrap;
     }
-    .field{
+    .chip{
+      font-size:12px;
+      padding:5px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      color: rgba(234,240,247,.90);
+      white-space:nowrap;
+    }
+    .chip.brand{
+      border:1px solid rgba(43,226,166,.30);
+      background: rgba(43,226,166,.12);
+      color: rgba(234,240,247,.95);
+    }
+
+    #topRight{
       display:flex;
       align-items:center;
+      gap:10px;
+      justify-content:flex-end;
+      min-width:360px;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
       gap:8px;
-      padding:8px 10px;
-      border:1px solid var(--line);
-      border-radius:12px;
-      background: rgba(255,255,255,.03);
-    }
-    .field label{
-      font-size:12px;
-      color:var(--muted);
-      font-weight:700;
-    }
-    .field input, .field select{
-      background: transparent;
-      color: var(--text);
-      border: none;
-      outline:none;
-      font-size:13px;
-      font-weight:800;
-      min-width: 90px;
-    }
-    .btn{
-      cursor:pointer;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.04);
-      color: rgba(234,240,247,.92);
       padding:9px 12px;
-      border-radius:12px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(18,26,40,.65);
+      box-shadow: var(--shadow2);
+      font-size:12px;
+      color: var(--text);
+      white-space:nowrap;
+      max-width: 42vw;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .dot{
+      width:9px;height:9px;border-radius:50%;
+      background: var(--brand1);
+      box-shadow: 0 0 0 4px rgba(43,226,166,.10);
+      flex:0 0 auto;
+    }
+
+    #copyright{
+      font-size:12px;
+      color: rgba(234,240,247,.68);
+      background: rgba(0,0,0,.16);
+      padding:9px 12px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:999px;
+      white-space:nowrap;
+    }
+
+    /* ===== Main Layout ===== */
+    #main{
+      height: calc(100vh - 78px);
+      padding:16px;
+      display:grid;
+      grid-template-columns: 330px 1fr 380px;
+      gap:16px;
+      min-height:0;
+    }
+
+    .panel{
+      background: linear-gradient(180deg, rgba(18,26,40,.92), rgba(15,23,38,.88));
+      border: 1px solid var(--border);
+      border-radius: var(--r18);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+
+    .panelHeader{
+      padding:14px 14px 12px 14px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      background: rgba(0,0,0,.12);
+    }
+    .panelHeader .h{
       font-weight:900;
       font-size:13px;
-    }
-    .btn:hover{ background: rgba(255,255,255,.07); }
-
-    .tog{
+      letter-spacing:.2px;
       display:flex;
       align-items:center;
-      gap:8px;
-      padding:8px 10px;
-      border:1px solid var(--line);
-      border-radius:12px;
-      background: rgba(255,255,255,.03);
-      user-select:none;
+      gap:10px;
+    }
+    .panelHeader .h .tag{
+      font-size:11px;
+      padding:3px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      color: rgba(234,240,247,.92);
+    }
+    .panelBody{
+      padding:14px;
+      overflow:auto;
+      min-height:0;
+    }
+
+    .card{
+      background: rgba(0,0,0,.16);
+      border:1px solid rgba(255,255,255,.07);
+      border-radius: var(--r14);
+      padding:12px;
+      margin-bottom:12px;
+    }
+
+    .cardTitle{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+      color: var(--muted);
+      font-size:12px;
+    }
+    .cardTitle b{
+      color: var(--text);
+      font-size:12.5px;
+      font-weight:900;
+    }
+
+    .small{
       font-size:12px;
       color: var(--muted);
-      font-weight:800;
-    }
-    .tog input{ transform: translateY(1px); }
-
-    #chart{
-      height: calc(100vh - 58px - 14px - 14px - 54px - 18px); /* sticky topbar + paddings */
-      min-height: 520px;
-      width: 100%;
+      line-height:1.45;
     }
 
-    .hint{
-      margin-left:auto;
-      color: rgba(234,240,247,.70);
+    .kv{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px 10px;
       font-size:12px;
-      font-weight:700;
+      color: var(--muted);
+    }
+    .kv b{ color: var(--text); font-weight:900; }
+
+    /* ===== Gauge ===== */
+    .gaugeWrap{
+      display:flex;
+      gap:12px;
+      align-items:center;
+    }
+    .gauge{
+      width:160px;height:160px;border-radius:50%;
+      background:
+        conic-gradient(
+          rgba(43,226,166,1) 0deg,
+          rgba(76,194,255,1) 120deg,
+          rgba(255,90,90,.95) 240deg,
+          rgba(43,226,166,1) 360deg
+        );
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+      position:relative;
+      flex:0 0 auto;
+      overflow:hidden;
+    }
+    .gauge::after{
+      content:"";
+      position:absolute; inset:14px;
+      border-radius:50%;
+      background: rgba(10,15,23,.92);
+      border:1px solid rgba(255,255,255,.06);
+      z-index:2;
+    }
+    .gaugeMask{
+      position:absolute; inset:0;
+      border-radius:50%;
+      z-index:1;
+      background: conic-gradient(var(--brand1) 0deg, var(--brand1) 0deg, rgba(255,90,90,.92) 0deg, rgba(255,90,90,.92) 360deg);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+    }
+    .gaugeCenter{
+      position:absolute; inset:0;
+      z-index:3;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      text-align:center;
+    }
+    .gaugeCenter .num{
+      font-size:36px;
+      font-weight:950;
+      letter-spacing:.6px;
+    }
+    .gaugeCenter .lbl{
+      margin-top:2px;
+      font-size:12px;
+      color: var(--muted);
     }
 
-    /* Responsive */
-    @media (max-width: 1180px){
-      .content{ grid-template-columns: 300px 1fr; }
-      .rightcol{ display:none; }
+    /* ===== Signal box ===== */
+    .signalBox{
+      border-radius: var(--r14);
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.08);
     }
-    @media (max-width: 880px){
-      .content{ grid-template-columns: 1fr; }
-      #chart{ min-height: 480px; }
+    .signal{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      padding:12px;
+      background: rgba(0,0,0,.16);
+      border-left: 4px solid rgba(255,255,255,.10);
+    }
+    .signal.buy{ border-left-color: var(--brand1); }
+    .signal.sell{ border-left-color: var(--danger); }
+    .signal.neutral{ border-left-color: rgba(255,255,255,.14); }
+    .signal .side{ font-weight:950; letter-spacing:.4px; }
+    .signal .meta{ margin-top:6px; font-size:12px; color:var(--muted); line-height:1.35; }
+
+    /* ===== Left footer disclaimer ===== */
+    #leftDisclaimer{
+      margin-top:12px;
+      padding-top:12px;
+      border-top:1px solid rgba(255,255,255,.06);
+      font-size:11px;
+      line-height:1.55;
+      color: rgba(234,240,247,.74);
+    }
+
+    /* ===== Center Chart ===== */
+    #chartPanel .panelBody{ padding:0; }
+    #chartTop{
+      padding:10px 14px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      background: rgba(0,0,0,.14);
+      gap:12px;
+    }
+    #priceLine{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:950;
+      min-width: 260px;
+    }
+    #priceLine .sym{
+      font-size:13px;
+      color: var(--muted);
+      font-weight:950;
+      letter-spacing:.3px;
+    }
+    #hintText{
+      font-size:12px;
+      color: var(--muted);
+      max-width:55%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    #tfQuick{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .tfBtn{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.14);
+      color: rgba(234,240,247,.90);
+      border-radius:999px;
+      padding:6px 10px;
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+    }
+
+    #chartWrap{
+      position:relative;
+      width:100%;
+      height: calc(100vh - 78px - 16px - 16px - 52px);
+      min-height:420px;
+    }
+    #chart{
+      position:absolute; inset:0;
+      width:100%;
+      height:100%;
+    }
+
+    /* Overlay for BIG glowing B/S */
+    #sigOverlay{
+      position:absolute; inset:0;
+      pointer-events:none;
+      z-index:20;
+    }
+
+    /* ===== Right Controls ===== */
+    .field{ margin-bottom:10px; }
+    .label{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:6px;
+      font-size:12px;
+      color: var(--muted);
+    }
+
+    input, select{
+      width:100%;
+      background: rgba(0,0,0,.24);
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--text);
+      padding:10px 10px;
+      border-radius: var(--r12);
+      outline:none;
+      font-size:13px;
+    }
+
+    .btn{
+      width:100%;
+      border:0;
+      color:#081119;
+      font-weight:950;
+      letter-spacing:.3px;
+      padding:12px 12px;
+      border-radius: var(--r12);
+      cursor:pointer;
+      background: var(--gradBrand);
+      box-shadow: var(--shadow2);
+    }
+
+    .btnGhost{
+      width:100%;
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--text);
+      font-weight:900;
+      padding:11px 12px;
+      border-radius: var(--r12);
+      cursor:pointer;
+      background: rgba(0,0,0,.14);
+    }
+
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+
+    .note{
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.45;
+    }
+
+    @media (max-width: 1180px){
+      body{ overflow:auto; }
+      #main{
+        height:auto;
+        grid-template-columns: 1fr;
+      }
+      #chartWrap{ height: 560px; }
+      #brand{ min-width:0; }
+      #topRight{ min-width:0; }
+      #tfQuick{ justify-content:flex-start; }
     }
   </style>
 </head>
 
 <body>
-  <div class="app">
-    <!-- Topbar -->
-    <div class="topbar">
-      <div class="brand">
-        <span class="dot"></span>
-        <span>DarriusAI · Inflection Hunter</span>
-      </div>
-
-      <div class="meta">
-        <span class="pill">Symbol: <b id="symText">—</b></span>
-        <span class="pill">Last: <b id="priceText">—</b></span>
+  <!-- Header -->
+  <div id="topbar">
+    <div id="brand">
+      <div class="logo"></div>
+      <div id="brandText">
+        <div id="brandLine1">
+          <span class="accent">DarriusAI</span> · Inflection Hunter
+        </div>
+        <div id="brandLine2">
+          <span class="chip brand">AI 拐点决策系统</span>
+          <span class="chip">拐点猎手</span>
+        </div>
       </div>
     </div>
 
-    <!-- Main grid -->
-    <div class="content">
-      <!-- Left: Market Pulse -->
-      <div class="card">
-        <div class="card-hd">
-          <div class="title">Market Pulse</div>
-          <div style="color:rgba(234,240,247,.55); font-size:12px; font-weight:800;">
-            Derived only
+    <div id="topRight">
+      <div id="statusBadge" class="pill">
+        <span class="dot"></span>
+        <span id="statusText">Ready · 前端已就绪</span>
+      </div>
+      <div id="copyright">© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
+    </div>
+  </div>
+
+  <div id="main">
+    <!-- LEFT -->
+    <div class="panel" id="leftPanel">
+      <div class="panelHeader">
+        <div class="h">Market Pulse · 市场情绪 <span class="tag" id="pulseTag">LIVE</span></div>
+      </div>
+      <div class="panelBody">
+        <div class="card">
+          <div class="gaugeWrap">
+            <div class="gauge" id="pulseGauge">
+              <div class="gaugeMask" id="pulseGaugeMask"></div>
+              <div class="gaugeCenter">
+                <div class="num" id="pulseScore">—</div>
+                <div class="lbl">Tradability</div>
+              </div>
+            </div>
+            <div style="flex:1">
+              <div class="kv">
+                <span>Bullish</span><b id="bullPct">—</b>
+                <span>Bearish</span><b id="bearPct" style="color:var(--danger)">—</b>
+                <span>Neutral</span><b id="neuPct">—</b>
+                <span>Net Inflow</span><b id="netInflow" style="color:var(--brand1)">—</b>
+              </div>
+              <div class="small" style="margin-top:10px">
+                <b>Note:</b> Market Pulse is derived only from the main chart.<br/>
+                <b>说明：</b>Market Pulse 完全由主图派生，不引入外部数据。
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="card-bd">
-          <div class="mp-wrap">
-            <!-- IMPORTANT: ids for market.pulse.js -->
-            <div id="marketPulseRing" class="mp-ring">
-              <div class="mp-center" id="marketPulseValue">0%</div>
+        <div class="signalBox">
+          <div class="signal neutral" id="signalRow">
+            <div>
+              <div class="side" id="signalSide">Waiting…</div>
+              <div class="meta" id="signalMeta">Waiting for confirmation…<br/>等待确认…</div>
             </div>
-
-            <div class="mp-col">
-              <div class="mp-label" id="marketPulseLabel">Neutral</div>
-              <div class="mp-sub">
-                Direction must align with EMA regime.<br/>
-                Low certainty = low participation.
-              </div>
-              <div class="mp-value" id="mpDebug">—</div>
+            <div style="text-align:right">
+              <div style="font-weight:950" id="signalPx">—</div>
+              <div class="meta" id="signalTf">TF: —</div>
             </div>
           </div>
+        </div>
 
-          <div style="margin-top:14px; border-top:1px solid var(--line); padding-top:12px; color:rgba(234,240,247,.65); font-size:12px; line-height:1.5;">
-            <b>Disciplines</b><br/>
-            • EMA green → Pulse never Bearish<br/>
-            • Recent B/S → direction must bias accordingly<br/>
-            • AUX flat → ring shrinks (tradeability ↓)
+        <div id="leftDisclaimer">
+          <div>
+            <b>中文：</b> 本系统仅用于信息展示，不构成任何投资建议。
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Middle: Main Chart -->
-      <div class="card main">
-        <div class="card-hd">
-          <div class="title">Trading Dashboard · Main Chart</div>
-          <div class="hint" id="hintText">—</div>
+    <!-- CENTER -->
+    <div class="panel" id="chartPanel">
+      <div id="chartTop">
+        <div id="priceLine">
+          <span class="sym" id="symText">—</span>
+          <span id="priceText">—</span>
         </div>
+        <div id="hintText">Loading…</div>
+        <div id="tfQuick">
+          <button class="tfBtn" data-tf="5m">5m</button>
+          <button class="tfBtn" data-tf="15m">15m</button>
+          <button class="tfBtn" data-tf="30m">30m</button>
+          <button class="tfBtn" data-tf="1h">1h</button>
+          <button class="tfBtn" data-tf="4h">4h</button>
+          <button class="tfBtn" data-tf="1d">1D</button>
+          <button class="tfBtn" data-tf="1w">1W</button>
+          <button class="tfBtn" data-tf="1M">1M</button>
+        </div>
+      </div>
+      <div class="panelBody">
+        <div id="chartWrap">
+          <div id="chart"></div>
+          <div id="sigOverlay"></div>
+        </div>
+      </div>
+    </div>
 
-        <div class="card-bd" style="padding:12px 14px;">
-          <div class="main-top">
-            <!-- IMPORTANT: ids expected by chart.core.js -->
-            <div class="field">
-              <label for="symbolInput">Symbol</label>
-              <input id="symbolInput" value="TSLA" />
-            </div>
+    <!-- RIGHT -->
+    <div class="panel" id="rightPanel">
+      <div class="panelHeader">
+        <div class="h">Control Center · 控制台</div>
+      </div>
 
-            <div class="field">
-              <label for="tfSelect">TF</label>
-              <select id="tfSelect">
-                <option value="1h">1h</option>
-                <option value="4h">4h</option>
-                <option value="1d" selected>1d</option>
-              </select>
-            </div>
+      <div class="panelBody">
+        <div class="card">
+          <div class="cardTitle"><b>Market · 品种与周期</b><span class="small">Chart</span></div>
 
-            <button class="btn" id="btnReload" type="button">Reload</button>
+          <div class="field">
+            <div class="label"><span>Symbol · 品种</span><span class="small">(如 BTCUSDT)</span></div>
+            <input id="symbol" value="BTCUSDT"/>
+          </div>
 
-            <label class="tog" title="Toggle EMA line">
-              <input type="checkbox" id="toggleEMA" checked />
+          <div class="field">
+            <div class="label"><span>Timeframe · 周期</span></div>
+            <select id="tf">
+              <option value="5m">5m · 5分钟</option>
+              <option value="15m">15m · 15分钟</option>
+              <option value="30m">30m · 30分钟</option>
+              <option value="1h">1h · 1小时</option>
+              <option value="4h">4h · 4小时</option>
+              <option value="1d" selected>1d · 日线</option>
+              <option value="1w">1w · 周线</option>
+              <option value="1M">1M · 月线</option>
+            </select>
+          </div>
+
+          <button class="btn" id="loadBtn">Load · 加载</button>
+
+          <div class="row2">
+            <!-- ✅ 关键：id 用 toggleEMA / toggleAUX，兼容 chart.core.js -->
+            <label class="btnGhost" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+              <input type="checkbox" id="toggleEMA" checked style="width:auto;margin:0;transform:translateY(1px)">
               EMA
             </label>
-
-            <label class="tog" title="Toggle AUX line">
-              <input type="checkbox" id="toggleAUX" checked />
+            <label class="btnGhost" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+              <input type="checkbox" id="toggleAUX" checked style="width:auto;margin:0;transform:translateY(1px)">
               AUX
             </label>
           </div>
 
-          <div style="height:12px;"></div>
-
-          <!-- IMPORTANT: chart container id -->
-          <div id="chart"></div>
+          <div class="note" style="margin-top:8px">
+            <b>Note:</b> EMA/AUX parameters are internal and hidden from end users.<br/>
+            <b>说明：</b>EMA/AUX 参数为内部策略要素，对客户隐藏；系统会按周期自动适配。
+          </div>
         </div>
-      </div>
 
-      <!-- Right: placeholder panel (safe) -->
-      <div class="card rightcol">
-        <div class="card-hd">
-          <div class="title">Notes / Next Modules</div>
-        </div>
-        <div class="card-bd" style="color:rgba(234,240,247,.70); font-size:12px; line-height:1.55;">
-          This panel is intentionally a placeholder.<br/>
-          Keep billing/subscription logic isolated.
+        <!-- Subscription（你原来有 subscription.js / boot.js 就继续保留） -->
+        <div class="card">
+          <div class="cardTitle">
+            <b>Subscription · 订阅开通</b>
+            <span class="small" id="planStatus">从后端拉取…</span>
+          </div>
+
+          <div class="field">
+            <div class="label"><span><b>User ID</b> · 用户ID</span><span class="small">（必填）</span></div>
+            <input id="userId" placeholder="例如：user_123 / 你的系统用户ID"/>
+          </div>
+
+          <div class="field">
+            <div class="label"><span>Email · 邮箱</span><span class="small">（建议填）</span></div>
+            <input id="email" placeholder="用于收据 / 首次兜底匹配"/>
+          </div>
+
+          <div class="field">
+            <div class="label"><span>Plan · 套餐</span><span class="small">—</span></div>
+            <select id="planSelect">
+              <option value="">Loading…</option>
+            </select>
+          </div>
+
+          <div class="row2" style="margin-top:0">
+            <button class="btn" id="subscribeBtn" disabled>Start · 开通</button>
+            <button class="btnGhost" id="manageBtn" disabled>Manage · 管理</button>
+          </div>
+
+          <div class="note" style="margin-top:10px">
+            <b>Subscription Status：</b><span id="subStatusText" style="margin-left:6px;color:rgba(234,240,247,.88)">Unknown</span>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- 1) LightweightCharts (must be first) -->
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- =========================
+       SCRIPTS (ORDER IS CRITICAL)
+       LightweightCharts 已在 head 加载
+       ========================= -->
+  <script>
+    // ✅ 与 chart.core.js 的 DEFAULT_API_BASE 兼容
+    window.API_BASE = "https://darrius-api.onrender.com";
+    document.getElementById("yearNow").textContent = String(new Date().getFullYear());
+  </script>
 
-  <!-- 2) chart.core.js (frozen main chart) -->
+  <!-- ✅ 冻结主图系统：只负责算与画 + 输出快照 -->
   <script src="./js/chart.core.js?v=20260119"></script>
 
-  <!-- 3) market.pulse.js (UI layer, derived only) -->
+  <!-- ✅ UI 表达层：只读快照 + 渲染（你新建的文件） -->
   <script src="./js/market.pulse.js?v=20260119"></script>
 
-  <script>
-    // Init chart
-    if (window.ChartCore && typeof window.ChartCore.init === "function") {
-      window.ChartCore.init({ containerId: "chart", autoLoad: true });
-    }
+  <!-- ✅ 订阅系统：不动（如你已有就继续加载） -->
+  <script src="./js/subscription.js?v=20260119"></script>
 
-    // Hook reload button
-    (function(){
-      const btn = document.getElementById("btnReload");
-      if (!btn) return;
-      btn.addEventListener("click", function(){
-        try { window.ChartCore && window.ChartCore.load && window.ChartCore.load(); } catch(_) {}
-      });
-
-      const sym = document.getElementById("symbolInput");
-      const tf = document.getElementById("tfSelect");
-      const onEnter = (ev) => {
-        if (ev && ev.key === "Enter") {
-          try { window.ChartCore && window.ChartCore.load && window.ChartCore.load(); } catch(_) {}
-        }
-      };
-      sym && sym.addEventListener("keydown", onEnter);
-      tf && tf.addEventListener("change", function(){
-        try { window.ChartCore && window.ChartCore.load && window.ChartCore.load(); } catch(_) {}
-      });
-    })();
-  </script>
+  <!-- ✅ 启动脚本：负责绑定 Load/TF 按钮、初始化等 -->
+  <script src="./js/boot.js?v=20260119"></script>
 </body>
 </html>
