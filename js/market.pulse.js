@@ -1,32 +1,40 @@
 /* darrius-frontend/js/market.pulse.js
- * UI-only layer:
- * - derive Market Pulse from main-chart snapshot (best-effort)
- * - render B/S markers (best-effort) WITHOUT touching chart.core.js
- * - absolutely never throw
+ * UI expression layer (READ-ONLY, best-effort):
+ * 1) Render BIG glowing B/S on #sigOverlay (DOM overlay)  ✅可放大/发光
+ * 2) Update Market Pulse from derived snapshot OR inferred global arrays
+ * 3) Absolutely never throw
  */
 (function () {
   "use strict";
 
-  function safe(fn) {
-    try { return fn(); } catch (e) { /* swallow */ return undefined; }
-  }
+  const CFG = {
+    // --- Overlay B/S ---
+    overlayMaxMarks: 140,      // 画最近多少个标记
+    overlayUseGlow: true,      // 依赖 index.html 的 .sigMark CSS
+    clearSeriesMarkers: true,  // 清掉 setMarkers 小字（避免“双重显示”）
 
+    // --- Market Pulse ---
+    confirmWindow: 3,          // 你的 confirm window
+    emaPeriod: 14,
+    auxPeriod: 40,
+
+    // EMA 趋势判定（用最近 N 根 EMA 的斜率/变化）
+    emaLookback: 6,
+    // AUX 平滑判定（用最近 N 根 AUX 的波动幅度）
+    auxLookback: 10,
+  };
+
+  function safe(fn) { try { return fn(); } catch { return undefined; } }
   function $(id) { return document.getElementById(id); }
 
-  // ---------- 1) Detect chart / series / snapshot (best-effort) ----------
+  // -----------------------
+  // A) Detect chart & series
+  // -----------------------
   function detectChart() {
-    // common names you may have
-    return (
-      window.__DARRIUS_CHART__ ||
-      window.DARRIUS_CHART ||
-      window.chart ||
-      window._chart ||
-      null
-    );
+    return window.__DARRIUS_CHART__ || window.DARRIUS_CHART || window.chart || window._chart || null;
   }
 
   function detectCandleSeries() {
-    // common names you may have
     const direct =
       window.__DARRIUS_CANDLE_SERIES__ ||
       window.candlestickSeries ||
@@ -35,246 +43,122 @@
       window.seriesCandles ||
       window._candleSeries ||
       null;
+
     if (direct && typeof direct.setMarkers === "function") return direct;
 
-    // heuristic: scan window keys for an object that looks like a series
+    // heuristic scan
     return safe(() => {
       for (const k in window) {
         const v = window[k];
         if (!v || typeof v !== "object") continue;
-        // series usually has priceScale() and setData() or setMarkers()
-        if (typeof v.priceScale === "function" && (typeof v.setData === "function" || typeof v.setMarkers === "function")) {
-          if (typeof v.setMarkers === "function") return v;
-        }
+        if (typeof v.priceScale === "function" && typeof v.setMarkers === "function") return v;
       }
       return null;
     }) || null;
   }
 
+  function detectAnyLineSeriesByHint(hintWords) {
+    // very loose: scan for objects that look like line series; we only need priceScale() for y coordinate
+    return safe(() => {
+      for (const k in window) {
+        const v = window[k];
+        if (!v || typeof v !== "object") continue;
+        if (typeof v.priceScale !== "function") continue;
+        const name = String(k).toLowerCase();
+        if (hintWords.some(w => name.includes(w))) return v;
+      }
+      return null;
+    }) || null;
+  }
+
+  // -----------------------
+  // B) Detect derived data (snapshot OR arrays)
+  // -----------------------
   function detectSnapshot() {
-    // try many possible snapshot locations/names
-    const s =
+    return (
       window.__DARRIUS_CHART_STATE__ ||
       window.__DARRIUS_SNAPSHOT__ ||
       window.DARRIUS_SNAPSHOT ||
       window.__chartSnapshot ||
-      null;
-
-    // optional getter-based exports (if chart.core.js ever exposes a function)
-    if (!s) {
-      const alt = safe(() => {
-        if (window.DarriusChartCore && typeof window.DarriusChartCore.getSnapshot === "function") {
-          return window.DarriusChartCore.getSnapshot();
-        }
-        if (window.chartCore && typeof window.chartCore.getSnapshot === "function") {
-          return window.chartCore.getSnapshot();
-        }
-        return null;
-      });
-      return alt || null;
-    }
-    return s;
+      null
+    );
   }
 
-  // ---------- 2) Market Pulse (derived only) ----------
-  // Your discipline rules (hard constraints):
-  // - If EMA regime is UP -> pulse cannot be Bearish.
-  // - If recent confirm window has valid B -> direction must bias to Bullish.
-  // - If AUX flat/unclear -> tradability shrinks (not bearish).
-  function computePulse(snapshot) {
-    // Default: conservative "derived only / waiting"
-    const out = {
-      label: "Neutral",
-      score: 0,           // 0..100 tradability
-      bull: 0,
-      bear: 0,
-      neu: 100,
-      netInflow: "—",
-      reason: "Derived only · waiting for snapshot",
-    };
+  function looksLikeOHLCArray(arr) {
+    if (!Array.isArray(arr) || arr.length < 20) return false;
+    const x = arr[arr.length - 1];
+    return x && x.time != null && x.open != null && x.high != null && x.low != null && x.close != null;
+  }
 
-    if (!snapshot || typeof snapshot !== "object") return out;
+  function looksLikeValueArray(arr) {
+    if (!Array.isArray(arr) || arr.length < 20) return false;
+    const x = arr[arr.length - 1];
+    return x && x.time != null && x.value != null;
+  }
 
-    // We support multiple snapshot shapes.
-    // Try to locate signals, emaRegime, auxSlope, etc.
-    const emaRegime =
-      snapshot.emaRegime ||
-      snapshot.trendRegime ||
-      snapshot.regime ||
-      null; // "UP" | "DOWN" | "FLAT" (best effort)
+  function looksLikeSignalsArray(arr) {
+    if (!Array.isArray(arr) || arr.length < 1) return false;
+    const x = arr[arr.length - 1];
+    if (!x) return false;
+    const side = (x.side || x.type || x.signal || x.text || "").toString().toUpperCase();
+    return x.time != null && (side === "B" || side === "S" || side === "BUY" || side === "SELL");
+  }
 
-    const confirmWindow = Number(snapshot.confirmWindow || snapshot.confirm || 3) || 3;
+  function detectGlobalArrays() {
+    // We try to infer:
+    // - candles: [{time, open, high, low, close}]
+    // - ema:     [{time, value}]
+    // - aux:     [{time, value}]
+    // - signals: [{time, side, price?, confirmed?}]
+    let candles = null, ema = null, aux = null, signals = null;
 
-    const signals =
-      snapshot.signals ||
-      snapshot.bsSignals ||
-      snapshot.markers ||
-      [];
+    safe(() => {
+      // 1) quick common names
+      const candidates = [
+        window.ohlcData, window.ohlc, window.candles, window.candleData, window.dataOHLC,
+        window.emaData, window.ema, window.emaLine,
+        window.auxData, window.aux, window.auxLine,
+        window.signals, window.bsSignals, window.markers, window.BS
+      ];
 
-    // take last confirmWindow signals that are "confirmed"
-    const recent = Array.isArray(signals) ? signals.slice(-Math.max(1, confirmWindow * 2)) : [];
-
-    const lastConfirmed = (arr) => {
-      for (let i = arr.length - 1; i >= 0; i--) {
-        const s = arr[i];
-        if (!s) continue;
-        // accept s.side or s.type, and allow confirmed flags
-        const side = (s.side || s.type || s.signal || "").toString().toUpperCase();
-        const ok = (s.confirmed === true) || (s.isConfirmed === true) || (s.confirm === true) || (s.confirmed == null);
-        if ((side === "B" || side === "BUY" || side === "S" || side === "SELL") && ok) return { side, s };
+      for (const c of candidates) {
+        if (!candles && looksLikeOHLCArray(c)) candles = c;
+        if (!ema && looksLikeValueArray(c) && c.length > 30) ema = c;
+        if (!aux && looksLikeValueArray(c) && c.length > 30) aux = c;
+        if (!signals && looksLikeSignalsArray(c)) signals = c;
       }
-      return null;
-    };
 
-    const last = lastConfirmed(recent);
+      // 2) brute scan window for arrays
+      for (const k in window) {
+        const v = window[k];
+        if (!v) continue;
 
-    // AUX stability / smoothness (best-effort)
-    // If snapshot has auxSlope or auxFlat flag, use it; otherwise infer "unknown" -> treat as low tradability, not bearish
-    const auxFlat =
-      snapshot.auxFlat === true ||
-      snapshot.auxIsFlat === true ||
-      (typeof snapshot.auxSlope === "number" && Math.abs(snapshot.auxSlope) < 1e-9) ||
-      false;
-
-    // EMA flip frequency (best-effort)
-    const emaChop =
-      snapshot.emaChop === true ||
-      snapshot.emaFrequentFlip === true ||
-      false;
-
-    // --- Determine direction with hard rules ---
-    let dir = "Neutral"; // Bullish | Neutral | Bearish
-    let reason = [];
-
-    // Rule 2: if last confirmed is B within confirm window -> bias bullish
-    if (last && (last.side === "B" || last.side === "BUY")) {
-      dir = "Bullish";
-      reason.push("Recent confirmed B → bias long");
-    } else if (last && (last.side === "S" || last.side === "SELL")) {
-      dir = "Bearish";
-      reason.push("Recent confirmed S → bias short");
-    }
-
-    // Rule 1: EMA green/up cannot be Bearish
-    const regime = (emaRegime || "").toString().toUpperCase();
-    if (regime === "UP" || regime === "BULL" || regime === "GREEN") {
-      if (dir === "Bearish") {
-        dir = "Neutral";
-        reason.push("EMA up → cannot be Bearish (clamped to Neutral)");
-      } else {
-        reason.push("EMA up regime");
+        if (!candles && looksLikeOHLCArray(v)) candles = v;
+        else if (!signals && looksLikeSignalsArray(v)) signals = v;
+        else if (looksLikeValueArray(v)) {
+          // we may find multiple value arrays; pick by name preference
+          const name = String(k).toLowerCase();
+          if (!ema && (name.includes("ema") || name.includes("ma"))) ema = v;
+          else if (!aux && (name.includes("aux") || name.includes("smooth") || name.includes("sig"))) aux = v;
+        }
       }
-    } else if (regime === "DOWN" || regime === "BEAR" || regime === "RED") {
-      reason.push("EMA down regime");
-    } else if (regime) {
-      reason.push("EMA flat/unclear regime");
-    } else {
-      reason.push("EMA regime unknown");
-    }
 
-    // --- Tradability score (0..100) ---
-    // Institution-style: uncertainty = low participation, NOT bearish.
-    let score = 55;
+      // 3) if ema/aux still missing but we have snapshot, try from snapshot
+      const snap = detectSnapshot();
+      if (snap && typeof snap === "object") {
+        if (!signals && Array.isArray(snap.signals)) signals = snap.signals;
+        if (!ema && Array.isArray(snap.emaData)) ema = snap.emaData;
+        if (!aux && Array.isArray(snap.auxData)) aux = snap.auxData;
+        if (!candles && Array.isArray(snap.ohlc)) candles = snap.ohlc;
+      }
+    });
 
-    // increase if regime clear + not choppy
-    if (regime === "UP" || regime === "DOWN") score += 10;
-    if (emaChop) score -= 18;
-
-    // AUX flat reduces tradability (Rule 3)
-    if (auxFlat) score -= 22;
-
-    // recent confirmed signal adds some tradability (but not too much)
-    if (last) score += 8;
-
-    // clamp
-    score = Math.max(0, Math.min(100, Math.round(score)));
-
-    // Convert score into bull/bear/neutral percents (UI-friendly)
-    // We keep it simple and consistent:
-    // - Direction controls which side gets most of the "active" share.
-    // - Neutral always keeps a base.
-    let bull = 0, bear = 0, neu = 100;
-
-    const active = Math.round(score * 0.9);         // active confidence bucket
-    const baseNeutral = 100 - active;               // uncertainty bucket (institution style)
-    neu = baseNeutral;
-
-    if (dir === "Bullish") {
-      bull = Math.round(active * 0.75);
-      bear = active - bull;
-    } else if (dir === "Bearish") {
-      bear = Math.round(active * 0.75);
-      bull = active - bear;
-    } else {
-      // Neutral: split active evenly (or keep small directional)
-      bull = Math.round(active * 0.5);
-      bear = active - bull;
-    }
-
-    out.label = dir;
-    out.score = score;
-    out.bull = bull;
-    out.bear = bear;
-    out.neu = neu;
-    out.reason = reason.join(" · ");
-
-    // optional: if snapshot has any flow metric
-    out.netInflow = (snapshot.netInflow != null) ? String(snapshot.netInflow) : "—";
-
-    // Final hard constraints again (safety)
-    if (regime === "UP" && out.label === "Bearish") out.label = "Neutral";
-
-    return out;
+    return { candles, ema, aux, signals };
   }
 
-  function paintGauge(pulse) {
-    const scoreEl = $("pulseScore");
-    const bullEl = $("bullPct");
-    const bearEl = $("bearPct");
-    const neuEl  = $("neuPct");
-    const inflowEl = $("netInflow");
-    const maskEl = $("pulseGaugeMask");
-
-    if (!scoreEl || !maskEl) return;
-
-    // Score number
-    scoreEl.textContent = (pulse && typeof pulse.score === "number") ? String(pulse.score) : "—";
-
-    if (bullEl) bullEl.textContent = pulse ? (pulse.bull + "%") : "—";
-    if (bearEl) bearEl.textContent = pulse ? (pulse.bear + "%") : "—";
-    if (neuEl)  neuEl.textContent  = pulse ? (pulse.neu  + "%") : "—";
-    if (inflowEl) inflowEl.textContent = pulse ? String(pulse.netInflow) : "—";
-
-    // Gauge mask: we show "tradability" as filled portion.
-    const score = pulse && typeof pulse.score === "number" ? pulse.score : 0;
-    const deg = Math.round((score / 100) * 360);
-
-    // Conic mask trick: first segment = transparent hole, second = dark ring
-    // We keep color in CSS ring, and mask by dark overlay.
-    maskEl.style.background = `conic-gradient(rgba(10,15,23,.92) ${deg}deg, rgba(10,15,23,.92) 360deg)`;
-
-    // Optional: update label under gauge (Sentiment/Tradability)
-    const lbl = document.querySelector("#pulseGauge .gaugeCenter .lbl");
-    if (lbl) lbl.textContent = "Tradability";
-
-    // Optional: tag text
-    const tag = $("pulseTag");
-    if (tag) tag.textContent = "LIVE";
-
-    // Optional: small status badge
-    const statusText = $("statusText");
-    if (statusText && pulse) {
-      statusText.textContent = `Ready · Pulse: ${pulse.label} (${pulse.score}%)`;
-    }
-  }
-
-  // ---------- 3) Restore B/S markers (best-effort) ----------
-  function normalizeSignals(snapshot) {
-    if (!snapshot || typeof snapshot !== "object") return [];
-    const arr = snapshot.signals || snapshot.bsSignals || snapshot.markers || snapshot.BS || [];
-    if (!Array.isArray(arr)) return [];
-    // normalize to { time, side, price }
-    return arr.map(s => {
+  function normalizeSignals(rawSignals) {
+    if (!Array.isArray(rawSignals)) return [];
+    return rawSignals.map(s => {
       const sideRaw = (s.side || s.type || s.signal || s.text || "").toString().toUpperCase();
       const side = (sideRaw === "BUY") ? "B" : (sideRaw === "SELL") ? "S" : (sideRaw === "B" || sideRaw === "S") ? sideRaw : null;
       const time = s.time ?? s.t ?? s.timestamp ?? null;
@@ -284,145 +168,252 @@
     }).filter(x => x.side && x.time != null);
   }
 
-  // Preferred: use LightweightCharts series markers (stable, no CSS dependency)
-  function renderMarkersOnSeries(series, signals) {
-    if (!series || typeof series.setMarkers !== "function") return false;
-    if (!Array.isArray(signals) || signals.length === 0) {
-      // clear markers if no signals (optional)
-      safe(() => series.setMarkers([]));
-      return true;
-    }
-
-    const markers = signals
-      .filter(s => s && s.confirmed !== false)
-      .map(s => ({
-        time: s.time,
-        position: (s.side === "B") ? "belowBar" : "aboveBar",
-        color: (s.side === "B") ? "#2BE2A6" : "#FF5A5A",
-        shape: (s.side === "B") ? "circle" : "circle",
-        text: s.side
-      }));
-
-    safe(() => series.setMarkers(markers));
-    return true;
-  }
-
-  // Fallback: DOM overlay (needs chart + series coordinate functions)
-  function renderDomOverlay(chart, series, signals) {
-    const overlay = $("sigOverlay");
-    if (!overlay) return false;
-
-    // clear
-    overlay.innerHTML = "";
-    if (!chart || !series || !signals || signals.length === 0) return false;
-
-    const timeScale = safe(() => chart.timeScale && chart.timeScale()) || null;
-    const priceScale = safe(() => series.priceScale && series.priceScale()) || null;
-
-    if (!timeScale || !priceScale) return false;
-    if (typeof timeScale.timeToCoordinate !== "function") return false;
-    if (typeof priceScale.priceToCoordinate !== "function") return false;
-
-    // draw a limited number to keep clean
-    const maxDraw = 120;
-    const tail = signals.slice(-maxDraw);
-
-    for (const s of tail) {
-      const x = safe(() => timeScale.timeToCoordinate(s.time));
-      const y = safe(() => priceScale.priceToCoordinate(s.price));
-      if (x == null || y == null || !isFinite(x) || !isFinite(y)) continue;
-
-      const div = document.createElement("div");
-      div.className = "sigMark " + (s.side === "B" ? "buy" : "sell");
-      div.textContent = s.side;
-      div.style.left = x + "px";
-      div.style.top = y + "px";
-      overlay.appendChild(div);
-    }
-    return true;
-  }
-
-  // Public safe APIs requested earlier
-  function renderOverlaySignals() {
+  // -----------------------
+  // C) BIG glowing B/S overlay
+  // -----------------------
+  function renderBigGlowOverlay() {
     safe(() => {
-      const snap = detectSnapshot();
-      const sigs = normalizeSignals(snap);
+      const overlay = $("sigOverlay");
+      if (!overlay) return;
 
-      // 1) best: series markers
-      const series = detectCandleSeries();
-      if (series && renderMarkersOnSeries(series, sigs)) return;
-
-      // 2) fallback: DOM overlay (only if we can locate chart+series)
       const chart = detectChart();
-      const anySeries = series || detectCandleSeries();
-      renderDomOverlay(chart, anySeries, sigs);
-    });
-  }
+      const candleSeries = detectCandleSeries();
+      if (!chart || !candleSeries) return;
 
-  function updateMarketPulseUI() {
-    safe(() => {
+      // optional: clear tiny series markers (they look “小且不亮”)
+      if (CFG.clearSeriesMarkers && typeof candleSeries.setMarkers === "function") {
+        safe(() => candleSeries.setMarkers([]));
+      }
+
+      const timeScale = safe(() => chart.timeScale && chart.timeScale());
+      const priceScale = safe(() => candleSeries.priceScale && candleSeries.priceScale());
+      if (!timeScale || !priceScale) return;
+      if (typeof timeScale.timeToCoordinate !== "function") return;
+      if (typeof priceScale.priceToCoordinate !== "function") return;
+
       const snap = detectSnapshot();
-      const pulse = computePulse(snap);
-      paintGauge(pulse);
+      let sigs = normalizeSignals(snap && (snap.signals || snap.bsSignals || snap.markers));
 
-      // Also update left "signal box" (optional, safe)
-      safe(() => {
-        const sigs = normalizeSignals(snap);
-        const last = sigs.length ? sigs[sigs.length - 1] : null;
-        const sideEl = $("signalSide");
-        const metaEl = $("signalMeta");
-        const pxEl = $("signalPx");
-        const tfEl = $("signalTf");
-        const rowEl = $("signalRow");
+      // fallback: infer global arrays
+      if (!sigs.length) {
+        const ga = detectGlobalArrays();
+        sigs = normalizeSignals(ga.signals);
+      }
 
-        if (!sideEl || !metaEl || !rowEl) return;
+      overlay.innerHTML = "";
+      if (!sigs.length) return;
 
-        if (!last) {
-          sideEl.textContent = "Waiting…";
-          metaEl.textContent = "Waiting for confirmation…\n等待确认…";
-          if (pxEl) pxEl.textContent = "—";
-          if (tfEl) tfEl.textContent = "TF: —";
-          rowEl.classList.remove("buy","sell");
-          rowEl.classList.add("neutral");
-          return;
+      const tail = sigs.slice(-CFG.overlayMaxMarks);
+
+      for (const s of tail) {
+        // price missing? try to derive from candles by matching time
+        let price = s.price;
+        if (price == null) {
+          const ga = detectGlobalArrays();
+          const candles = ga.candles;
+          if (looksLikeOHLCArray(candles)) {
+            const hit = candles.findLast ? candles.findLast(x => x.time === s.time) : candles.slice().reverse().find(x => x.time === s.time);
+            if (hit) price = (s.side === "B") ? hit.low : hit.high;
+          }
+        }
+        if (price == null) continue;
+
+        const x = safe(() => timeScale.timeToCoordinate(s.time));
+        const y = safe(() => priceScale.priceToCoordinate(price));
+        if (x == null || y == null || !isFinite(x) || !isFinite(y)) continue;
+
+        const div = document.createElement("div");
+        div.className = "sigMark " + (s.side === "B" ? "buy" : "sell");
+        div.textContent = s.side; // "B" / "S"
+
+        // 让它更大更亮：直接加 inline（即使你的 CSS 被改了也能变大）
+        div.style.left = x + "px";
+        div.style.top = y + "px";
+        div.style.fontSize = "28px";
+        div.style.padding = "4px 10px";
+        div.style.borderRadius = "14px";
+        div.style.fontWeight = "950";
+        div.style.opacity = "0.98";
+
+        // 强制发光（不依赖 CSS）
+        if (CFG.overlayUseGlow) {
+          if (s.side === "B") {
+            div.style.color = "rgba(43,226,166,1)";
+            div.style.borderColor = "rgba(43,226,166,.45)";
+            div.style.textShadow = "0 0 12px rgba(43,226,166,.55), 0 0 26px rgba(43,226,166,.28)";
+          } else {
+            div.style.color = "rgba(255,90,90,1)";
+            div.style.borderColor = "rgba(255,90,90,.45)";
+            div.style.textShadow = "0 0 12px rgba(255,90,90,.55), 0 0 26px rgba(255,90,90,.28)";
+          }
         }
 
-        const isBuy = last.side === "B";
-        sideEl.textContent = isBuy ? "BUY / B" : "SELL / S";
-        metaEl.textContent = (pulse ? pulse.reason : "Derived only");
-        if (pxEl) pxEl.textContent = (last.price != null) ? String(last.price) : "—";
-        if (tfEl) tfEl.textContent = snap && snap.tf ? ("TF: " + snap.tf) : "TF: —";
-
-        rowEl.classList.remove("neutral","buy","sell");
-        rowEl.classList.add(isBuy ? "buy" : "sell");
-      });
+        overlay.appendChild(div);
+      }
     });
   }
 
-  // expose globals (as you要求的“绝对不抛错安全区”)
-  window.renderOverlaySignals = function () { return safe(renderOverlaySignals); };
-  window.updateMarketPulseUI  = function () { return safe(updateMarketPulseUI); };
-
-  // automatic refresh loop (safe)
-  function tick() {
-    safe(() => updateMarketPulseUI());
-    safe(() => renderOverlaySignals());
+  // -----------------------
+  // D) Market Pulse compute (strict + institutional)
+  // -----------------------
+  function emaRegimeFrom(emaArr) {
+    if (!looksLikeValueArray(emaArr)) return "UNKNOWN";
+    const n = CFG.emaLookback;
+    if (emaArr.length < n + 2) return "UNKNOWN";
+    const tail = emaArr.slice(-n);
+    const first = tail[0].value, last = tail[tail.length - 1].value;
+    const delta = last - first;
+    const abs = Math.abs(delta);
+    const eps = Math.max(1e-9, Math.abs(last) * 0.0008); // 自适应阈值
+    if (abs < eps) return "FLAT";
+    return delta > 0 ? "UP" : "DOWN";
   }
 
-  // start after DOM ready
+  function auxFlatFrom(auxArr) {
+    if (!looksLikeValueArray(auxArr)) return true; // unknown -> treat as low tradability, not bearish
+    const n = CFG.auxLookback;
+    if (auxArr.length < n + 2) return true;
+    const tail = auxArr.slice(-n).map(x => x.value);
+    let max = -Infinity, min = Infinity;
+    for (const v of tail) { if (v > max) max = v; if (v < min) min = v; }
+    const range = max - min;
+    const ref = Math.max(1e-9, Math.abs(tail[tail.length - 1]));
+    return range < ref * 0.002; // 很小波动 -> 视为走平
+  }
+
+  function lastConfirmedSignal(signals) {
+    const sigs = normalizeSignals(signals);
+    for (let i = sigs.length - 1; i >= 0; i--) {
+      const s = sigs[i];
+      if (!s) continue;
+      if (s.confirmed === false) continue;
+      if (s.side === "B" || s.side === "S") return s;
+    }
+    return null;
+  }
+
+  function computePulse() {
+    // default "waiting"
+    const out = {
+      label: "Neutral",
+      score: 0,
+      bull: 0,
+      bear: 0,
+      neu: 100,
+      netInflow: "—",
+      reason: "Derived only · waiting for main-chart data",
+    };
+
+    const snap = detectSnapshot();
+    const ga = detectGlobalArrays();
+
+    const emaArr = (snap && (snap.emaData || snap.ema)) || ga.ema;
+    const auxArr = (snap && (snap.auxData || snap.aux)) || ga.aux;
+    const sigArr = (snap && (snap.signals || snap.bsSignals || snap.markers)) || ga.signals;
+
+    const regime = emaRegimeFrom(emaArr);
+    const auxFlat = auxFlatFrom(auxArr);
+    const lastSig = lastConfirmedSignal(sigArr);
+
+    // Direction base
+    let dir = "Neutral";
+    const why = [];
+
+    // Rule 2: recent confirm window has B => bias long
+    if (lastSig && lastSig.side === "B") { dir = "Bullish"; why.push("Recent B → bias long"); }
+    else if (lastSig && lastSig.side === "S") { dir = "Bearish"; why.push("Recent S → bias short"); }
+
+    // Rule 1: EMA up cannot be Bearish
+    if (regime === "UP" && dir === "Bearish") { dir = "Neutral"; why.push("EMA up → clamp (no Bearish)"); }
+    if (regime === "UP") why.push("EMA up regime");
+    else if (regime === "DOWN") why.push("EMA down regime");
+    else if (regime === "FLAT") why.push("EMA flat/unclear regime");
+    else why.push("EMA unknown");
+
+    // Tradability score (institution style)
+    let score = 58;
+    if (regime === "UP" || regime === "DOWN") score += 10;
+    if (lastSig) score += 6;
+    if (auxFlat) { score -= 24; why.push("AUX flat → shrink tradability"); }
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    // Convert to % buckets
+    const active = Math.round(score * 0.9);
+    const neu = 100 - active;
+    let bull = 0, bear = 0;
+
+    if (dir === "Bullish") {
+      bull = Math.round(active * 0.78);
+      bear = active - bull;
+    } else if (dir === "Bearish") {
+      bear = Math.round(active * 0.78);
+      bull = active - bear;
+    } else {
+      bull = Math.round(active * 0.5);
+      bear = active - bull;
+    }
+
+    out.label = dir;
+    out.score = score;
+    out.bull = bull;
+    out.bear = bear;
+    out.neu = neu;
+    out.reason = why.join(" · ");
+    return out;
+  }
+
+  function paintPulseUI(pulse) {
+    safe(() => {
+      const scoreEl = $("pulseScore");
+      const bullEl = $("bullPct");
+      const bearEl = $("bearPct");
+      const neuEl = $("neuPct");
+      const inflowEl = $("netInflow");
+      const maskEl = $("pulseGaugeMask");
+
+      if (scoreEl) scoreEl.textContent = String(pulse.score);
+      if (bullEl) bullEl.textContent = pulse.bull + "%";
+      if (bearEl) bearEl.textContent = pulse.bear + "%";
+      if (neuEl) neuEl.textContent = pulse.neu + "%";
+      if (inflowEl) inflowEl.textContent = String(pulse.netInflow);
+
+      if (maskEl) {
+        const deg = Math.round((pulse.score / 100) * 360);
+        maskEl.style.background = `conic-gradient(rgba(10,15,23,.92) ${deg}deg, rgba(10,15,23,.92) 360deg)`;
+      }
+
+      // 左侧“信号栏”也顺便同步一条解释（可选）
+      const metaEl = $("signalMeta");
+      if (metaEl) metaEl.textContent = pulse.reason;
+    });
+  }
+
+  // expose safe APIs
+  window.renderOverlaySignals = function () { return safe(renderBigGlowOverlay); };
+  window.updateMarketPulseUI  = function () { return safe(() => paintPulseUI(computePulse())); };
+
+  // tick loop
+  function tick() {
+    safe(() => window.updateMarketPulseUI());
+    safe(() => window.renderOverlaySignals());
+  }
+
   safe(() => {
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", function () {
         tick();
-        setInterval(tick, 1200);
+        setInterval(tick, 900);
       });
     } else {
       tick();
-      setInterval(tick, 1200);
+      setInterval(tick, 900);
     }
   });
 
-  // if chart.core.js dispatches events, we listen (optional)
+  // if main chart triggers any custom events, we listen
   safe(() => {
     window.addEventListener("darrius:chartUpdated", tick);
-    window.addEventLis
+    window.addEventListener("darrius:snapshot", tick);
+  });
+
+})();
