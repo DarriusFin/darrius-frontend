@@ -409,33 +409,46 @@ window.__OVERLAY_BIG_SIGS__ = true;   // 告诉 chart.core.js：不要画小 mar
   // UI: BIG glowing B/S overlay (independent from chart markers)
   // This fixes your "B/S small and no glow" permanently.
   // -----------------------------
- function renderOverlaySignals() {
+function renderOverlaySignals() {
   safe(() => {
-    // ===============================
-    // 0) 基础校验
-    // ===============================
+    // -----------------------------
+    // 0) read snapshot
+    // -----------------------------
     const snap =
-      (window.DarriusChart && window.DarriusChart.getSnapshot && window.DarriusChart.getSnapshot()) ||
-      (typeof window.getChartSnapshot === 'function' ? window.getChartSnapshot() : null);
+      (window.DarriusChart && typeof window.DarriusChart.getSnapshot === 'function'
+        ? window.DarriusChart.getSnapshot()
+        : (typeof window.getChartSnapshot === 'function' ? window.getChartSnapshot() : null));
 
     if (!snap || !Array.isArray(snap.signals) || snap.signals.length === 0) return;
 
-    // chart / series 必须存在（只读）
-    const chart = window.chart || window._chart || window.ChartCore?._chart;
-    const candleSeries = window.candleSeries || window._candleSeries;
+    // -----------------------------
+    // 1) get read-only coordinate bridge (MUST come from chart.core.js)
+    // -----------------------------
+    const timeToX = window.DarriusChart && typeof window.DarriusChart.timeToX === 'function'
+      ? window.DarriusChart.timeToX
+      : null;
 
-    if (!chart || !chart.timeScale || !candleSeries || !candleSeries.priceToCoordinate) return;
+    const priceToY = window.DarriusChart && typeof window.DarriusChart.priceToY === 'function'
+      ? window.DarriusChart.priceToY
+      : null;
 
-    // ===============================
-    // 1) 找 overlay 父容器（自动兜底）
-    // ===============================
+    if (!timeToX || !priceToY) return; // 没桥接就不画，避免错位
+
+    // -----------------------------
+    // 2) pick correct host: MUST be the real chart container
+    // -----------------------------
     const host =
-      document.getElementById('chartWrap') ||
-      document.getElementById('chart');
+      document.getElementById('chart') ||
+      document.getElementById('chartWrap');
 
     if (!host) return;
 
-    // overlay 层（唯一）
+    // ensure positioning base
+    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+
+    // -----------------------------
+    // 3) one overlay layer
+    // -----------------------------
     let layer = document.getElementById('bsOverlayLayer');
     if (!layer) {
       layer = document.createElement('div');
@@ -447,63 +460,70 @@ window.__OVERLAY_BIG_SIGS__ = true;   // 告诉 chart.core.js：不要画小 mar
       layer.style.height = '100%';
       layer.style.pointerEvents = 'none';
       layer.style.zIndex = '30';
-      host.style.position = 'relative'; // 确保定位基准
       host.appendChild(layer);
     }
 
-    // 清空旧节点
+    // clear previous
     layer.innerHTML = '';
 
-    // ===============================
-    // 2) 只取“最近 N 个有效信号”
-    // ===============================
-    const MAX_SIGS = 12;
-    const sigs = snap.signals.slice(-MAX_SIGS);
+    // -----------------------------
+    // 4) render (big glowing only)
+    // -----------------------------
+    const maxN = 80; // 防止过密
+    const sigs = snap.signals.slice(Math.max(0, snap.signals.length - maxN));
 
-    // ===============================
-    // 3) 渲染每一个大字发光 B / S
-    // ===============================
-    sigs.forEach(sig => {
-      if (!sig || sig.time == null || sig.price == null) return;
+    for (const s of sigs) {
+      const t = s.time ?? s.t;
+      const p = s.price ?? s.p;
 
-      const x = chart.timeScale().timeToCoordinate(sig.time);
-      const y = candleSeries.priceToCoordinate(sig.price);
+      if (t == null || p == null) continue;
 
-      if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) return;
+      const x = timeToX(t);
+      const y = priceToY(p);
+
+      // if offscreen / invalid => skip
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+
+      const sideRaw = (s.side || s.type || s.signal || '').toString().toUpperCase();
+      const side = sideRaw === 'S' ? 'S' : 'B';
 
       const el = document.createElement('div');
-      el.textContent = sig.side === 'S' ? 'S' : 'B';
+      el.className = 'bs-glow';
+      el.textContent = side;
 
-      const isBuy = sig.side !== 'S';
-
+      // style: big + glow
       el.style.position = 'absolute';
-      el.style.left = `${Math.round(x)}px`;
-      el.style.top  = `${Math.round(y)}px`;
       el.style.transform = 'translate(-50%, -50%)';
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
 
       el.style.width = '34px';
       el.style.height = '34px';
-      el.style.lineHeight = '34px';
-      el.style.borderRadius = '50%';
-
+      el.style.borderRadius = '999px';
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'center';
+      el.style.fontWeight = '800';
       el.style.fontSize = '16px';
-      el.style.fontWeight = '700';
-      el.style.textAlign = 'center';
+      el.style.letterSpacing = '0.5px';
 
-      el.style.color = isBuy ? '#2BE2A6' : '#FF5A5A';
-      el.style.border = `2px solid ${isBuy ? '#2BE2A6' : '#FF5A5A'}`;
-      el.style.background = 'rgba(0,0,0,0.45)';
-
-      // 发光（关键）
-      el.style.boxShadow = isBuy
-        ? '0 0 10px rgba(43,226,166,0.85), 0 0 18px rgba(43,226,166,0.55)'
-        : '0 0 10px rgba(255,90,90,0.85), 0 0 18px rgba(255,90,90,0.55)';
+      // color + glow
+      if (side === 'B') {
+        el.style.color = '#2BE2A6';
+        el.style.border = '1px solid rgba(43,226,166,.70)';
+        el.style.background = 'rgba(10, 30, 25, .35)';
+        el.style.boxShadow = '0 0 10px rgba(43,226,166,.35), 0 0 22px rgba(43,226,166,.22)';
+      } else {
+        el.style.color = '#FF5A5A';
+        el.style.border = '1px solid rgba(255,90,90,.70)';
+        el.style.background = 'rgba(40, 10, 10, .35)';
+        el.style.boxShadow = '0 0 10px rgba(255,90,90,.35), 0 0 22px rgba(255,90,90,.22)';
+      }
 
       layer.appendChild(el);
-    });
-  });
+    }
+  }, 'renderOverlaySignals');
 }
-
 
       // Normalize signals to {idx, side, price}
       // We try multiple shapes and fallback to mapping by nearest time
