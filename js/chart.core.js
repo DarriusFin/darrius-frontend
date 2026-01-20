@@ -721,6 +721,25 @@
       lastValueVisible: false,
     });
 
+    // -----------------------------
+// Read-only coordinate bridge (for market.pulse.js overlay)
+// - DO NOT expose chart object to UI layer
+// - Only expose time->x and price->y mapping (safe, read-only)
+// -----------------------------
+safeRun("exposeCoordBridge", () => {
+  window.DarriusChart = window.DarriusChart || {};
+
+  window.DarriusChart.timeToX = (t) => safeRun("timeToX", () => {
+    if (!chart || !chart.timeScale) return null;
+    return chart.timeScale().timeToCoordinate(t);
+  });
+
+  window.DarriusChart.priceToY = (p) => safeRun("priceToY", () => {
+    if (!candleSeries || !candleSeries.priceToCoordinate) return null;
+    return candleSeries.priceToCoordinate(p);
+  });
+});
+
     const resize = () => safeRun("resize", () => {
       const r = containerEl.getBoundingClientRect();
       chart.applyOptions({
