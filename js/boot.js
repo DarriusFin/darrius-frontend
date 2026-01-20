@@ -182,18 +182,17 @@
 
     // ---- Subscription wiring ----
 if (!window.Subscription) {
-  log("⚠ Subscription module not found. Did you include /js/subscription.js ?");
-  // don't mark page bad; chart may still run
+  log("⚠️ Subscription module not found. Did you include /js/subscription.js ?");
 } else {
   try {
     if (typeof window.Subscription.attach === "function") {
-      window.Subscription.attach();           // ✅ 核心：必须 attach 才会绑按钮+拉 plans
+      window.Subscription.attach(); // ✅ 必须：绑定按钮 + 拉 plans
       log("✅ Subscription.attach()");
-    } else if (typeof window.Subscription.init === "function") {
-      window.Subscription.init();             // 兼容旧版
-      log("✅ Subscription.init()");
+    } else if (typeof window.Subscription.initPlans === "function") {
+      window.Subscription.initPlans(); // 兜底：至少拉 plans
+      log("✅ Subscription.initPlans()");
     } else {
-      log("⚠ Subscription has no attach/init");
+      log("⚠️ Subscription has no attach/initPlans");
     }
   } catch (e) {
     log("❌ Subscription wiring error: " + e.message);
