@@ -659,3 +659,116 @@
 
   window.ChartCore = { init, load, applyToggles };
 })();
+/* =========================
+ * Snapshot Export (READ-ONLY)
+ * - UI层（market.pulse.js）只读这里
+ * - 不允许 UI 层反向修改主图内部
+ * ========================= */
+
+(function () {
+  'use strict';
+
+  // 1) 单例快照容器（只存“最新一次计算/渲染后的结果”）
+  const __SNAPSHOT = {
+    version: 'snapshot_v1',
+    ts: 0,
+
+    meta: {
+      symbol: null,
+      timeframe: null,
+      bars: 0,
+      source: 'demo',
+      emaPeriod: null,
+      auxPeriod: null,
+      confirmWindow: null,
+    },
+
+    // 主序列（用于 UI 派生：market pulse、risk、overlay）
+    candles: [],     // [{time, open, high, low, close}]
+    ema: [],         // [{time, value}]
+    aux: [],         // [{time, value}]  (或你用于“稳定度/平滑度”的那条线)
+
+    // 信号（用于：Market Pulse 的 bias + B/S overlay）
+    // 统一：只给“有效信号”（confirm-window 成立后的）
+    signals: [],     // [{time, price, side:'B'|'S', i, reason?, strength?}]
+
+    // 趋势底色（为了 rule-1 强一致：Market Pulse 不得逆趋势）
+    // 统一：由主图已经算出来的趋势结果写入；没有就留 null
+    trend: {
+      emaSlope: null,        // 最近一段 EMA 的 slope（>0 up, <0 down）
+      emaRegime: null,       // 'UP'|'DOWN'|'FLAT'|null
+      emaColor: null,        // 'GREEN'|'RED'|'NEUTRAL'|null  （对应你蜡烛底色）
+      flipCount: null,       // EMA regime 在最近N根内反转次数（用于稳定度）
+    },
+
+    // 风险助手（由 chart.core.js 内部既有逻辑写入；没有就留 null）
+    risk: {
+      entry: null,     // number
+      stop: null,      // number
+      targets: null,   // string 或 number[]（推荐 string 给 UI 直接显示）
+      confidence: null,// 0~100
+      winrate: null,   // 0~100（如果你有回测/估计）
+    },
+  };
+
+  // 2) 写快照：供 chart.core.js 内部在“每次加载/重算/重绘后”调用
+  //    注意：只拷贝必要字段，避免把巨大对象/series引用泄漏出去
+  function __setSnapshot(patch) {
+    try {
+      if (!patch || typeof patch !== 'object') return;
+      // 深拷贝：只处理我们需要的数组（浅拷贝即可，元素是 plain object）
+      const now = Date.now();
+      __SNAPSHOT.ts = now;
+
+      if (patch.meta) {
+        __SNAPSHOT.meta = Object.assign({}, __SNAPSHOT.meta, patch.meta);
+      }
+      if (Array.isArray(patch.candles)) __SNAPSHOT.candles = patch.candles.slice();
+      if (Array.isArray(patch.ema))     __SNAPSHOT.ema     = patch.ema.slice();
+      if (Array.isArray(patch.aux))     __SNAPSHOT.aux     = patch.aux.slice();
+      if (Array.isArray(patch.signals)) __SNAPSHOT.signals = patch.signals.slice();
+
+      if (patch.trend) {
+        __SNAPSHOT.trend = Object.assign({}, __SNAPSHOT.trend, patch.trend);
+      }
+      if (patch.risk) {
+        __SNAPSHOT.risk = Object.assign({}, __SNAPSHOT.risk, patch.risk);
+      }
+    } catch (e) {
+      // 永不抛错：不允许快照导出影响主图
+    }
+  }
+
+  // 3) 读快照：market.pulse.js 会调用这个
+  function __getSnapshot() {
+    try {
+      // 返回一个“只读副本”（浅拷贝 + 数组拷贝）
+      return {
+        version: __SNAPSHOT.version,
+        ts: __SNAPSHOT.ts,
+        meta: Object.assign({}, __SNAPSHOT.meta),
+        candles: (__SNAPSHOT.candles || []).slice(),
+        ema: (__SNAPSHOT.ema || []).slice(),
+        aux: (__SNAPSHOT.aux || []).slice(),
+        signals: (__SNAPSHOT.signals || []).slice(),
+        trend: Object.assign({}, __SNAPSHOT.trend),
+        risk: Object.assign({}, __SNAPSHOT.risk),
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 4) 暴露给 UI 层：两种入口都给（与你 market.pulse.js 的多重 fallback 对齐）
+  window.DarriusChart = window.DarriusChart || {};
+  window.DarriusChart.getSnapshot = __getSnapshot;
+
+  // 兼容另一种命名（你 market.pulse.js 也会尝试这个）
+  if (typeof window.getChartSnapshot !== 'function') {
+    window.getChartSnapshot = __getSnapshot;
+  }
+
+  // 5) 提供给 chart.core.js 内部调用（不暴露到 UI 层也行；但暴露给自己更方便）
+  window.DarriusChart.__setSnapshot = __setSnapshot;
+
+})();
