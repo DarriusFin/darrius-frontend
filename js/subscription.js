@@ -356,9 +356,8 @@ if (!startBtn || !manageBtn) {
   manageBtn.addEventListener("click", openCustomerPortal);
 }
 
-// UI init: Unknown should allow Start
-updateSubscriptionUI("unknown");
-
+// UI init: default allow Start before status fetched
+updateSubscriptionUI("inactive");
 
   // Expose module
   window.Subscription = {
