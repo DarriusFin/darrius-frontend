@@ -383,7 +383,7 @@ if (manageBtn) {
     initPlans();
 
     // bind buttons
-    $(IDS.subscribeBtn)?.addEventListener("click", subscribe);
+    
     // bind buttons (HARD BIND)
 const subBtn = $(IDS.subscribeBtn);
 if (subBtn) {
