@@ -1,5 +1,5 @@
 /* =========================================================
- * DarriusAI · Subscription Module (Final)
+ * DarriusAI · Subscription Module (Final)  ✅ FINAL CHECKED
  * File: js/subscription.js
  * Purpose:
  *  - Load plans from backend: /api/plans (preferred)
@@ -274,71 +274,39 @@
 
   // -------- Optional: subscription status --------
   async function refreshSubscriptionStatus() {
-  const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
-  const manageBtn = $(IDS.manageBtn);
+    const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
+    const manageBtn = $(IDS.manageBtn);
 
-  // 1) 没 user_id：保持 Unknown + 禁用 Manage
-  if (!user_id) {
-    setSubStatusText("Unknown");
-    if (manageBtn) manageBtn.disabled = true;
-    return;
-  }
-
-  // 2) 有 user_id：先“乐观启用” Manage（因为 portal 接口你已验证可用）
-  if (manageBtn) manageBtn.disabled = false;
-  setSubStatusText("Checking...");
-
-  // 3) 再尝试拉 status（失败也不影响 Manage）
-  try {
-    const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
-
-    const status = data?.status || "unknown";
-    const has = !!data?.has_access;
-    setSubStatusText(`${status}${has ? " · Access ON" : " · Access OFF"}`);
-
-    // 只做文案，不再用它来锁按钮
-    if (manageBtn) {
-      manageBtn.textContent = "Manage · 管理";
+    // 1) 没 user_id：保持 Unknown + 禁用 Manage
+    if (!user_id) {
+      setSubStatusText("Unknown");
+      if (manageBtn) manageBtn.disabled = true;
+      return;
     }
 
-    if (isAdmin()) log(`✅ sub status: ${JSON.stringify(data).slice(0, 260)}`);
-  } catch (e) {
-    // status 端点失败也没关系，Manage 仍可用
-    setSubStatusText("Unknown");
-    if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
-  }
-}
+    // 2) 有 user_id：先“乐观启用” Manage（portal 端点你已验证可用）
+    if (manageBtn) {
+      manageBtn.disabled = false;
+      manageBtn.textContent = "Manage · 管理";
+    }
+    setSubStatusText("Checking...");
 
+    // 3) 再尝试拉 status（失败也不影响 Manage）
     try {
       const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
+
       const status = data?.status || "unknown";
       const has = !!data?.has_access;
-
       setSubStatusText(`${status}${has ? " · Access ON" : " · Access OFF"}`);
 
-     const portalFlag = data?.customer_portal; // may be boolean OR url OR object
-const portalUrl =
-  data?.portal_url ||
-  data?.customer_portal_url ||
-  (typeof portalFlag === "string" ? portalFlag : "") ||
-  portalFlag?.url ||
-  portalFlag?.portal_url ||
-  "";
-
-const hasPortal = (portalFlag === true) || (typeof portalUrl === "string" && portalUrl.startsWith("http"));
-
-if (manageBtn) {
-  manageBtn.disabled = !hasPortal;
-  manageBtn.textContent = hasPortal ? "Manage · 管理" : "Manage · (pending)";
-}
-
+      // 不再用 status 返回来锁按钮（只显示文案）
+      if (manageBtn) manageBtn.textContent = "Manage · 管理";
 
       if (isAdmin()) log(`✅ sub status: ${JSON.stringify(data).slice(0, 260)}`);
     } catch (e) {
-      // endpoint may not exist; keep UI stable
-      setSubStatusText("Not implemented");
-      if (manageBtn) manageBtn.disabled = true;
-      if (isAdmin()) log(`⚠️ status endpoint missing: ${e.message}`);
+      // status 端点失败也没关系，Manage 仍可用
+      setSubStatusText("Unknown");
+      if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
     }
   }
 
@@ -382,24 +350,23 @@ if (manageBtn) {
     // init plans now
     initPlans();
 
-    // bind buttons
-    
     // bind buttons (HARD BIND)
-const subBtn = $(IDS.subscribeBtn);
-if (subBtn) {
-  subBtn.onclick = subscribe;
-}
+    const subBtn = $(IDS.subscribeBtn);
+    if (subBtn) {
+      subBtn.onclick = subscribe;
+    }
 
-const m = $(IDS.manageBtn);
-if (m) {
-  m.disabled = false;              // ⭐ attach 跑起来就别再锁
-  m.onclick = openCustomerPortal;  // ⭐ 用 onclick 覆盖，防止被其他脚本覆盖
-}
+    const m = $(IDS.manageBtn);
+    if (m) {
+      // 只要 attach 跑起来，就把 Manage 的点击“钉死”
+      // 是否禁用由 refreshSubscriptionStatus() 决定（无 user_id 时禁用）
+      m.onclick = openCustomerPortal;
+    }
 
     // userId typing triggers status refresh (non-blocking)
     $(IDS.userId)?.addEventListener("input", scheduleRefreshStatus);
 
-    // initial status
+    // initial status (will enable/disable Manage based on user_id)
     refreshSubscriptionStatus();
   }
 
