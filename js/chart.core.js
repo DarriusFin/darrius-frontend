@@ -1,8 +1,9 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.01.19-PRESET2-SNAPSHOT
+ * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.01.21-MASSIVE-AGGS
  *
  * Role:
  *  - Render main chart (candles + EMA + AUX + signals)
+ *  - Fetch OHLCV via backend proxy (Massive/Polygon aggregates)
  *  - Output a read-only snapshot to window.__DARRIUS_CHART_STATE__
  *  - Emit event "darrius:chartUpdated" with snapshot detail
  *
@@ -53,6 +54,7 @@
     (window.API_BASE && String(window.API_BASE)) ||
     "https://darrius-api.onrender.com";
 
+  // NOTE: We keep candidates for backward compat, but we now prefer Massive aggs.
   const BARS_PATH_CANDIDATES = [
     "/api/market/bars",
     "/api/bars",
@@ -75,6 +77,10 @@
     "/sigs",
     "/signals",
   ];
+
+  // Prefer your verified endpoint:
+  // /api/data/stocks/aggregates?ticker=...&multiplier=...&timespan=...&from=...&to=...
+  const MASSIVE_AGGS_PATH = "/api/data/stocks/aggregates";
 
   // -----------------------------
   // Preset 2 params
@@ -119,7 +125,7 @@
       qs("#symbol") ||
       qs("#sym");
     const v = el && (el.value || el.textContent);
-    return (v || "TSLA").trim();
+    return (v || "AAPL").trim();
   }
 
   function getUiTf() {
@@ -148,9 +154,39 @@
     return r.json();
   }
 
+  // tf -> multiplier/timespan + a reasonable history window
+  function tfToAggParams(tf) {
+    const m = String(tf || "1d").trim();
+    const map = {
+      "5m":  { multiplier: 5,   timespan: "minute", daysBack: 20 },
+      "15m": { multiplier: 15,  timespan: "minute", daysBack: 35 },
+      "30m": { multiplier: 30,  timespan: "minute", daysBack: 60 },
+      "1h":  { multiplier: 60,  timespan: "minute", daysBack: 90 },
+      "4h":  { multiplier: 240, timespan: "minute", daysBack: 180 },
+      "1d":  { multiplier: 1,   timespan: "day",    daysBack: 700 },
+      "1w":  { multiplier: 1,   timespan: "week",   daysBack: 1800 },
+      "1M":  { multiplier: 1,   timespan: "month",  daysBack: 3600 },
+    };
+    return map[m] || map["1d"];
+  }
+
+  function toYMD(d) {
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${da}`;
+  }
+
+  function rangeByDaysBack(daysBack) {
+    const to = new Date();
+    const from = new Date(Date.now() - (daysBack * 24 * 3600 * 1000));
+    return { from: toYMD(from), to: toYMD(to) };
+  }
+
   function toUnixTime(t) {
     if (t == null) return null;
     if (typeof t === "number") {
+      // ms -> s
       if (t > 2e10) return Math.floor(t / 1000);
       return t;
     }
@@ -166,6 +202,7 @@
   function normalizeBars(payload) {
     const raw =
       Array.isArray(payload) ? payload :
+      Array.isArray(payload?.results) ? payload.results :      // ✅ Polygon aggregates
       Array.isArray(payload?.bars) ? payload.bars :
       Array.isArray(payload?.ohlcv) ? payload.ohlcv :
       Array.isArray(payload?.data) ? payload.data :
@@ -215,22 +252,44 @@
       .sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
   }
 
+  // ✅ NEW: Prefer Massive aggregates endpoint.
   async function fetchBarsPack(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
+
+    // 1) tf -> multiplier/timespan + range
+    const cfg = tfToAggParams(tf);
+    const { from, to } = rangeByDaysBack(cfg.daysBack);
+
+    // 2) build URL
+    const url = new URL(apiBase + MASSIVE_AGGS_PATH);
+    url.searchParams.set("ticker", String(sym || "AAPL").trim().toUpperCase());
+    url.searchParams.set("multiplier", String(cfg.multiplier));
+    url.searchParams.set("timespan", String(cfg.timespan));
+    url.searchParams.set("from", from);
+    url.searchParams.set("to", to);
+
+    // 3) fetch + normalize
+    const payload = await fetchJson(url.toString());
+    const bars = normalizeBars(payload);
+
+    if (bars.length) return { payload, bars, urlUsed: url.toString() };
+
+    // 4) fallback: old candidates (optional)
+    let lastErr = new Error(`Aggs returned empty. ticker=${sym} tf=${tf} from=${from} to=${to}`);
     const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
 
-    let lastErr = null;
     for (const p of BARS_PATH_CANDIDATES) {
-      const url = `${apiBase}${p}?${q}`;
+      const u = `${apiBase}${p}?${q}`;
       try {
-        const payload = await fetchJson(url);
-        const bars = normalizeBars(payload);
-        if (bars.length) return { payload, bars, urlUsed: url };
-        lastErr = new Error(`bars empty from ${url}`);
+        const pl = await fetchJson(u);
+        const bs = normalizeBars(pl);
+        if (bs.length) return { payload: pl, bars: bs, urlUsed: u };
+        lastErr = new Error(`bars empty from ${u}`);
       } catch (e) {
         lastErr = e;
       }
     }
+
     throw new Error(`All bars endpoints failed. Last error: ${lastErr?.message || lastErr}`);
   }
 
@@ -418,6 +477,7 @@
     safeRun("applyMarkers", () => {
       if (!candleSeries) return;
 
+      // If overlay is enabled, we keep series markers empty.
       if (window.__OVERLAY_BIG_SIGS__ === true) { candleSeries.setMarkers([]); return; }
 
       const arr = Array.isArray(sigs) ? sigs : [];
@@ -469,18 +529,12 @@
   // -----------------------------
   function publishSnapshot(snapshot) {
     safeRun("publishSnapshot", () => {
-      // Freeze shallowly (consumer should treat as read-only)
       const s = Object.freeze(snapshot);
-
-      // global
       window.__DARRIUS_CHART_STATE__ = s;
 
-      // event
       try {
         window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: s }));
-      } catch (_) {
-        // very old browsers: ignore
-      }
+      } catch (_) {}
     });
   }
 
@@ -489,8 +543,8 @@
   // -----------------------------
   function applyToggles() {
     safeRun("applyToggles", () => {
-      const emaChecked = $("toggleEMA")?.checked ?? $("emaToggle")?.checked ?? $("emaCheck")?.checked;
-      const auxChecked = $("toggleAUX")?.checked ?? $("auxToggle")?.checked ?? $("auxCheck")?.checked;
+      const emaChecked = $("toggleEMA")?.checked ?? $("emaToggle")?.checked ?? $("tgEMA")?.checked ?? $("emaCheck")?.checked;
+      const auxChecked = $("toggleAUX")?.checked ?? $("auxToggle")?.checked ?? $("tgAux")?.checked ?? $("auxCheck")?.checked;
 
       if (typeof emaChecked === "boolean") showEMA = emaChecked;
       if (typeof auxChecked === "boolean") showAUX = auxChecked;
@@ -539,7 +593,7 @@
     emaSeries.setData(emaPts);
     auxSeries.setData(auxPts);
 
-    // signals
+    // signals: try payload then optional endpoints then compute fallback
     let sigs = normalizeSignals(payload);
     if (!sigs.length) sigs = await fetchOptionalSignals(sym, tf);
     if (!sigs.length) sigs = computeSignalsCrossPlusInflection(bars, emaPts, auxPts, CONFIRM_WINDOW);
@@ -562,14 +616,13 @@
           symbol: sym || null,
           timeframe: tf || null,
           bars: Array.isArray(bars) ? bars.length : 0,
-          source: (window.__DATA_SOURCE__ || "demo"),
+          source: (window.__DATA_SOURCE__ || "massive"),
           emaPeriod: EMA_PERIOD || 14,
           auxPeriod: AUX_PERIOD || 40,
           confirmWindow: CONFIRM_WINDOW || 3,
         };
 
-        // 注意：你的 sigs 只有 {time, side}，没有 price
-        // 这里用“该 time 对应的 close”补齐 price（用于 overlay 定位）
+        // closeByTime for signal price fill
         const closeByTime = new Map();
         for (const b of bars) closeByTime.set(b.time, b.close);
 
@@ -590,8 +643,7 @@
           })
           .filter(x => x.time != null && x.price != null);
 
-        // 趋势信息：你主图是按 EMA slope 给蜡烛底色
-        // 这里给出一个“最近 10 根”的 slope 估计 + regime
+        // trend summary (EMA slope)
         const n = Math.min(10, emaVals.length - 1);
         let emaSlope = null;
         let emaRegime = null;
@@ -613,12 +665,11 @@
 
         const snapTrend = {
           emaSlope,
-          emaRegime,   // 'UP'|'DOWN'|'FLAT'
-          emaColor,    // 'GREEN'|'RED'|'NEUTRAL'
+          emaRegime,
+          emaColor,
           flipCount: null,
         };
 
-        // 风险信息：你当前 chart.core.js 没有 risk 计算，先留空
         const snapRisk = {
           entry: null,
           stop: null,
@@ -631,9 +682,6 @@
           window.DarriusChart.__setSnapshot({
             meta: snapMeta,
             candles: Array.isArray(bars) ? bars : [],
-            // 这里“对齐你的 market.pulse.js”：它期望 ema/aux 是数组
-            // 你现在 snapshot export IIFE 里注释写的是 [{time,value}]
-            // 但 market.pulse.js 多半兼容 number[]；为了稳，给两份都行：
             ema: Array.isArray(emaPts) ? emaPts : [],
             aux: Array.isArray(auxPts) ? auxPts : [],
             signals: snapSignals,
@@ -642,17 +690,16 @@
           });
         }
       } catch (e) {
-        // 永不影响主图
+        // swallow
       }
     });
 
     // -------- SNAPSHOT OUTPUT (consumer only) --------
-    // Keep snapshot compact but sufficient. We expose last N arrays for MP usage.
     const N = Math.min(200, bars.length);
     const start = bars.length - N;
 
     const snapshot = {
-      version: "2026.01.19-PRESET2",
+      version: "2026.01.21-MASSIVE-AGGS",
       ts: Date.now(),
       apiBase: DEFAULT_API_BASE,
       urlUsed,
@@ -660,13 +707,10 @@
       tf,
       params: { EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW },
       barsCount: bars.length,
-      // last N bars for derived computations
       bars: bars.slice(start),
       ema: emaVals.slice(start),
       aux: auxVals.slice(start),
-      // all signals (or last 100)
       sigs: sigs.slice(Math.max(0, sigs.length - 200)),
-      // helpful last price
       lastClose: bars[bars.length - 1].close,
     };
 
@@ -723,26 +767,20 @@
 
     // -----------------------------
     // Read-only coordinate bridge (for market.pulse.js overlay)
-    // - DO NOT expose chart object to UI layer
-    // - Only expose time->x and price->y mapping (safe, read-only)
-    // - Also expose __hostId so overlay knows the real chart container
     // -----------------------------
     safeRun("bridgeExpose", () => {
       window.DarriusChart = window.DarriusChart || {};
 
-      // time -> x(px)
       window.DarriusChart.timeToX = (t) => safeRun("timeToX", () => {
         if (!chart || !chart.timeScale) return null;
         return chart.timeScale().timeToCoordinate(t);
       });
 
-      // price -> y(px)
       window.DarriusChart.priceToY = (p) => safeRun("priceToY", () => {
         if (!candleSeries || !candleSeries.priceToCoordinate) return null;
         return candleSeries.priceToCoordinate(p);
       });
 
-      // optional: tell UI which host is the real chart container
       window.DarriusChart.__hostId = containerId || "chart";
     });
 
@@ -763,12 +801,15 @@
     });
     resize();
 
+    // Accept various checkbox ids
     $("toggleEMA")?.addEventListener("change", applyToggles);
     $("emaToggle")?.addEventListener("change", applyToggles);
+    $("tgEMA")?.addEventListener("change", applyToggles);
     $("emaCheck")?.addEventListener("change", applyToggles);
 
     $("toggleAUX")?.addEventListener("change", applyToggles);
     $("auxToggle")?.addEventListener("change", applyToggles);
+    $("tgAux")?.addEventListener("change", applyToggles);
     $("auxCheck")?.addEventListener("change", applyToggles);
 
     if (opts.autoLoad !== false) load().catch((e) => {
@@ -788,7 +829,6 @@
 (function () {
   "use strict";
 
-  // 1) 单例快照容器（只存“最新一次计算/渲染后的结果”）
   const __SNAPSHOT = {
     version: "snapshot_v1",
     ts: 0,
@@ -803,36 +843,28 @@
       confirmWindow: null,
     },
 
-    // 主序列（用于 UI 派生：market pulse、risk、overlay）
     candles: [],     // [{time, open, high, low, close}]
     ema: [],         // [{time, value}]
-    aux: [],         // [{time, value}]  (或你用于“稳定度/平滑度”的那条线)
+    aux: [],         // [{time, value}]
 
-    // 信号（用于：Market Pulse 的 bias + B/S overlay）
-    // 统一：只给“有效信号”（confirm-window 成立后的）
     signals: [],     // [{time, price, side:'B'|'S', i, reason?, strength?}]
 
-    // 趋势底色（为了 rule-1 强一致：Market Pulse 不得逆趋势）
-    // 统一：由主图已经算出来的趋势结果写入；没有就留 null
     trend: {
-      emaSlope: null,        // 最近一段 EMA 的 slope（>0 up, <0 down）
-      emaRegime: null,       // 'UP'|'DOWN'|'FLAT'|null
-      emaColor: null,        // 'GREEN'|'RED'|'NEUTRAL'|null  （对应你蜡烛底色）
-      flipCount: null,       // EMA regime 在最近N根内反转次数（用于稳定度）
+      emaSlope: null,
+      emaRegime: null,
+      emaColor: null,
+      flipCount: null,
     },
 
-    // 风险助手（由 chart.core.js 内部既有逻辑写入；没有就留 null）
     risk: {
-      entry: null,     // number
-      stop: null,      // number
-      targets: null,   // string 或 number[]（推荐 string 给 UI 直接显示）
-      confidence: null,// 0~100
-      winrate: null,   // 0~100（如果你有回测/估计）
+      entry: null,
+      stop: null,
+      targets: null,
+      confidence: null,
+      winrate: null,
     },
   };
 
-  // 2) 写快照：供 chart.core.js 内部在“每次加载/重算/重绘后”调用
-  //    注意：只拷贝必要字段，避免把巨大对象/series引用泄漏出去
   function __setSnapshot(patch) {
     try {
       if (!patch || typeof patch !== "object") return;
@@ -854,14 +886,12 @@
         __SNAPSHOT.risk = Object.assign({}, __SNAPSHOT.risk, patch.risk);
       }
     } catch (e) {
-      // 永不抛错：不允许快照导出影响主图
+      // never throw
     }
   }
 
-  // 3) 读快照：market.pulse.js 会调用这个
   function __getSnapshot() {
     try {
-      // 返回一个“只读副本”（浅拷贝 + 数组拷贝）
       return {
         version: __SNAPSHOT.version,
         ts: __SNAPSHOT.ts,
@@ -878,15 +908,12 @@
     }
   }
 
-  // 4) 暴露给 UI 层：两种入口都给（与你 market.pulse.js 的多重 fallback 对齐）
   window.DarriusChart = window.DarriusChart || {};
   window.DarriusChart.getSnapshot = __getSnapshot;
 
-  // 兼容另一种命名（你 market.pulse.js 也会尝试这个）
   if (typeof window.getChartSnapshot !== "function") {
     window.getChartSnapshot = __getSnapshot;
   }
 
-  // 5) 提供给 chart.core.js 内部调用（不暴露到 UI 层也行；但暴露给自己更方便）
   window.DarriusChart.__setSnapshot = __setSnapshot;
 })();
