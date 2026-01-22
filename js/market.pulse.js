@@ -1,18 +1,23 @@
-/* market.pulse.js
- * UI-only layer. Must NOT mutate chart.core.js internals.
- * - Reads snapshot from window.__DARRIUS_CHART_STATE__ and/or window.DarriusChart.getSnapshot()
- * - Updates UI panels: Data Source strong hint, Market Pulse, Risk Copilot
- * - Never touches billing/subscription/payment logic
- */
+/* =========================================================================
+ * DarriusAI - market.pulse.js (UI ONLY) v2026.01.22-STEP2A
+ *
+ * Goals (Step 2A):
+ *  1) UI 精简：删除（隐藏）黄色框内的 Note/说明文本（不触碰订阅/支付）
+ *  2) Data Source 强提示：顶部/右侧显示 Market vs Demo vs Delayed(15m)，含 provider + urlUsed
+ *  3) 修正左侧 Market Pulse 面板：把 Bullish/Bearish/Neutral/Net Inflow 的 “—” 恢复为数值
+ *  4) 恢复主图 B/S markers：若之前开启 __OVERLAY_BIG_SIGS__ 但 overlay 未实现，则关闭该开关
+ *
+ * Hard Rule:
+ *  - MUST NOT touch billing/subscription/payment logic or endpoints.
+ * ========================================================================= */
+
 (() => {
   "use strict";
 
   // -----------------------------
-  // Absolute no-throw safe zone
+  // Safe runner (never throw)
   // -----------------------------
-  function safeRun(tag, fn) {
-    try { return fn(); } catch (e) { return null; }
-  }
+  function safeRun(tag, fn) { try { return fn(); } catch (_) { return null; } }
 
   // -----------------------------
   // DOM helpers
@@ -21,25 +26,9 @@
   const qs = (sel, root) => (root || document).querySelector(sel);
   const qsa = (sel, root) => Array.from((root || document).querySelectorAll(sel));
 
-  function setText(el, text) {
-    if (!el) return;
-    el.textContent = (text == null ? "" : String(text));
-  }
-
-  function setHtml(el, html) {
-    if (!el) return;
-    el.innerHTML = (html == null ? "" : String(html));
-  }
-
-  function addClass(el, cls) {
-    if (!el) return;
-    el.classList.add(cls);
-  }
-
-  function removeClass(el, cls) {
-    if (!el) return;
-    el.classList.remove(cls);
-  }
+  function setText(el, text) { if (el) el.textContent = (text == null ? "" : String(text)); }
+  function hide(el) { if (el) el.style.display = "none"; }
+  function show(el) { if (el) el.style.display = ""; }
 
   // -----------------------------
   // Snapshot readers
@@ -47,23 +36,16 @@
   function readCoreState() {
     return safeRun("readCoreState", () => window.__DARRIUS_CHART_STATE__ || null) || null;
   }
-
   function readUiSnapshot() {
     return safeRun("readUiSnapshot", () => {
-      if (window.DarriusChart && typeof window.DarriusChart.getSnapshot === "function") {
-        return window.DarriusChart.getSnapshot();
-      }
-      if (typeof window.getChartSnapshot === "function") {
-        return window.getChartSnapshot();
-      }
+      if (window.DarriusChart && typeof window.DarriusChart.getSnapshot === "function") return window.DarriusChart.getSnapshot();
+      if (typeof window.getChartSnapshot === "function") return window.getChartSnapshot();
       return null;
     }) || null;
   }
 
   function pickFirst(...vals) {
-    for (const v of vals) {
-      if (v !== undefined && v !== null && v !== "") return v;
-    }
+    for (const v of vals) if (v !== undefined && v !== null && v !== "") return v;
     return null;
   }
 
@@ -72,394 +54,423 @@
   // -----------------------------
   function inferDataInfo(coreState, uiSnap) {
     const version = pickFirst(coreState?.version, uiSnap?.version, "unknown");
-    const urlUsed = pickFirst(coreState?.urlUsed, coreState?.meta?.urlUsed, uiSnap?.meta?.urlUsed, null);
+    const urlUsed = pickFirst(coreState?.urlUsed, uiSnap?.meta?.urlUsed, "");
 
-    // explicit fields (if chart.core.js exports them)
     const dataMode = pickFirst(
-      coreState?.dataMode,
-      coreState?.data_mode,
-      coreState?.mode,
-      uiSnap?.meta?.dataMode,
-      uiSnap?.meta?.mode,
-      null
+      coreState?.dataMode, coreState?.mode, coreState?.data_mode,
+      uiSnap?.meta?.dataMode, uiSnap?.meta?.mode, null
     );
 
     const dataSource = pickFirst(
-      coreState?.dataSource,
-      coreState?.data_source,
-      coreState?.source,
-      uiSnap?.meta?.source,
-      uiSnap?.meta?.dataSource,
-      null
+      coreState?.dataSource, coreState?.source, coreState?.data_source,
+      uiSnap?.meta?.source, uiSnap?.meta?.dataSource, null
     );
 
     const provider = pickFirst(
-      coreState?.provider,
-      coreState?.vendor,
-      coreState?.dataProvider,
-      uiSnap?.meta?.provider,
-      uiSnap?.meta?.vendor,
-      null
+      coreState?.provider, coreState?.vendor, coreState?.dataProvider,
+      uiSnap?.meta?.provider, uiSnap?.meta?.vendor, null
     );
 
     const delayedMinutes = pickFirst(
-      coreState?.delayedMinutes,
-      coreState?.delayed_minutes,
-      coreState?.delayMinutes,
-      uiSnap?.meta?.delayedMinutes,
-      uiSnap?.meta?.delayMinutes,
-      null
+      coreState?.delayedMinutes, coreState?.delayMinutes, coreState?.delayed_minutes,
+      uiSnap?.meta?.delayedMinutes, uiSnap?.meta?.delayMinutes, null
     );
 
-    // fallback inference from urlUsed / version text
     const url = String(urlUsed || "");
     const v = String(version || "");
     const looksAggs = /\/api\/data\/stocks\/aggregates/i.test(url) || /aggregates/i.test(url);
     const looksMarket = looksAggs || /massive/i.test(v) || /datamode/i.test(v);
 
-    // normalize mode
     let modeNorm = (dataMode || "").toLowerCase().trim();
     if (!modeNorm) {
-      // If we see delayed in version or UI, assume delayed; else unknown -> demo
       if (/delayed/i.test(v) || /delay/i.test(v)) modeNorm = "delayed";
       else if (looksMarket) modeNorm = "market";
       else modeNorm = "demo";
     }
 
-    // normalize source label
-    let srcLabel = (dataSource || "").toLowerCase().trim();
-    if (!srcLabel) {
-      if (looksAggs) srcLabel = "market";
-      else srcLabel = modeNorm === "demo" ? "demo" : "market";
-    }
+    let srcNorm = (dataSource || "").toLowerCase().trim();
+    if (!srcNorm) srcNorm = looksMarket ? "market" : "demo";
 
-    // normalize provider label
     let providerLabel = provider ? String(provider) : (looksAggs ? "Massive" : "Local");
-    if (String(providerLabel).toLowerCase() === "local") providerLabel = "Local";
-    if (String(providerLabel).toLowerCase() === "massive") providerLabel = "Massive";
+    if (/massive/i.test(providerLabel)) providerLabel = "Massive";
 
-    // delayed minutes fallback
     let dmin = delayedMinutes;
     if ((modeNorm === "delayed" || /delayed/i.test(v)) && (dmin == null || dmin === "")) dmin = 15;
 
-    // final display
     const displayMode =
       modeNorm === "demo" ? "Demo" :
       modeNorm === "delayed" ? "Delayed" :
-      modeNorm === "market" ? "Market" :
       "Market";
 
-    const displaySource =
-      srcLabel === "demo" ? "Demo (Local)" :
-      srcLabel === "market" ? "Market" :
-      "Market";
-
-    const delayText = (displayMode === "Delayed" || modeNorm === "delayed")
-      ? `(${Number(dmin) || 15}m)`
-      : "";
+    const displaySource = (srcNorm === "demo") ? "Demo (Local)" : "Market";
+    const delayText = (displayMode === "Delayed") ? `(${Number(dmin) || 15}m)` : "";
 
     return {
       version: String(version),
-      urlUsed: urlUsed ? String(urlUsed) : "",
+      urlUsed: String(urlUsed || ""),
       displayMode,
       displaySource,
       provider: providerLabel,
       delayedMinutes: (Number.isFinite(Number(dmin)) ? Number(dmin) : null),
       delayText,
-      isDelayed: (displayMode === "Delayed" || modeNorm === "delayed"),
-      isDemo: (displayMode === "Demo" || modeNorm === "demo"),
+      isDelayed: displayMode === "Delayed",
+      isDemo: displayMode === "Demo",
     };
   }
 
   // -----------------------------
-  // UI: Data Source strong hint
+  // Widget: Data Source strong hint (top-right small badge + inside right panel if possible)
   // -----------------------------
-  function ensureDataStatusWidget() {
-    // Try to attach to existing right-panel control center if present
-    const rightPanel =
-      $("controlCenter") ||
-      qs("#rightPanel") ||
-      qs(".control-center") ||
-      qs("[data-panel='control']") ||
-      qs(".panel-right") ||
-      null;
+  function ensureTopBadge() {
+    let el = qs("#darriusTopDataBadge");
+    if (el) return el;
 
-    // If we can't find a right panel, we fallback to a small fixed badge (non-invasive)
-    if (!rightPanel) return { root: ensureFloatingBadgeRoot(), modeEl: null, detailEl: null };
-
-    // Find an existing "Data Source" section container if you have one
-    const existing =
-      qs("#dataSourceSection", rightPanel) ||
-      qs(".data-source", rightPanel) ||
-      qs("[data-section='data-source']", rightPanel) ||
-      null;
-
-    const host = existing || rightPanel;
-
-    // Create (or reuse) widget root
-    let root = qs("#darriusDataStatus", host);
-    if (!root) {
-      root = document.createElement("div");
-      root.id = "darriusDataStatus";
-      root.style.cssText = [
-        "margin: 10px 0 12px 0",
-        "padding: 10px 12px",
-        "border: 1px solid rgba(255,255,255,.08)",
-        "border-radius: 12px",
-        "background: rgba(0,0,0,.18)",
-        "backdrop-filter: blur(6px)",
-      ].join(";");
-
-      root.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-          <div style="display:flex;flex-direction:column;gap:4px;">
-            <div style="font-weight:700;font-size:12px;letter-spacing:.2px;opacity:.92;">
-              Data Source <span style="opacity:.5;">/ 数据源</span>
-            </div>
-            <div id="darriusDataModeLine" style="font-size:13px;font-weight:800;"></div>
-            <div id="darriusDataDetailLine" style="font-size:11px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
-          </div>
-          <div id="darriusDataPill" style="
-            font-size:12px;font-weight:900;
-            padding:6px 10px;border-radius:999px;
-            border:1px solid rgba(255,255,255,.14);
-            background: rgba(255,255,255,.06);
-            white-space:nowrap;">
-          </div>
-        </div>
-      `;
-
-      // Insert near the top of section
-      host.insertBefore(root, host.firstChild);
-    }
-
-    return {
-      root,
-      modeEl: qs("#darriusDataModeLine", root),
-      detailEl: qs("#darriusDataDetailLine", root),
-      pillEl: qs("#darriusDataPill", root),
-    };
-  }
-
-  function ensureFloatingBadgeRoot() {
-    let root = qs("#darriusFloatingDataBadge");
-    if (root) return root;
-
-    root = document.createElement("div");
-    root.id = "darriusFloatingDataBadge";
-    root.style.cssText = [
+    el = document.createElement("div");
+    el.id = "darriusTopDataBadge";
+    el.style.cssText = [
       "position: fixed",
       "top: 12px",
-      "left: 50%",
-      "transform: translateX(-50%)",
+      "right: 16px",
       "z-index: 9999",
-      "display: flex",
-      "align-items: center",
-      "gap: 8px",
-      "padding: 8px 12px",
-      "border-radius: 999px",
+      "padding: 8px 10px",
+      "border-radius: 10px",
       "border: 1px solid rgba(255,255,255,.14)",
       "background: rgba(0,0,0,.35)",
       "backdrop-filter: blur(8px)",
       "font-size: 12px",
+      "line-height: 1.2",
       "font-weight: 900",
-      "letter-spacing: .2px",
+      "max-width: 420px",
       "pointer-events: none",
     ].join(";");
 
-    root.innerHTML = `
-      <span id="darriusFloatingPill"></span>
-      <span id="darriusFloatingDetail" style="font-weight:700;opacity:.75;"></span>
+    el.innerHTML = `
+      <div id="darriusTopDataLine1"></div>
+      <div id="darriusTopDataLine2" style="font-weight:700;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+    `;
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function ensureRightPanelCard() {
+    // 尝试找到你右侧 Control Center 区域（不依赖固定 id）
+    const rightPanel =
+      $("controlCenter") ||
+      qs(".control-center") ||
+      qs("[data-panel='control']") ||
+      qs(".panel-right") ||
+      qs("#rightPanel") ||
+      null;
+
+    if (!rightPanel) return null;
+
+    let card = qs("#darriusDataStatusCard", rightPanel);
+    if (card) return card;
+
+    card = document.createElement("div");
+    card.id = "darriusDataStatusCard";
+    card.style.cssText = [
+      "margin: 10px 0 12px 0",
+      "padding: 10px 12px",
+      "border: 1px solid rgba(255,255,255,.10)",
+      "border-radius: 12px",
+      "background: rgba(0,0,0,.18)",
+    ].join(";");
+
+    card.innerHTML = `
+      <div style="font-weight:800;font-size:12px;opacity:.9;margin-bottom:6px;">
+        Data Source <span style="opacity:.5;">/ 数据源</span>
+      </div>
+      <div id="darriusDataCardLine1" style="font-size:13px;font-weight:900;"></div>
+      <div id="darriusDataCardLine2" style="font-size:11px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
     `;
 
-    document.body.appendChild(root);
-    return root;
+    rightPanel.insertBefore(card, rightPanel.firstChild);
+    return card;
   }
 
   function renderDataStatus(info) {
     safeRun("renderDataStatus", () => {
-      const w = ensureDataStatusWidget();
+      // Top badge
+      const badge = ensureTopBadge();
+      const l1 = qs("#darriusTopDataLine1", badge);
+      const l2 = qs("#darriusTopDataLine2", badge);
 
-      const modeLine = `${info.displaySource} · ${info.displayMode}${info.delayText ? " " + info.delayText : ""}`;
-      const detailLine = info.urlUsed ? `Provider: ${info.provider} · ${info.urlUsed}` : `Provider: ${info.provider}`;
+      const line1 = `${info.displaySource} · ${info.displayMode}${info.delayText ? " " + info.delayText : ""}`;
+      const line2 = info.urlUsed ? `Provider: ${info.provider} · ${info.urlUsed}` : `Provider: ${info.provider}`;
 
-      // Color strategy (no CSS dependency)
-      const pillText = info.isDemo ? "DEMO" : (info.isDelayed ? "DELAYED" : "MARKET");
-      const pillBorder = info.isDemo
+      setText(l1, line1);
+      setText(l2, line2);
+
+      // Color hint
+      const border = info.isDemo
         ? "rgba(255,255,255,.18)"
         : info.isDelayed
           ? "rgba(255,210,0,.35)"
           : "rgba(0,255,170,.25)";
-      const pillBg = info.isDemo
-        ? "rgba(255,255,255,.06)"
-        : info.isDelayed
-          ? "rgba(255,210,0,.10)"
-          : "rgba(0,255,170,.08)";
 
-      if (w.modeEl) setText(w.modeEl, modeLine);
-      if (w.detailEl) setText(w.detailEl, detailLine);
+      badge.style.borderColor = border;
 
-      if (w.pillEl) {
-        setText(w.pillEl, pillText);
-        w.pillEl.style.borderColor = pillBorder;
-        w.pillEl.style.background = pillBg;
-      }
-
-      // floating badge fallback
-      const f = qs("#darriusFloatingDataBadge");
-      if (f) {
-        const fp = qs("#darriusFloatingPill", f);
-        const fd = qs("#darriusFloatingDetail", f);
-        if (fp) setText(fp, `${pillText}`);
-        if (fd) setText(fd, `${info.displaySource} · ${info.displayMode}${info.delayText ? " " + info.delayText : ""}`);
-        f.style.borderColor = pillBorder;
-        f.style.background = "rgba(0,0,0,.35)";
+      // Right card
+      const card = ensureRightPanelCard();
+      if (card) {
+        setText(qs("#darriusDataCardLine1", card), line1);
+        setText(qs("#darriusDataCardLine2", card), line2);
       }
     });
   }
 
   // -----------------------------
-  // UI: Remove / sanitize misleading texts (safe & scoped)
+  // Step2A UI cleanup: remove yellow box notes
+  // (We hide blocks by matching text patterns; we do NOT touch subscription/payment area)
   // -----------------------------
-  function sanitizeUiTexts() {
-    safeRun("sanitizeUiTexts", () => {
-      // Only touch known hint/notes nodes; never touch subscription/payment area.
-      const idsToClear = [
-        "yellowText",
-        "yellowHint",
-        "dataHintYellow",
-        "hintYellow",
-        "legacyHint",
-      ];
-      idsToClear.forEach((id) => setText($(id), ""));
+  const REMOVE_TEXT_PATTERNS = [
+    /Market Pulse is derived/i,
+    /Pulse.*derived/i,
+    /Commission terms/i,
+    /For live data.*proxy/i,
+    /EMA\/AUX parameters/i,
+    /EMA.*AUX.*internal/i,
+    /说明：\s*Market Pulse/i,
+    /说明：\s*Market Pulse.*不会/i,
+    /说明：\s*For live data/i,
+    /说明：\s*EMA\/AUX/i,
+    /说明：\s*推荐/i,
+  ];
 
-      // If your page has a known "yellow box" container, clear only that container
-      const yellowBox =
-        qs("#yellowBox") ||
-        qs(".yellow-box") ||
-        qs("[data-ui='yellow']") ||
-        null;
-      if (yellowBox) setText(yellowBox, "");
+  function isInsideSubscriptionOrBilling(el) {
+    // 防止误伤订阅/支付区域：只要祖先包含明显 subscription/billing/checkout 字样，就不动
+    const p = el.closest?.("[data-section*='sub' i], [id*='sub' i], [class*='sub' i], [id*='billing' i], [class*='billing' i], [id*='checkout' i], [class*='checkout' i]");
+    return !!p;
+  }
 
-      // Optional: shrink overly long disclaimers if a specific container exists
-      const note = qs("#marketPulseNote") || qs("[data-note='market-pulse']");
-      if (note && note.textContent && note.textContent.length > 400) {
-        // keep it short to reduce clutter
-        note.textContent = note.textContent.slice(0, 220) + "…";
+  function cleanupYellowNotes() {
+    safeRun("cleanupYellowNotes", () => {
+      const nodes = qsa("div, p, span, small, li");
+      for (const el of nodes) {
+        if (!el || !el.textContent) continue;
+        if (isInsideSubscriptionOrBilling(el)) continue;
+
+        const t = el.textContent.trim();
+        if (!t) continue;
+
+        // 只清理“Note/说明”这类说明块，避免误杀正文标题
+        const looksLikeNote = /^note\s*:/i.test(t) || /^说明：/i.test(t) || /Note\s*:/i.test(t);
+        if (!looksLikeNote) continue;
+
+        if (REMOVE_TEXT_PATTERNS.some((re) => re.test(t))) {
+          hide(el);
+        }
       }
     });
   }
 
   // -----------------------------
-  // UI: Market Pulse + Risk Copilot (read-only)
+  // Red box improvement: refine disclaimers (left bottom blocks)
   // -----------------------------
-  function calcPulseFromSnapshot(uiSnap, coreState) {
-    // Minimal, stable pulse: based on recent EMA slope regime from uiSnap.trend or coreState.ema.
-    // Never blocks chart.
-    return safeRun("calcPulse", () => {
-      const trend = uiSnap?.trend || null;
+  const EN_DISCLAIMER = [
+    "English:",
+    "For informational purposes only. Not investment advice.",
+    "Delayed/market data may be delayed or inaccurate. Past performance is not indicative of future results.",
+    "You are solely responsible for your trading decisions and risk.",
+  ].join(" ");
 
-      // If provided by chart.core snapshot bridge
-      if (trend && (trend.emaSlope != null || trend.emaRegime)) {
-        const slope = Number(trend.emaSlope);
-        const regime = String(trend.emaRegime || "").toUpperCase();
-        const scoreBase =
-          regime === "UP" ? 58 :
-          regime === "DOWN" ? 42 :
-          50;
+  const ZH_DISCLAIMER = [
+    "中文：",
+    "本内容仅供信息参考，不构成任何投资建议。",
+    "行情/信号可能延迟或不准确，历史表现不代表未来结果。",
+    "交易有风险，盈亏自负。"
+  ].join("");
 
-        const slopeAdj = Number.isFinite(slope) ? Math.max(-8, Math.min(8, slope * 1000)) : 0;
-        const score = Math.max(1, Math.min(99, Math.round(scoreBase + slopeAdj)));
+  function refineDisclaimers() {
+    safeRun("refineDisclaimers", () => {
+      // 找到包含旧英文免责声明的块
+      const blocks = qsa("div, p, small");
+      for (const el of blocks) {
+        const t = (el.textContent || "").trim();
+        if (!t) continue;
 
-        return {
-          score,
-          bullish: Math.max(0, Math.min(100, Math.round(score + 5))),
-          bearish: Math.max(0, Math.min(100, Math.round(100 - score - 5))),
-          neutral: Math.max(0, Math.min(100, 100 - Math.round(score + 5) - Math.round(100 - score - 5))),
-          netFlow: slope > 0 ? "Net Inflow" : slope < 0 ? "Net Outflow" : "Balanced",
-        };
-      }
+        // 英文块
+        if (/Informational use only/i.test(t) || (/For informational/i.test(t) && /Not investment advice/i.test(t))) {
+          setText(el, EN_DISCLAIMER);
+          el.style.opacity = "0.85";
+          el.style.lineHeight = "1.25";
+          el.style.fontSize = "11px";
+          continue;
+        }
 
-      // Fallback: derive from coreState.ema array if exists
-      const emaArr = coreState?.ema;
-      if (Array.isArray(emaArr) && emaArr.length >= 8) {
-        const n = Math.min(10, emaArr.length - 1);
-        const now = Number(emaArr[emaArr.length - 1]);
-        const prev = Number(emaArr[emaArr.length - 1 - n]);
-        if (Number.isFinite(now) && Number.isFinite(prev)) {
-          const slope = (now - prev) / n;
-          const score = Math.max(1, Math.min(99, Math.round(50 + Math.max(-15, Math.min(15, slope * 500)))));
-          return {
-            score,
-            bullish: Math.round(Math.min(100, score + 6)),
-            bearish: Math.round(Math.min(100, 100 - score + 6)),
-            neutral: Math.max(0, 100 - Math.round(Math.min(100, score + 6)) - Math.round(Math.min(100, 100 - score + 6))),
-            netFlow: slope > 0 ? "Net Inflow" : slope < 0 ? "Net Outflow" : "Balanced",
-          };
+        // 中文块
+        if (/本系统仅用于信息展示/i.test(t) || (/不构成任何投资建议/i.test(t) && /风险/i.test(t))) {
+          setText(el, ZH_DISCLAIMER);
+          el.style.opacity = "0.85";
+          el.style.lineHeight = "1.25";
+          el.style.fontSize = "11px";
+          continue;
         }
       }
 
-      return { score: 50, bullish: 33, bearish: 33, neutral: 34, netFlow: "Balanced" };
-    }) || { score: 50, bullish: 33, bearish: 33, neutral: 34, netFlow: "Balanced" };
-  }
+      // Links line: try keep existing, if not exists create minimal
+      const linkLine =
+        qs("#darriusFooterLinks") ||
+        qs("[data-ui='footer-links']") ||
+        null;
 
-  function renderMarketPulse(pulse) {
-    safeRun("renderMarketPulse", () => {
-      // Try common ids (no assumptions)
-      setText($("pulseScore"), pulse.score);
-      setText($("mpScore"), pulse.score);
-
-      setText($("pulseBullish"), `${pulse.bullish}%`);
-      setText($("pulseBearish"), `${pulse.bearish}%`);
-      setText($("pulseNeutral"), `${pulse.neutral}%`);
-      setText($("pulseNetFlow"), pulse.netFlow);
-
-      // If there is a ring gauge using CSS vars
-      const ring = $("pulseRing") || qs(".pulse-ring");
-      if (ring) {
-        ring.style.setProperty("--pulse", String(pulse.score));
+      if (linkLine && !isInsideSubscriptionOrBilling(linkLine)) {
+        // 只做轻微规范化
+        linkLine.style.opacity = "0.85";
+        linkLine.style.fontSize = "11px";
       }
     });
   }
 
-  function renderRiskCopilot(uiSnap, coreState) {
-    safeRun("renderRiskCopilot", () => {
-      // If UI snapshot provides risk; otherwise keep existing UI untouched.
-      const risk = uiSnap?.risk || null;
-      if (!risk) return;
+  // -----------------------------
+  // Market Pulse numbers: fill Bullish/Bearish/Neutral/Net Inflow
+  // Strategy: locate panel by title text then locate rows by label text
+  // -----------------------------
+  function computePulse(coreState, uiSnap) {
+    return safeRun("computePulse", () => {
+      // Use uiSnap.trend if exists
+      const trend = uiSnap?.trend || null;
+      let score = 50;
 
-      // Common ids
-      if (risk.entry != null) setText($("riskEntry"), String(risk.entry));
-      if (risk.stop != null) setText($("riskStop"), String(risk.stop));
-      if (risk.targets != null) setText($("riskTargets"), Array.isArray(risk.targets) ? risk.targets.join(" / ") : String(risk.targets));
-      if (risk.confidence != null) setText($("riskConfidence"), String(risk.confidence));
-      if (risk.winrate != null) setText($("riskWinrate"), String(risk.winrate));
+      if (trend && (trend.emaSlope != null || trend.emaRegime)) {
+        const slope = Number(trend.emaSlope);
+        const regime = String(trend.emaRegime || "").toUpperCase();
+        const base = regime === "UP" ? 58 : regime === "DOWN" ? 42 : 50;
+        const adj = Number.isFinite(slope) ? Math.max(-10, Math.min(10, slope * 1000)) : 0;
+        score = Math.max(1, Math.min(99, Math.round(base + adj)));
+      } else {
+        // fallback from coreState.ema array
+        const emaArr = coreState?.ema;
+        if (Array.isArray(emaArr) && emaArr.length >= 8) {
+          const n = Math.min(10, emaArr.length - 1);
+          const now = Number(emaArr[emaArr.length - 1]);
+          const prev = Number(emaArr[emaArr.length - 1 - n]);
+          if (Number.isFinite(now) && Number.isFinite(prev)) {
+            const slope = (now - prev) / n;
+            score = Math.max(1, Math.min(99, Math.round(50 + Math.max(-15, Math.min(15, slope * 500)))));
+          }
+        }
+      }
+
+      const bullish = Math.max(0, Math.min(100, Math.round(score + 5)));
+      const bearish = Math.max(0, Math.min(100, Math.round(100 - score - 5)));
+      const neutral = Math.max(0, 100 - bullish - bearish);
+
+      const netFlow = score >= 55 ? "Net Inflow" : score <= 45 ? "Net Outflow" : "Balanced";
+
+      return { score, bullish, bearish, neutral, netFlow };
+    }) || { score: 50, bullish: 33, bearish: 33, neutral: 34, netFlow: "Balanced" };
+  }
+
+  function findPanelByTitleRegex(titleRegex) {
+    const candidates = qsa("div, section, article");
+    for (const el of candidates) {
+      const t = (el.textContent || "").trim();
+      if (!t) continue;
+      // 要求同一块里包含标题（避免全页匹配）
+      if (titleRegex.test(t) && t.length < 2000) return el;
+    }
+    return null;
+  }
+
+  function setRowValue(panel, labelRegex, valueText) {
+    if (!panel) return false;
+
+    // 找到包含 label 的元素，然后优先找同一行的“右侧值”
+    const nodes = qsa("div, p, span, small", panel);
+    for (const el of nodes) {
+      const txt = (el.textContent || "").trim();
+      if (!txt) continue;
+      if (!labelRegex.test(txt)) continue;
+
+      // 尝试：同一个父容器里最后一个 span/div 作为 value
+      const row = el.closest("div") || el.parentElement;
+      if (row) {
+        const kids = qsa("span, div, small", row);
+        // 找到看起来像 value 的（短、可能是 — 或 数字/百分号）
+        for (let i = kids.length - 1; i >= 0; i--) {
+          const k = kids[i];
+          const kt = (k.textContent || "").trim();
+          if (!kt) continue;
+          if (k === el) continue;
+
+          // value candidate
+          if (kt === "—" || kt === "--" || /%$/.test(kt) || /^[0-9.]+$/.test(kt) || /Inflow|Outflow|Balanced/i.test(kt)) {
+            setText(k, valueText);
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  function renderMarketPulseNumbers(pulse) {
+    safeRun("renderMarketPulseNumbers", () => {
+      // 大号中间分数
+      const bigScore =
+        $("pulseScore") ||
+        $("mpScore") ||
+        qs("[data-ui='pulse-score']") ||
+        null;
+      if (bigScore) setText(bigScore, pulse.score);
+
+      // 面板定位（包含 Market Pulse / 市场情绪）
+      const panel = findPanelByTitleRegex(/Market Pulse|市场情绪/i) || document;
+
+      setRowValue(panel, /Bullish/i, `${pulse.bullish}%`);
+      setRowValue(panel, /Bearish/i, `${pulse.bearish}%`);
+      setRowValue(panel, /Neutral/i, `${pulse.neutral}%`);
+      setRowValue(panel, /Net\s*Inflow|Net\s*Flow/i, pulse.netFlow);
     });
   }
 
   // -----------------------------
-  // Main refresh pipeline
+  // Restore B/S markers if overlay flag is ON but overlay not implemented
   // -----------------------------
-  function refreshAll(reason) {
+  function restoreMarkersIfMissing() {
+    safeRun("restoreMarkersIfMissing", () => {
+      // 如果你没实现大号 overlay，就别开 __OVERLAY_BIG_SIGS__
+      // 否则 chart.core.js 会清空 markers，导致 B/S 消失
+      const overlayOn = (window.__OVERLAY_BIG_SIGS__ === true);
+
+      // 简单判断：UI层有没有创建 overlay canvas（如果你以后做了大号 overlay，可把这个 id 保持一致）
+      const overlayExists = !!qs("#darriusBigSignalsOverlay");
+
+      if (overlayOn && !overlayExists) {
+        window.__OVERLAY_BIG_SIGS__ = false;
+
+        // 触发主图重绘 markers（不影响订阅/支付）
+        if (window.ChartCore && typeof window.ChartCore.load === "function") {
+          window.ChartCore.load().catch(() => {});
+        }
+      }
+    });
+  }
+
+  // -----------------------------
+  // Main refresh
+  // -----------------------------
+  function refreshAll() {
     safeRun("refreshAll", () => {
       const coreState = readCoreState();
       const uiSnap = readUiSnapshot();
 
       const info = inferDataInfo(coreState, uiSnap);
       renderDataStatus(info);
-      sanitizeUiTexts();
 
-      const pulse = calcPulseFromSnapshot(uiSnap, coreState);
-      renderMarketPulse(pulse);
-      renderRiskCopilot(uiSnap, coreState);
+      restoreMarkersIfMissing();
 
-      // optional: show a tiny debug line if a container exists (doesn't clutter)
-      const dbg = $("uiDebugLine") || qs("[data-ui='debugline']");
-      if (dbg) {
-        const sym = pickFirst(coreState?.symbol, uiSnap?.meta?.symbol, "");
-        const tf = pickFirst(coreState?.tf, uiSnap?.meta?.timeframe, "");
-        setText(dbg, `${sym} · ${tf} · ${info.displayMode}${info.delayText ? " " + info.delayText : ""} · v=${info.version}`);
-      }
+      // 清理黄色说明块
+      cleanupYellowNotes();
+
+      // 完善红框免责声明（精简+专业化）
+      refineDisclaimers();
+
+      // 恢复市场情绪数据
+      const pulse = computePulse(coreState, uiSnap);
+      renderMarketPulseNumbers(pulse);
     });
   }
 
@@ -468,14 +479,12 @@
   // -----------------------------
   function boot() {
     safeRun("boot", () => {
-      // Run once on load (after DOM ready)
-      refreshAll("boot");
+      refreshAll();
 
-      // Listen to chart updates
-      window.addEventListener("darrius:chartUpdated", () => refreshAll("event"));
+      window.addEventListener("darrius:chartUpdated", () => refreshAll());
 
-      // Fallback timer (UI-only; low frequency)
-      setInterval(() => refreshAll("timer"), 2500);
+      // 低频兜底刷新（UI-only）
+      setInterval(refreshAll, 2500);
     });
   }
 
