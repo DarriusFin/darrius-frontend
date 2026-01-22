@@ -4,24 +4,15 @@
  * Role:
  *  - Render main chart (candles + EMA + AUX + signals)
  *  - Fetch OHLCV via backend proxy (Massive/Polygon aggregates)
- *  - Output a read-only snapshot to:
- *      window.__DARRIUS_CHART_STATE__  (canonical)
- *      window.__IH_SNAPSHOT__         (compat)
- *      window.__CHART_SNAPSHOT__      (compat)
- *  - Provide read-only coordinate bridge for overlays:
- *      window.DarriusChart.timeToX / priceToY
- *      window.DarriusChart.getSnapshot()
- *
- * Preset 2:
- *  - EMA 14
- *  - AUX 40 (HMA-like)
- *  - confirm window 3
- *  - Candles colored by EMA slope
+ *  - Output a read-only snapshot to window.__DARRIUS_CHART_STATE__
+ *  - Provide read-only bridge for UI overlay (market.pulse.js):
+ *      DarriusChart.timeToX / DarriusChart.priceToY / DarriusChart.getSnapshot()
+ *  - Emit event "darrius:chartUpdated" with snapshot detail
  *
  * Guarantees:
  *  1) Main chart render is highest priority and will not be broken by UI
  *  2) Non-critical parts (snapshot/event/markers) are wrapped in no-throw safe zones
- *  3) No billing/subscription/payments code touched
+ *  3) No billing/subscription code touched
  * ========================================================================= */
 
 (() => {
@@ -33,16 +24,19 @@
   const DIAG = (window.__DARRIUS_DIAG__ = window.__DARRIUS_DIAG__ || {
     lastError: null,
     chartError: null,
-    lastUrl: null,
-    lastBars: 0,
-    lastSigs: 0,
-    timeMode: null,
+    lastBarsUrl: null,
+    lastSigCount: null,
   });
 
   function safeRun(tag, fn) {
-    try { return fn(); }
-    catch (e) {
-      DIAG.lastError = { tag, message: String(e?.message || e), stack: String(e?.stack || "") };
+    try {
+      return fn();
+    } catch (e) {
+      DIAG.lastError = {
+        tag,
+        message: String(e?.message || e),
+        stack: String(e?.stack || ""),
+      };
       return undefined;
     }
   }
@@ -61,6 +55,10 @@
     (window._API_BASE_ && String(window._API_BASE_)) ||
     (window.API_BASE && String(window.API_BASE)) ||
     "https://darrius-api.onrender.com";
+
+  // Verified endpoint:
+  // /api/data/stocks/aggregates?ticker=...&multiplier=...&timespan=...&from=...&to=...
+  const MASSIVE_AGGS_PATH = "/api/data/stocks/aggregates";
 
   // Backward compat candidates (optional fallback)
   const BARS_PATH_CANDIDATES = [
@@ -86,10 +84,6 @@
     "/signals",
   ];
 
-  // Preferred endpoint:
-  // /api/data/stocks/aggregates?ticker=...&multiplier=...&timespan=...&from=...&to=...
-  const MASSIVE_AGGS_PATH = "/api/data/stocks/aggregates";
-
   // -----------------------------
   // Preset 2 params
   // -----------------------------
@@ -97,11 +91,6 @@
   const AUX_PERIOD = 40;
   const AUX_METHOD = "SMA";
   const CONFIRM_WINDOW = 3;
-
-  // De-chatter (fix: trend mid-cross spam)
-  const MIN_BARS_BETWEEN_SIGNALS = 6;     // lockout bars after emitting a signal
-  const MIN_SEPARATION_RATIO = 0.00025;   // min |EMA-AUX| / price for a valid cross
-  const REQUIRE_AUX_SLOPE_CONFIRM = true; // confirm needs AUX slope flip in window
 
   // -----------------------------
   // Colors
@@ -125,11 +114,6 @@
 
   let showEMA = true;
   let showAUX = true;
-
-  // track candle time mode for coordinate bridge
-  // 'utc' -> UTCTimestamp seconds
-  // 'businessDay' -> {year,month,day}
-  let __timeMode = "utc";
 
   // -----------------------------
   // UI readers
@@ -172,6 +156,7 @@
     return r.json();
   }
 
+  // tf -> multiplier/timespan + a reasonable history window
   function tfToAggParams(tf) {
     const m = String(tf || "1d").trim();
     const map = {
@@ -200,39 +185,26 @@
     return { from: toYMD(from), to: toYMD(to) };
   }
 
-  function isBusinessDay(t) {
-    return !!(t && typeof t === "object" && t.year && t.month && t.day);
-  }
-
   function toUnixSec(t) {
     if (t == null) return null;
-    if (typeof t === "number" && Number.isFinite(t)) {
-      if (t > 2e10) return Math.floor(t / 1000); // ms -> s
-      return t; // assume already seconds
+    if (typeof t === "number") {
+      // ms -> s
+      if (t > 2e10) return Math.floor(t / 1000);
+      return t;
     }
     if (typeof t === "string") {
       const ms = Date.parse(t);
       if (!Number.isFinite(ms)) return null;
       return Math.floor(ms / 1000);
     }
-    if (isBusinessDay(t)) {
-      const ms = Date.UTC(t.year, (t.month || 1) - 1, t.day || 1, 0, 0, 0);
-      return Math.floor(ms / 1000);
-    }
+    if (typeof t === "object" && t.year && t.month && t.day) return t; // business day
     return null;
-  }
-
-  function toBusinessDayFromUnixSec(sec) {
-    const ms = sec * 1000;
-    const d = new Date(ms);
-    if (!Number.isFinite(d.getTime())) return null;
-    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
   }
 
   function normalizeBars(payload) {
     const raw =
       Array.isArray(payload) ? payload :
-      Array.isArray(payload?.results) ? payload.results :      // Polygon aggregates
+      Array.isArray(payload?.results) ? payload.results : // Polygon/Massive-like
       Array.isArray(payload?.bars) ? payload.bars :
       Array.isArray(payload?.ohlcv) ? payload.ohlcv :
       Array.isArray(payload?.data) ? payload.data :
@@ -253,6 +225,7 @@
 
     bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
 
+    // de-dupe by time
     const out = [];
     let lastT = null;
     for (const b of bars) {
@@ -270,25 +243,40 @@
       payload?.data?.sigs ||
       payload?.data?.signals ||
       [];
+
     if (!Array.isArray(raw)) return [];
-    return raw
+    const out = raw
       .map((s) => {
         const time = toUnixSec(s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date);
         const side = String(s.side ?? s.type ?? s.action ?? s.text ?? "").toUpperCase();
-        const ss = (side.includes("BUY") ? "B" : side.includes("SELL") ? "S" : side);
-        if (!time || (ss !== "B" && ss !== "S")) return null;
-        return { time, side: ss, price: Number.isFinite(Number(s.price)) ? Number(s.price) : null };
+        const side2 = side.includes("BUY") ? "B" : side.includes("SELL") ? "S" : side;
+        if (!time || (side2 !== "B" && side2 !== "S")) return null;
+        return { time, side: side2 };
       })
       .filter(Boolean)
       .sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
+
+    // de-dupe by (time, side)
+    const used = new Set();
+    const dedup = [];
+    for (const s of out) {
+      const k = `${s.time}:${s.side}`;
+      if (used.has(k)) continue;
+      used.add(k);
+      dedup.push(s);
+    }
+    return dedup;
   }
 
+  // Prefer Massive aggregates endpoint.
   async function fetchBarsPack(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
 
+    // tf -> multiplier/timespan + range
     const cfg = tfToAggParams(tf);
     const { from, to } = rangeByDaysBack(cfg.daysBack);
 
+    // build URL
     const url = new URL(apiBase + MASSIVE_AGGS_PATH);
     url.searchParams.set("ticker", String(sym || "AAPL").trim().toUpperCase());
     url.searchParams.set("multiplier", String(cfg.multiplier));
@@ -296,12 +284,15 @@
     url.searchParams.set("from", from);
     url.searchParams.set("to", to);
 
-    const payload = await fetchJson(url.toString());
+    const urlStr = url.toString();
+    DIAG.lastBarsUrl = urlStr;
+
+    // fetch + normalize
+    const payload = await fetchJson(urlStr);
     const bars = normalizeBars(payload);
+    if (bars.length) return { payload, bars, urlUsed: urlStr, aggCfg: cfg, range: { from, to } };
 
-    if (bars.length) return { payload, bars, urlUsed: url.toString() };
-
-    // fallback (optional)
+    // fallback candidates (optional)
     let lastErr = new Error(`Aggs returned empty. ticker=${sym} tf=${tf} from=${from} to=${to}`);
     const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
 
@@ -310,13 +301,12 @@
       try {
         const pl = await fetchJson(u);
         const bs = normalizeBars(pl);
-        if (bs.length) return { payload: pl, bars: bs, urlUsed: u };
+        if (bs.length) return { payload: pl, bars: bs, urlUsed: u, aggCfg: cfg, range: { from, to } };
         lastErr = new Error(`bars empty from ${u}`);
       } catch (e) {
         lastErr = e;
       }
     }
-
     throw new Error(`All bars endpoints failed. Last error: ${lastErr?.message || lastErr}`);
   }
 
@@ -350,18 +340,6 @@
     return out;
   }
 
-  function smaAt(values, endIdx, period) {
-    const start = endIdx - period + 1;
-    if (start < 0) return NaN;
-    let sum = 0;
-    for (let i = start; i <= endIdx; i++) {
-      const v = values[i];
-      if (!Number.isFinite(v)) return NaN;
-      sum += v;
-    }
-    return sum / period;
-  }
-
   function wmaAt(values, endIdx, period) {
     const start = endIdx - period + 1;
     if (start < 0) return NaN;
@@ -374,6 +352,18 @@
       den += w;
     }
     return den ? (num / den) : NaN;
+  }
+
+  function smaAt(values, endIdx, period) {
+    const start = endIdx - period + 1;
+    if (start < 0) return NaN;
+    let sum = 0;
+    for (let i = start; i <= endIdx; i++) {
+      const v = values[i];
+      if (!Number.isFinite(v)) return NaN;
+      sum += v;
+    }
+    return sum / period;
   }
 
   function maOnArray(values, period, method) {
@@ -406,14 +396,6 @@
     return out;
   }
 
-  function buildLinePoints(bars, values) {
-    const pts = new Array(bars.length);
-    for (let i = 0; i < bars.length; i++) {
-      pts[i] = { time: bars[i].time, value: Number.isFinite(values[i]) ? values[i] : null };
-    }
-    return pts;
-  }
-
   function computeAuxByYourAlgo(closes, period, method) {
     const n = Math.max(2, Math.floor(period || 40));
     const half = Math.max(1, Math.floor(n / 2));
@@ -428,112 +410,12 @@
     return maOnArray(vect, p, method || "SMA");
   }
 
-  function computeAuxSlope(auxV, i) {
-    if (i <= 0) return 0;
-    const a0 = auxV[i - 1], a1 = auxV[i];
-    if (!Number.isFinite(a0) || !Number.isFinite(a1)) return 0;
-    if (a1 > a0) return 1;
-    if (a1 < a0) return -1;
-    return 0;
-  }
-
-  // Fix: avoid mid-trend EMA/AUX repeated crossings producing spam signals
-  function computeSignalsCrossPlusConfirm(bars, emaPts, auxPts, confirmWindow) {
-    const n = bars.length;
-    if (n < 10) return [];
-
-    const emaV = emaPts.map(p => p.value);
-    const auxV = auxPts.map(p => p.value);
-
-    const cw = Math.max(1, Math.floor(confirmWindow ?? 3));
-    const sigs = [];
-    const used = new Set();
-
-    let lastSigIndex = -999999;
-    let lastSigSide = null;
-
-    function addSig(i, side) {
-      const t = bars[i].time;
-      const key = `${t}:${side}`;
-      if (used.has(key)) return;
-      used.add(key);
-      sigs.push({ time: t, side, i });
-      lastSigIndex = i;
-      lastSigSide = side;
+  function buildLinePoints(bars, values) {
+    const pts = new Array(bars.length);
+    for (let i = 0; i < bars.length; i++) {
+      pts[i] = { time: bars[i].time, value: Number.isFinite(values[i]) ? values[i] : null };
     }
-
-    function separationOk(i) {
-      const e = emaV[i], a = auxV[i];
-      const px = bars[i]?.close;
-      if (![e, a, px].every(Number.isFinite)) return false;
-      const sep = Math.abs(e - a);
-      return (sep / Math.max(1e-9, Math.abs(px))) >= MIN_SEPARATION_RATIO;
-    }
-
-    function findConfirmIndex(startIdx, wantSlopeSign) {
-      // confirm by AUX slope flip (preferred) or by staying consistent for cw bars
-      let seen = 0;
-      for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
-        const s = computeAuxSlope(auxV, j);
-        if (REQUIRE_AUX_SLOPE_CONFIRM) {
-          if (wantSlopeSign > 0 && s > 0) return j;
-          if (wantSlopeSign < 0 && s < 0) return j;
-        } else {
-          if (wantSlopeSign > 0 && s >= 0) seen++;
-          if (wantSlopeSign < 0 && s <= 0) seen++;
-          if (seen >= Math.max(1, Math.floor(cw * 0.6))) return j;
-        }
-      }
-      return -1;
-    }
-
-    for (let i = 1; i < n; i++) {
-      // lockout
-      if ((i - lastSigIndex) < MIN_BARS_BETWEEN_SIGNALS) continue;
-
-      const e0 = emaV[i - 1], e1 = emaV[i];
-      const a0 = auxV[i - 1], a1 = auxV[i];
-      if (![e0, e1, a0, a1].every(Number.isFinite)) continue;
-
-      // raw cross
-      const crossUp = (e0 <= a0 && e1 > a1);
-      const crossDn = (e0 >= a0 && e1 < a1);
-
-      if (crossUp) {
-        if (!separationOk(i)) continue;
-        if (lastSigSide === "B") continue; // avoid B->B
-        const k = findConfirmIndex(i, +1);
-        if (k >= 0) addSig(k, "B");
-      } else if (crossDn) {
-        if (!separationOk(i)) continue;
-        if (lastSigSide === "S") continue; // avoid S->S
-        const k = findConfirmIndex(i, -1);
-        if (k >= 0) addSig(k, "S");
-      }
-    }
-
-    sigs.sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
-    return sigs;
-  }
-
-  function applyMarkers(sigs) {
-    safeRun("applyMarkers", () => {
-      if (!candleSeries) return;
-
-      // If overlay is enabled, keep series markers empty.
-      if (window.__OVERLAY_BIG_SIGS__ === true) { candleSeries.setMarkers([]); return; }
-
-      const arr = Array.isArray(sigs) ? sigs : [];
-      candleSeries.setMarkers(
-        arr.map((s) => ({
-          time: s.time,
-          position: s.side === "B" ? "belowBar" : "aboveBar",
-          color: s.side === "B" ? "#FFD400" : "#FF5A5A",
-          shape: s.side === "B" ? "arrowUp" : "arrowDown",
-          text: s.side,
-        }))
-      );
-    });
+    return pts;
   }
 
   function colorCandlesByEMATrend(bars, emaVals) {
@@ -567,23 +449,110 @@
     return out;
   }
 
+  function computeTrendFromAux(auxVals) {
+    const trend = new Array(auxVals.length).fill(0);
+    let last = 0;
+    for (let i = 1; i < auxVals.length; i++) {
+      const a0 = auxVals[i - 1];
+      const a1 = auxVals[i];
+      if (!Number.isFinite(a0) || !Number.isFinite(a1)) { trend[i] = last; continue; }
+      if (a1 > a0) last = 1;
+      else if (a1 < a0) last = -1;
+      trend[i] = last;
+    }
+    trend[0] = trend[1] || 0;
+    return trend;
+  }
+
+  // Cross + confirm (your discussed fallback). Returns unique {time, side}
+  function computeSignalsCrossPlusConfirm(bars, emaPts, auxPts, confirmWindow) {
+    const n = bars.length;
+    if (n < 5) return [];
+
+    const emaV = emaPts.map(p => p.value);
+    const auxV = auxPts.map(p => p.value);
+    const trend = computeTrendFromAux(auxV);
+
+    const cw = Math.max(0, Math.floor(confirmWindow ?? 3));
+    const sigs = [];
+    const used = new Set();
+
+    function addSig(i, side) {
+      const t = bars[i].time;
+      const k = `${t}:${side}`;
+      if (used.has(k)) return;
+      used.add(k);
+      sigs.push({ time: t, side });
+    }
+
+    function findConfirmIndex(startIdx, wantTrend) {
+      // wantTrend: +1 confirm up, -1 confirm down
+      for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
+        const prev = trend[j - 1];
+        const curr = trend[j];
+        if (wantTrend > 0) {
+          if (prev <= 0 && curr > 0) return j;
+        } else {
+          if (prev >= 0 && curr < 0) return j;
+        }
+      }
+      return -1;
+    }
+
+    for (let i = 1; i < n; i++) {
+      const e0 = emaV[i - 1], e1 = emaV[i];
+      const a0 = auxV[i - 1], a1 = auxV[i];
+      if (![e0, e1, a0, a1].every(Number.isFinite)) continue;
+
+      const crossUp = (e0 <= a0 && e1 > a1);
+      const crossDn = (e0 >= a0 && e1 < a1);
+
+      if (crossUp) {
+        const k = findConfirmIndex(i, +1);
+        if (k >= 0) addSig(k, "B");
+      } else if (crossDn) {
+        const k = findConfirmIndex(i, -1);
+        if (k >= 0) addSig(k, "S");
+      }
+    }
+
+    sigs.sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
+    return sigs;
+  }
+
+  // series markers (small). Overlay uses big markers; we keep small empty when overlay enabled.
+  function applyMarkers(sigs) {
+    safeRun("applyMarkers", () => {
+      if (!candleSeries) return;
+
+      if (window.__OVERLAY_BIG_SIGS__ === true) {
+        candleSeries.setMarkers([]);
+        return;
+      }
+
+      const arr = Array.isArray(sigs) ? sigs : [];
+      candleSeries.setMarkers(
+        arr.map((s) => ({
+          time: s.time,
+          position: s.side === "B" ? "belowBar" : "aboveBar",
+          color: s.side === "B" ? "#FFD400" : "#FF5A5A",
+          shape: s.side === "B" ? "arrowUp" : "arrowDown",
+          text: s.side,
+        }))
+      );
+    });
+  }
+
   // -----------------------------
   // Snapshot output (read-only)
   // -----------------------------
   function publishSnapshot(snapshot) {
     safeRun("publishSnapshot", () => {
-      const s = Object.freeze(snapshot);
+      const frozen = Object.freeze(snapshot);
+      window.__DARRIUS_CHART_STATE__ = frozen;
 
-      // canonical
-      window.__DARRIUS_CHART_STATE__ = s;
-
-      // compat aliases (so UI won't break if it expects other names)
-      window.__IH_SNAPSHOT__ = s;
-      window.__CHART_SNAPSHOT__ = s;
-
-      // event
       try {
-        window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: s }));
+        window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: frozen }));
       } catch (_) {}
     });
   }
@@ -593,8 +562,17 @@
   // -----------------------------
   function applyToggles() {
     safeRun("applyToggles", () => {
-      const emaChecked = $("toggleEMA")?.checked ?? $("emaToggle")?.checked ?? $("tgEMA")?.checked ?? $("emaCheck")?.checked;
-      const auxChecked = $("toggleAUX")?.checked ?? $("auxToggle")?.checked ?? $("tgAux")?.checked ?? $("auxCheck")?.checked;
+      const emaChecked =
+        $("toggleEMA")?.checked ??
+        $("emaToggle")?.checked ??
+        $("tgEMA")?.checked ??
+        $("emaCheck")?.checked;
+
+      const auxChecked =
+        $("toggleAUX")?.checked ??
+        $("auxToggle")?.checked ??
+        $("tgAux")?.checked ??
+        $("auxCheck")?.checked;
 
       if (typeof emaChecked === "boolean") showEMA = emaChecked;
       if (typeof auxChecked === "boolean") showAUX = auxChecked;
@@ -605,6 +583,34 @@
   }
 
   // -----------------------------
+  // Data mode / source labels (for strong UI hint)
+  // -----------------------------
+  function resolveDataMeta(tf) {
+    // Your UI has: Demo(Local) / Market delayed (Massive)
+    // We read a few globals if you set them in index.html; otherwise we infer.
+    const dataMode = String(window.__DATA_MODE__ || window.__DATA_SOURCE__ || "").toLowerCase();
+    const source =
+      String(window.__DATA_SOURCE_NAME__ || window.__DATA_PROVIDER__ || window.__DATA_SOURCE__ || "").trim() ||
+      (dataMode.includes("demo") ? "Local" : "Massive");
+
+    // delayed minutes: default 15 when using market delayed minute data
+    let delayedMinutes = Number(window.__DELAYED_MINUTES__);
+    if (!Number.isFinite(delayedMinutes)) {
+      delayedMinutes = 0;
+      const t = String(tf || "").toLowerCase();
+      // if you are on Massive Starter delayed feeds, keep it 15
+      if (!dataMode.includes("demo")) delayedMinutes = 15;
+      if (t === "1d" || t === "1w" || t === "1m") delayedMinutes = !dataMode.includes("demo") ? 15 : 0;
+    }
+
+    return {
+      dataMode: dataMode || (source.toLowerCase().includes("local") ? "demo" : "market"),
+      source,
+      delayedMinutes: Math.max(0, Math.floor(delayedMinutes)),
+    };
+  }
+
+  // -----------------------------
   // Core load (MAIN FIRST)
   // -----------------------------
   async function load() {
@@ -612,6 +618,7 @@
 
     const sym = getUiSymbol();
     const tf = getUiTf();
+    const metaDS = resolveDataMeta(tf);
 
     safeRun("hintLoading", () => {
       if ($("hintText")) $("hintText").textContent = "Loading...";
@@ -628,13 +635,12 @@
     }
 
     const { payload, bars, urlUsed } = pack;
+    DIAG.lastBarsUrl = urlUsed;
+
     if (!bars.length) throw new Error("bars empty after normalization");
 
-    DIAG.lastUrl = urlUsed;
-    DIAG.lastBars = bars.length;
-
-    // -------- MAIN CHART --------
-    const closes = bars.map(b => b.close);
+    // -------- MAIN CHART: never let UI break this --------
+    const closes = bars.map((b) => b.close);
     const emaVals = ema(closes, EMA_PERIOD);
     const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
 
@@ -646,71 +652,60 @@
     emaSeries.setData(emaPts);
     auxSeries.setData(auxPts);
 
-    // signals: try payload then optional endpoints then compute fallback
+    // Signals: priority:
+    // 1) payload carries signals
+    // 2) optional signals endpoints
+    // 3) compute fallback (cross+confirm)
     let sigs = normalizeSignals(payload);
     if (!sigs.length) sigs = await fetchOptionalSignals(sym, tf);
     if (!sigs.length) sigs = computeSignalsCrossPlusConfirm(bars, emaPts, auxPts, CONFIRM_WINDOW);
 
-    DIAG.lastSigs = sigs.length;
+    DIAG.lastSigCount = sigs.length;
 
     applyMarkers(sigs);
-
     safeRun("fitContent", () => chart.timeScale().fitContent());
 
     safeRun("topText", () => {
       const last = bars[bars.length - 1];
       if ($("symText")) $("symText").textContent = sym;
       if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
-      if ($("hintText")) $("hintText").textContent = `Loaded · TF=${tf} · bars=${bars.length} · sigs=${sigs.length}`;
+      if ($("hintText")) $("hintText").textContent = `Loaded · ${metaDS.dataMode === "demo" ? "Demo" : "Market"} · TF=${tf} · bars=${bars.length} · sigs=${sigs.length}`;
     });
 
-    // ===== Coordinate bridge time mode =====
-    __timeMode = "utc"; // bars.time is unix seconds by normalization
-    DIAG.timeMode = __timeMode;
-
-    // ===== Snapshot Export (for market.pulse.js) =====
+    // ---- snapshot for market.pulse.js ----
+    // Keep 2 compatible forms:
+    //   A) window.__DARRIUS_CHART_STATE__ (flat)
+    //   B) DarriusChart.getSnapshot() schema (meta/candles/ema/aux/signals)
     safeRun("setSnapshotForUI", () => {
       try {
-        // closeByTime for signal price fill
+        window.DarriusChart = window.DarriusChart || {};
+
+        // close map for signal price fill
         const closeByTime = new Map();
         for (const b of bars) closeByTime.set(b.time, b.close);
 
-        const snapSignals = (Array.isArray(sigs) ? sigs : [])
-          .slice(Math.max(0, sigs.length - 200))
+        // Build rich signals array with price for overlay
+        const richSignals = (Array.isArray(sigs) ? sigs : [])
           .map((s, idx) => {
             const t = s.time ?? null;
             const side = (String(s.side || "").toUpperCase() === "S") ? "S" : "B";
-            const price = Number.isFinite(s.price) ? s.price : (closeByTime.get(t) ?? null);
+            const price = closeByTime.get(t);
             return {
               time: t,
               price: Number.isFinite(price) ? price : null,
               side,
               i: (typeof s.i === "number" ? s.i : idx),
-              reason: s.reason || s.note || null,
+              reason: s.reason || null,
               strength: (typeof s.strength === "number" ? s.strength : null),
             };
           })
-          .filter(x => x.time != null && x.price != null);
+          .filter((x) => x.time != null && x.price != null);
 
-        const snapMeta = {
-          symbol: sym || null,
-          timeframe: tf || null,
-          bars: bars.length,
-          source: (window.__DATA_SOURCE__ || "market"),
-          dataMode: (window.__DATA_MODE__ || "Delayed"),
-          delayedMinutes: (typeof window.__DELAYED_MINUTES__ === "number" ? window.__DELAYED_MINUTES__ : 15),
-          emaPeriod: EMA_PERIOD,
-          auxPeriod: AUX_PERIOD,
-          confirmWindow: CONFIRM_WINDOW,
-          urlUsed: urlUsed || null,
-        };
-
-        // trend summary (EMA slope)
+        // trend quick summary
         const n = Math.min(10, emaVals.length - 1);
         let emaSlope = null;
         let emaRegime = null;
         let emaColor = null;
-
         if (n >= 2) {
           const eNow = emaVals[emaVals.length - 1];
           const ePrev = emaVals[emaVals.length - 1 - n];
@@ -725,57 +720,89 @@
         else if (emaRegime === "DOWN") emaColor = "RED";
         else emaColor = "NEUTRAL";
 
-        const snapTrend = { emaSlope, emaRegime, emaColor, flipCount: null };
-        const snapRisk = { entry: null, stop: null, targets: null, confidence: null, winrate: null };
+        const snapMeta = {
+          symbol: sym || null,
+          timeframe: tf || null,
+          bars: Array.isArray(bars) ? bars.length : 0,
+          source: metaDS.source || "Massive",
+          dataMode: metaDS.dataMode || "market",
+          delayedMinutes: metaDS.delayedMinutes ?? 0,
+          emaPeriod: EMA_PERIOD,
+          auxPeriod: AUX_PERIOD,
+          confirmWindow: CONFIRM_WINDOW,
+          urlUsed: urlUsed || null,
+        };
 
-        window.DarriusChart = window.DarriusChart || {};
-        if (typeof window.DarriusChart.__setSnapshot === "function") {
-          window.DarriusChart.__setSnapshot({
-            meta: snapMeta,
-            candles: bars,
-            ema: emaPts,
-            aux: auxPts,
-            signals: snapSignals,
-            trend: snapTrend,
-            risk: snapRisk,
-          });
+        const snapObj = {
+          version: "snapshot_v1",
+          ts: Date.now(),
+          meta: snapMeta,
+          candles: Array.isArray(bars) ? bars : [],
+          ema: Array.isArray(emaPts) ? emaPts : [],
+          aux: Array.isArray(auxPts) ? auxPts : [],
+          signals: richSignals,
+          trend: { emaSlope, emaRegime, emaColor, flipCount: null },
+          risk: { entry: null, stop: null, targets: null, confidence: null, winrate: null },
+        };
+
+        // attach read-only getter for UI
+        window.DarriusChart.getSnapshot = () => {
+          try {
+            return {
+              version: snapObj.version,
+              ts: snapObj.ts,
+              meta: Object.assign({}, snapObj.meta),
+              candles: (snapObj.candles || []).slice(),
+              ema: (snapObj.ema || []).slice(),
+              aux: (snapObj.aux || []).slice(),
+              signals: (snapObj.signals || []).slice(),
+              trend: Object.assign({}, snapObj.trend),
+              risk: Object.assign({}, snapObj.risk),
+            };
+          } catch (_) {
+            return null;
+          }
+        };
+
+        // also keep compatibility with your older hook names
+        if (typeof window.getChartSnapshot !== "function") {
+          window.getChartSnapshot = window.DarriusChart.getSnapshot;
         }
+
+        // Provide __hostId for overlay host resolution
+        window.DarriusChart.__hostId = window.DarriusChart.__hostId || "chart";
       } catch (_) {}
     });
 
-    // -------- SNAPSHOT OUTPUT (consumer only) --------
-    const N = Math.min(400, bars.length);
+    // ---- publish flat snapshot (what you are checking in console) ----
+    const N = Math.min(600, bars.length);
     const start = bars.length - N;
 
-    const snapshot = {
+    const flatSnapshot = {
       version: "2026.01.22-DATAMODE-STABLE",
       ts: Date.now(),
       apiBase: DEFAULT_API_BASE,
-      urlUsed,
+      urlUsed: urlUsed || null,
       symbol: sym,
       tf,
-      timeMode: __timeMode,
-      params: {
-        EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW,
-        MIN_BARS_BETWEEN_SIGNALS,
-        MIN_SEPARATION_RATIO,
-        REQUIRE_AUX_SLOPE_CONFIRM
-      },
+      dataMode: metaDS.dataMode,
+      source: metaDS.source,
+      delayedMinutes: metaDS.delayedMinutes,
+      params: { EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW },
       barsCount: bars.length,
       bars: bars.slice(start),
       ema: emaVals.slice(start),
       aux: auxVals.slice(start),
-      sigs: (Array.isArray(sigs) ? sigs : []).slice(Math.max(0, sigs.length - 200)),
+      // provide BOTH names for UI:
+      sigs: (Array.isArray(sigs) ? sigs.slice(Math.max(0, sigs.length - 300)) : []),
+      signals: (Array.isArray(sigs) ? sigs.slice(Math.max(0, sigs.length - 300)) : []),
       lastClose: bars[bars.length - 1].close,
-      dataSource: (window.__DATA_SOURCE__ || "market"),
-      dataMode: (window.__DATA_MODE__ || "Delayed"),
-      delayedMinutes: (typeof window.__DELAYED_MINUTES__ === "number" ? window.__DELAYED_MINUTES__ : 15),
     };
 
-    publishSnapshot(snapshot);
-    applyToggles();
+    publishSnapshot(flatSnapshot);
 
-    return { urlUsed, bars: bars.length, sigs: (sigs || []).length };
+    applyToggles();
+    return { urlUsed, bars: bars.length, sigs: sigs.length };
   }
 
   // -----------------------------
@@ -829,58 +856,36 @@
     safeRun("bridgeExpose", () => {
       window.DarriusChart = window.DarriusChart || {};
 
-      // expose host id
+      window.DarriusChart.timeToX = (t) =>
+        safeRun("timeToX", () => {
+          if (!chart || !chart.timeScale) return null;
+          return chart.timeScale().timeToCoordinate(t);
+        });
+
+      window.DarriusChart.priceToY = (p) =>
+        safeRun("priceToY", () => {
+          if (!candleSeries || !candleSeries.priceToCoordinate) return null;
+          return candleSeries.priceToCoordinate(p);
+        });
+
       window.DarriusChart.__hostId = containerId || "chart";
-
-      // expose time mode
-      window.DarriusChart.__timeMode = () => __timeMode;
-
-      // timeToX accepts:
-      //  - unix seconds number
-      //  - businessDay object {year,month,day}
-      // It converts to current chart mode safely.
-      window.DarriusChart.timeToX = (t) => safeRun("timeToX", () => {
-        if (!chart || !chart.timeScale) return null;
-
-        // chart uses utc seconds in this build
-        if (__timeMode === "utc") {
-          const sec = toUnixSec(t);
-          if (sec == null) return null;
-          return chart.timeScale().timeToCoordinate(sec);
-        }
-
-        // if someday you switch to businessDay candles, support it too
-        if (__timeMode === "businessDay") {
-          if (isBusinessDay(t)) return chart.timeScale().timeToCoordinate(t);
-          const sec = toUnixSec(t);
-          if (sec == null) return null;
-          const bd = toBusinessDayFromUnixSec(sec);
-          if (!bd) return null;
-          return chart.timeScale().timeToCoordinate(bd);
-        }
-
-        return null;
-      });
-
-      window.DarriusChart.priceToY = (p) => safeRun("priceToY", () => {
-        if (!candleSeries || !candleSeries.priceToCoordinate) return null;
-        const n = Number(p);
-        if (!Number.isFinite(n)) return null;
-        return candleSeries.priceToCoordinate(n);
-      });
     });
 
-    const resize = () => safeRun("resize", () => {
-      const r = containerEl.getBoundingClientRect();
-      chart.applyOptions({
-        width: Math.max(1, Math.floor(r.width)),
-        height: Math.max(1, Math.floor(r.height)),
+    const resize = () =>
+      safeRun("resize", () => {
+        const r = containerEl.getBoundingClientRect();
+        chart.applyOptions({
+          width: Math.max(1, Math.floor(r.width)),
+          height: Math.max(1, Math.floor(r.height)),
+        });
       });
-    });
 
     safeRun("observeResize", () => {
-      try { new ResizeObserver(resize).observe(containerEl); }
-      catch (_) { window.addEventListener("resize", resize); }
+      try {
+        new ResizeObserver(resize).observe(containerEl);
+      } catch (_) {
+        window.addEventListener("resize", resize);
+      }
     });
     resize();
 
@@ -902,103 +907,17 @@
     }
   }
 
-  // public API
-  window.ChartCore = { init, load, applyToggles };
-})();
-
-/* =========================
- * Snapshot Export (READ-ONLY)
- * - UI层（market.pulse.js）只读这里
- * - 不允许 UI 层反向修改主图内部
- * ========================= */
-
-(function () {
-  "use strict";
-
-  const __SNAPSHOT = {
-    version: "snapshot_v1",
-    ts: 0,
-
-    meta: {
-      symbol: null,
-      timeframe: null,
-      bars: 0,
-      source: "demo",
-      dataMode: "Demo",
-      delayedMinutes: 0,
-      emaPeriod: null,
-      auxPeriod: null,
-      confirmWindow: null,
-      urlUsed: null,
-    },
-
-    candles: [],     // [{time, open, high, low, close}]
-    ema: [],         // [{time, value}]
-    aux: [],         // [{time, value}]
-    signals: [],     // [{time, price, side:'B'|'S', i, reason?, strength?}]
-
-    trend: {
-      emaSlope: null,
-      emaRegime: null,
-      emaColor: null,
-      flipCount: null,
-    },
-
-    risk: {
-      entry: null,
-      stop: null,
-      targets: null,
-      confidence: null,
-      winrate: null,
-    },
-  };
-
-  function __setSnapshot(patch) {
+  // Optional: allow UI to read snapshot via ChartCore too (extra fallback)
+  function getSnapshot() {
     try {
-      if (!patch || typeof patch !== "object") return;
-
-      __SNAPSHOT.ts = Date.now();
-
-      if (patch.meta) {
-        __SNAPSHOT.meta = Object.assign({}, __SNAPSHOT.meta, patch.meta);
+      if (window.DarriusChart && typeof window.DarriusChart.getSnapshot === "function") {
+        return window.DarriusChart.getSnapshot();
       }
-      if (Array.isArray(patch.candles)) __SNAPSHOT.candles = patch.candles.slice();
-      if (Array.isArray(patch.ema))     __SNAPSHOT.ema     = patch.ema.slice();
-      if (Array.isArray(patch.aux))     __SNAPSHOT.aux     = patch.aux.slice();
-      if (Array.isArray(patch.signals)) __SNAPSHOT.signals = patch.signals.slice();
-
-      if (patch.trend) {
-        __SNAPSHOT.trend = Object.assign({}, __SNAPSHOT.trend, patch.trend);
-      }
-      if (patch.risk) {
-        __SNAPSHOT.risk = Object.assign({}, __SNAPSHOT.risk, patch.risk);
-      }
-    } catch (_) {}
-  }
-
-  function __getSnapshot() {
-    try {
-      return {
-        version: __SNAPSHOT.version,
-        ts: __SNAPSHOT.ts,
-        meta: Object.assign({}, __SNAPSHOT.meta),
-        candles: (__SNAPSHOT.candles || []).slice(),
-        ema: (__SNAPSHOT.ema || []).slice(),
-        aux: (__SNAPSHOT.aux || []).slice(),
-        signals: (__SNAPSHOT.signals || []).slice(),
-        trend: Object.assign({}, __SNAPSHOT.trend),
-        risk: Object.assign({}, __SNAPSHOT.risk),
-      };
-    } catch (e) {
+      return window.__DARRIUS_CHART_STATE__ || null;
+    } catch (_) {
       return null;
     }
   }
 
-  window.DarriusChart = window.DarriusChart || {};
-  window.DarriusChart.getSnapshot = __getSnapshot;
-  window.DarriusChart.__setSnapshot = __setSnapshot;
-
-  if (typeof window.getChartSnapshot !== "function") {
-    window.getChartSnapshot = __getSnapshot;
-  }
+  window.ChartCore = { init, load, applyToggles, getSnapshot };
 })();
