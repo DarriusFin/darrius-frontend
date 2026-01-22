@@ -1,507 +1,650 @@
-/* =========================================================================
- * DarriusAI - market.pulse.js (UI ONLY) v2026.01.22-STEP2A-FULL
+/* market.pulse.js (STABLE COMPAT - REPLACEABLE) v2026.01.22
+ * UI-only layer. Must NOT mutate chart.core.js internals.
+ * - Reads snapshot (multiple schemas)
+ * - Renders Market Pulse
+ * - Renders Risk Copilot
+ * - Renders BIG glowing B/S overlay (independent from chart markers)
  *
- * Purpose (Step 2A):
- *  - Home UI cleanup (remove yellow-box Note blocks)
- *  - Strong Data Source badge (Market/Demo + Delayed minutes + provider + urlUsed)
- *  - Restore Market Pulse numbers (Bull/Bear/Neutral/Net Inflow + Sentiment score)
- *  - Keep chart stable; never break main chart; never touch subscription/payment logic
- *
- * HARD RULE:
- *  - MUST NOT change billing/subscription/payment logic or endpoints.
- * ========================================================================= */
-
+ * Safety:
+ * - Never throws
+ * - Never touches billing/subscription logic
+ */
 (() => {
-  "use strict";
+  'use strict';
+
+  // Overlay default (do NOT override if already set by index.html)
+  if (typeof window.__OVERLAY_BIG_SIGS__ !== 'boolean') window.__OVERLAY_BIG_SIGS__ = true;
 
   // -----------------------------
-  // Safe runner (never throw)
+  // Absolute no-throw safe zone
   // -----------------------------
-  function safeRun(tag, fn) { try { return fn(); } catch (e) { return null; } }
+  function safe(fn, tag = 'market.pulse') {
+    try { return fn(); } catch (e) { return null; }
+  }
 
   // -----------------------------
   // DOM helpers
   // -----------------------------
   const $ = (id) => document.getElementById(id);
-  const qs = (sel, root) => (root || document).querySelector(sel);
-  const qsa = (sel, root) => Array.from((root || document).querySelectorAll(sel));
-
-  function setText(el, text) { if (el) el.textContent = (text == null ? "" : String(text)); }
-  function hide(el) { if (el) el.style.display = "none"; }
-  function show(el, cssText) { if (!el) return; el.style.display = ""; if (cssText) el.style.cssText += ";" + cssText; }
 
   // -----------------------------
-  // Guard: never touch subscription/payment area
+  // DOM binding (IDs must be UNIQUE in index.html)
+  // If your index.html has different ids, add fallbacks here.
   // -----------------------------
-  function isInsideBilling(el) {
-    if (!el || !el.closest) return false;
-    return !!el.closest(
-      "[data-section*='sub' i],[id*='sub' i],[class*='sub' i]," +
-      "[id*='billing' i],[class*='billing' i]," +
-      "[id*='checkout' i],[class*='checkout' i]," +
-      "[id*='payment' i],[class*='payment' i]," +
-      "[id*='stripe' i],[class*='stripe' i]"
-    );
+  const DOM = {
+    // Market Pulse
+    pulseScore: null,
+    bullPct: null,
+    bearPct: null,
+    neuPct: null,
+    netInflow: null,
+    pulseGaugeMask: null,
+
+    // Signal UI
+    signalMeta: null,
+
+    // Risk Copilot
+    riskEntry: null,
+    riskStop: null,
+    riskTargets: null,
+    riskConf: null,
+    riskWR: null,
+
+    // Chart host
+    chart: null,
+  };
+
+  function bindDOM() {
+    DOM.pulseScore = $('pulseScore');
+    DOM.bullPct = $('bullPct');
+    DOM.bearPct = $('bearPct');
+    DOM.neuPct = $('neuPct');
+    DOM.netInflow = $('netInflow');
+    DOM.pulseGaugeMask = $('pulseGaugeMask');
+
+    DOM.signalMeta = $('signalMeta');
+
+    DOM.riskEntry = $('riskEntry');
+    DOM.riskStop = $('riskStop');
+    DOM.riskTargets = $('riskTargets');
+    DOM.riskConf = $('riskConf');
+    DOM.riskWR = $('riskWR');
+
+    DOM.chart = $('chart') || document.querySelector('#chart');
   }
 
   // -----------------------------
-  // Snapshot readers
+  // Snapshot reader (multiple fallbacks)
   // -----------------------------
-  function readCoreState() {
-    return safeRun("readCoreState", () => window.__DARRIUS_CHART_STATE__ || null) || null;
-  }
-
-  function readUiSnapshot() {
-    return safeRun("readUiSnapshot", () => {
-      if (window.DarriusChart && typeof window.DarriusChart.getSnapshot === "function") return window.DarriusChart.getSnapshot();
-      if (typeof window.getChartSnapshot === "function") return window.getChartSnapshot();
-      return null;
-    }) || null;
-  }
-
-  // -----------------------------
-  // Extract "Loaded - Delayed(15m)" from hint area (fallback)
-  // -----------------------------
-  function readHintDelayMinutes() {
-    return safeRun("readHintDelay", () => {
-      const hint =
-        $("hintText") ||
-        qs("[data-role='hintText']") ||
-        qs("#hint") ||
-        qs(".hintText");
-      const t = (hint && hint.textContent) ? hint.textContent : "";
-      const m = /Delayed\s*\(\s*(\d+)\s*m\s*\)/i.exec(t);
-      if (m) return Number(m[1]) || null;
-      return null;
-    });
+  function getSnapshot() {
+    // Preferred: DarriusChart snapshot
+    if (window.DarriusChart && typeof window.DarriusChart.getSnapshot === 'function') {
+      const s = safe(() => window.DarriusChart.getSnapshot(), 'getSnapshot:DarriusChart');
+      if (s) return s;
+    }
+    // Fallbacks
+    if (typeof window.getChartSnapshot === 'function') {
+      const s = safe(() => window.getChartSnapshot(), 'getSnapshot:getChartSnapshot');
+      if (s) return s;
+    }
+    if (window.__DARRIUS_CHART_STATE__) return window.__DARRIUS_CHART_STATE__;
+    if (window.__IH_SNAPSHOT__) return window.__IH_SNAPSHOT__;
+    if (window.__CHART_SNAPSHOT__) return window.__CHART_SNAPSHOT__;
+    return null;
   }
 
   // -----------------------------
-  // Strong Data Source badge (top-right)
+  // Utilities
   // -----------------------------
-  function ensureTopBadge() {
-    let el = qs("#darriusTopDataBadge");
-    if (el) return el;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const fmt = (x, d = 2) => {
+    if (x === null || x === undefined || Number.isNaN(x)) return '—';
+    const n = Number(x);
+    if (!Number.isFinite(n)) return '—';
+    return n.toFixed(d);
+  };
 
-    el = document.createElement("div");
-    el.id = "darriusTopDataBadge";
-    el.style.cssText = [
-      "position: fixed",
-      "top: 12px",
-      "right: 16px",
-      "z-index: 9999",
-      "padding: 8px 10px",
-      "border-radius: 10px",
-      "border: 1px solid rgba(255,255,255,.14)",
-      "background: rgba(0,0,0,.35)",
-      "backdrop-filter: blur(8px)",
-      "font-size: 12px",
-      "line-height: 1.2",
-      "font-weight: 900",
-      "max-width: 720px",
-      "pointer-events: none",
-    ].join(";");
+  function last(arr) { return arr && arr.length ? arr[arr.length - 1] : null; }
 
-    el.innerHTML = `
-      <div id="darriusTopDataLine1"></div>
-      <div id="darriusTopDataLine2"
-           style="font-weight:700;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
-    `;
-    document.body.appendChild(el);
-    return el;
+  function isBusinessDay(t) {
+    return !!(t && typeof t === 'object' && t.year && t.month && t.day);
   }
 
-  function inferDataInfo(coreState, uiSnap) {
-    const version = String(coreState?.version || uiSnap?.version || "unknown");
-    const urlUsed = String(coreState?.urlUsed || "");
-    const apiBase = String(coreState?.apiBase || "");
-
-    const hintDelay = readHintDelayMinutes();
-    const delayedMinutes =
-      Number(coreState?.delayedMinutes || coreState?.delayMinutes || coreState?.dataDelayMinutes || 0) ||
-      (hintDelay || 0);
-
-    const looksAggs = /\/api\/data\/stocks\/aggregates/i.test(urlUsed) || /aggregates/i.test(urlUsed);
-    const looksBars = /\/api\/market\/bars/i.test(urlUsed) || /\/bars\?/i.test(urlUsed);
-
-    // displayMode: prefer Delayed if hint shows Delayed() or version contains DATAMODE/DELAYED
-    const versionSaysDelayed = /delayed|datamode/i.test(version);
-    const isDelayed = versionSaysDelayed || (delayedMinutes > 0);
-
-    // Source
-    const displaySource = looksAggs ? "Market" : (looksBars ? "Demo (Local)" : "Demo (Local)");
-
-    // Provider
-    // - If Market via aggregates -> Massive
-    // - Else -> Local
-    const provider = looksAggs ? "Massive" : "Local";
-
-    const displayMode = isDelayed ? "Delayed" : (looksAggs ? "Market" : "Demo");
-    const delayText = isDelayed ? `(${(delayedMinutes || 15)}m)` : "";
-
-    return {
-      version,
-      apiBase,
-      urlUsed,
-      provider,
-      displaySource,
-      displayMode,
-      delayText,
-      isDelayed,
-      isMarket: looksAggs,
-    };
-  }
-
-  function renderDataStatus(info) {
-    safeRun("renderDataStatus", () => {
-      const badge = ensureTopBadge();
-      const l1 = qs("#darriusTopDataLine1", badge);
-      const l2 = qs("#darriusTopDataLine2", badge);
-
-      setText(l1, `${info.displaySource} · ${info.displayMode} ${info.delayText}`.trim());
-      setText(l2, `Provider: ${info.provider} · ${info.urlUsed || info.apiBase || ""}`.trim());
-
-      // border cue
-      badge.style.borderColor = info.isMarket
-        ? (info.isDelayed ? "rgba(255,210,0,.35)" : "rgba(0,255,170,.25)")
-        : "rgba(255,255,255,.18)";
-    });
-  }
-
-  // -----------------------------
-  // UI cleanup: remove ONLY Note blocks within specific cards
-  // -----------------------------
-  function findCardByHeaderText(headerText) {
-    const ht = String(headerText || "").trim();
-    if (!ht) return null;
-
-    // Try common patterns: card headers are often h3/h4/div with bold
-    const candidates = qsa("h1,h2,h3,h4,div,span").filter(el => {
-      const t = (el.textContent || "").trim();
-      return t === ht || t.includes(ht);
-    });
-
-    for (const h of candidates) {
-      // card container: up to 5 levels
-      let p = h;
-      for (let k = 0; k < 5 && p; k++) {
-        if (p.classList && (p.classList.contains("card") || p.classList.contains("panel"))) return p;
-        // heuristic: container with border/box
-        if (p.getBoundingClientRect && p.getBoundingClientRect().height > 80) {
-          // don't climb into huge layout wrapper
-          return p;
-        }
-        p = p.parentElement;
-      }
+  function toUtcSec(t) {
+    if (t == null) return null;
+    if (typeof t === 'number' && Number.isFinite(t)) {
+      if (t > 2e10) return Math.floor(t / 1000); // ms->s
+      return t; // already s
+    }
+    if (typeof t === 'string') {
+      const ms = Date.parse(t);
+      if (!Number.isFinite(ms)) return null;
+      return Math.floor(ms / 1000);
+    }
+    if (isBusinessDay(t)) {
+      // businessDay treated as UTC midnight
+      const ms = Date.UTC(t.year, (t.month || 1) - 1, t.day || 1, 0, 0, 0);
+      return Math.floor(ms / 1000);
     }
     return null;
   }
 
-  function removeNoteLinesIn(root) {
-    if (!root) return;
-
-    safeRun("removeNoteLinesIn", () => {
-      // Only small text nodes
-      const nodes = qsa("p,small,span,li,div", root);
-
-      for (const el of nodes) {
-        if (!el || !el.textContent) continue;
-        if (isInsideBilling(el)) continue;
-
-        // Do not hide big containers: only leaf or small height blocks
-        const t = el.textContent.trim();
-        if (!t) continue;
-
-        const looksNote = /^note\s*:/i.test(t) || /^说明：/.test(t);
-        if (!looksNote) continue;
-
-        // length limit to avoid swallowing real content
-        if (t.length > 400) continue;
-
-        // leaf preference
-        const isLeaf = !el.children || el.children.length === 0;
-
-        // height limit
-        const h = safeRun("rect", () => el.getBoundingClientRect().height) || 0;
-
-        if (isLeaf || h < 60) {
-          hide(el);
-        }
-      }
-    });
+  function pickCandles(snap) {
+    if (!snap) return null;
+    if (Array.isArray(snap.candles)) return snap.candles;
+    if (Array.isArray(snap.bars)) return snap.bars;
+    return null;
   }
 
-  function cleanupYellowBoxes() {
-    safeRun("cleanupYellowBoxes", () => {
-      // Left: Market Pulse card note
-      // Right: Data Source card note
-      // Right: EMA/AUX note
-      const headers = [
-        "Data Source", "数据源",
-        "Market Pulse", "市场情绪",
-        "EMA", "AUX"
-      ];
-
-      for (const ht of headers) {
-        const card = findCardByHeaderText(ht);
-        if (card) removeNoteLinesIn(card);
-      }
-
-      // Extra safety: remove known exact note sentences anywhere (leaf only)
-      const patterns = [
-        /Market Pulse is derived/i,
-        /For live data, requests should go through/i,
-        /EMA\/AUX parameters are internal/i,
-        /Commission terms are disclosed/i,
-        /说明：\s*Market Pulse/i,
-        /说明：\s*对外隐藏/i,
-      ];
-
-      const nodes = qsa("p,small,span,li");
-      for (const el of nodes) {
-        if (!el || !el.textContent) continue;
-        if (isInsideBilling(el)) continue;
-        if (el.children && el.children.length) continue;
-
-        const t = el.textContent.trim();
-        if (!t || t.length > 300) continue;
-        if ((/^note\s*:/i.test(t) || /^说明：/.test(t)) && patterns.some(re => re.test(t))) hide(el);
-      }
-    });
+  function pickSignalsRaw(snap) {
+    if (!snap) return null;
+    if (snap.signals != null) return snap.signals;
+    if (snap.sigs != null) return snap.sigs;
+    if (snap.bsSignals != null) return snap.bsSignals;
+    if (snap.markers != null) return snap.markers;
+    return null;
   }
 
-  // -----------------------------
-  // Restore B/S markers if overlay flag is ON but overlay not present
-  // -----------------------------
-  function restoreMarkersIfMissing() {
-    safeRun("restoreMarkersIfMissing", () => {
-      const overlayOn = (window.__OVERLAY_BIG_SIGS__ === true);
-      const overlayExists =
-        !!qs("#darriusBigSignalsOverlay") ||
-        !!qs("[data-overlay='big-sigs']") ||
-        !!qs(".big-sigs-overlay");
-      if (overlayOn && !overlayExists) {
-        window.__OVERLAY_BIG_SIGS__ = false;
-        if (window.ChartCore && typeof window.ChartCore.load === "function") {
-          window.ChartCore.load().catch(() => {});
-        }
-      }
-    });
+  function asArrayMaybe(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'object') return Object.keys(raw).map(k => raw[k]).filter(Boolean);
+    return [];
   }
 
-  // -----------------------------
-  // Market Pulse numbers (left panel)
-  // -----------------------------
-  function clamp01(x) { return Math.max(0, Math.min(1, x)); }
-  function pct(x) { return Math.round(clamp01(x) * 100); }
-
-  // Compute a stable sentiment from bars + ema/aux if snapshot missing pulse
-  function computeSentimentFromSnapshot(coreState, uiSnap) {
-    return safeRun("computeSentiment", () => {
-      // try ui snapshot first (more structured)
-      const candles = uiSnap?.candles || coreState?.bars || [];
-      const emaArr = uiSnap?.ema || [];
-      const auxArr = uiSnap?.aux || [];
-
-      const n = Array.isArray(candles) ? candles.length : 0;
-      if (!n) return null;
-
-      // last N window
-      const W = Math.min(120, n);
-      const slice = candles.slice(n - W);
-      const closes = slice.map(b => Number(b.close ?? b.c));
-      const rets = [];
-      for (let i = 1; i < closes.length; i++) {
-        const a = closes[i - 1], b = closes[i];
-        if (Number.isFinite(a) && Number.isFinite(b) && a !== 0) rets.push((b - a) / a);
-      }
-      if (!rets.length) return null;
-
-      // drift + volatility proxy
-      const drift = rets.reduce((s, x) => s + x, 0) / rets.length;
-      const vol = Math.sqrt(rets.reduce((s, x) => s + (x - drift) * (x - drift), 0) / rets.length) || 1e-9;
-
-      // trend proxy: ema slope (if exists)
-      let emaSlope = 0;
-      if (Array.isArray(emaArr) && emaArr.length >= 10) {
-        const m = emaArr.length;
-        const k = Math.min(10, m - 1);
-        const e1 = Number(emaArr[m - 1]?.value);
-        const e0 = Number(emaArr[m - 1 - k]?.value);
-        if (Number.isFinite(e1) && Number.isFinite(e0)) emaSlope = (e1 - e0) / k;
-      } else if (Array.isArray(coreState?.ema) && coreState.ema.length >= 10) {
-        const m = coreState.ema.length;
-        const k = Math.min(10, m - 1);
-        const e1 = Number(coreState.ema[m - 1]);
-        const e0 = Number(coreState.ema[m - 1 - k]);
-        if (Number.isFinite(e1) && Number.isFinite(e0)) emaSlope = (e1 - e0) / k;
-      }
-
-      // combine into 0..1
-      // drift/vol is like Sharpe-ish, squashed
-      const sharpeish = drift / (vol || 1e-9);
-      const score0 = 0.5 + 0.25 * Math.tanh(sharpeish * 3) + 0.25 * Math.tanh(emaSlope * 50);
-      const score = clamp01(score0);
-
-      // split into bull/bear/neutral percentages
-      // neutral centered around 0.5
-      const bull = clamp01((score - 0.5) * 1.6 + 0.5);
-      const bear = clamp01((0.5 - score) * 1.6 + 0.5);
-      const neutral = clamp01(1 - Math.abs(score - 0.5) * 2);
-
-      // net inflow proxy from last candles green/red ratio
-      let up = 0, dn = 0;
-      for (const b of slice.slice(-50)) {
-        const o = Number(b.open), c = Number(b.close);
-        if (!Number.isFinite(o) || !Number.isFinite(c)) continue;
-        if (c >= o) up++; else dn++;
-      }
-      const net = (up + dn) ? (up - dn) / (up + dn) : 0;
-
-      return {
-        sentimentScore: Math.round(score * 100),
-        bull: bull,
-        bear: bear,
-        neutral: neutral,
-        netInflow: net,
-      };
-    });
+  function normSide(s) {
+    const t = (s?.side ?? s?.type ?? s?.text ?? s?.signal ?? s?.action ?? '').toString().toUpperCase();
+    if (t.includes('BUY') || t === 'B') return 'B';
+    if (t.includes('SELL') || t === 'S') return 'S';
+    return '';
   }
 
-  // Update left UI (best-effort: try IDs, then label-based)
-  function updateMarketPulseUI(coreState, uiSnap) {
-    safeRun("updateMarketPulseUI", () => {
-      // 1) If there is already a computed pulse in snapshot, prefer it
-      const pulse = uiSnap?.pulse || uiSnap?.marketPulse || null;
-      let data = null;
+  // Detect timeframe string for special handling
+  function getTfFromSnap(snap) {
+    const tf =
+      snap?.meta?.timeframe ??
+      snap?.meta?.tf ??
+      snap?.tf ??
+      snap?.timeframe ??
+      snap?.params?.tf ??
+      null;
+    return (tf == null ? '' : String(tf)).trim();
+  }
 
-      if (pulse && typeof pulse === "object") {
-        data = {
-          sentimentScore: Number(pulse.score ?? pulse.sentiment ?? 0) || null,
-          bull: Number(pulse.bull ?? 0) / 100 || null,
-          bear: Number(pulse.bear ?? 0) / 100 || null,
-          neutral: Number(pulse.neutral ?? 0) / 100 || null,
-          netInflow: Number(pulse.netInflow ?? 0) || 0,
-        };
+  // IMPORTANT:
+  // If TF is intraday (m/h), we MUST keep utc seconds for overlay (avoid businessDay collapse).
+  function isIntradayTF(tf) {
+    const s = String(tf || '').toLowerCase();
+    return s.includes('m') || s.includes('h');
+  }
+
+  function normalizeOverlaySignals(snap) {
+    const raw = pickSignalsRaw(snap);
+    const arr = asArrayMaybe(raw);
+    if (!arr.length) return [];
+
+    const candles = pickCandles(snap) || [];
+    const tf = getTfFromSnap(snap);
+    const intraday = isIntradayTF(tf);
+
+    // map close by candle time key (supports both number sec & businessDay)
+    const closeByKey = new Map();
+    const candleTimesSec = [];
+
+    for (const b of candles) {
+      if (!b || b.time == null) continue;
+      const sec = toUtcSec(b.time);
+      if (sec != null) candleTimesSec.push(sec);
+      const k = isBusinessDay(b.time) ? `${b.time.year}-${b.time.month}-${b.time.day}` : String(b.time);
+      const c = Number(b.close);
+      if (Number.isFinite(c)) closeByKey.set(k, c);
+    }
+
+    candleTimesSec.sort((a, b) => a - b);
+
+    function nearestSec(target) {
+      if (!candleTimesSec.length || target == null) return null;
+      let lo = 0, hi = candleTimesSec.length - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const v = candleTimesSec[mid];
+        if (v === target) return v;
+        if (v < target) lo = mid + 1;
+        else hi = mid - 1;
       }
+      const a = candleTimesSec[Math.max(0, hi)];
+      const b = candleTimesSec[Math.min(candleTimesSec.length - 1, lo)];
+      if (a == null) return b ?? null;
+      if (b == null) return a ?? null;
+      return (Math.abs(a - target) <= Math.abs(b - target)) ? a : b;
+    }
 
-      if (!data) data = computeSentimentFromSnapshot(coreState, uiSnap);
-      if (!data) return;
+    const out = [];
+    const used = new Set();
 
-      // Common IDs (if you already have them)
-      const elScore = $("sentimentScore") || $("mpScore") || $("pulseScore");
-      const elBull  = $("bullPct") || $("mpBull");
-      const elBear  = $("bearPct") || $("mpBear");
-      const elNeut  = $("neutralPct") || $("mpNeutral");
-      const elNet   = $("netInflow") || $("mpNet");
+    // last 160 only
+    const start = Math.max(0, arr.length - 160);
+    for (let i = start; i < arr.length; i++) {
+      const s = arr[i] || {};
+      const side = normSide(s);
+      if (!side) continue;
 
-      if (elScore) setText(elScore, String(data.sentimentScore));
-      if (elBull)  setText(elBull, `${pct(data.bull)}%`);
-      if (elBear)  setText(elBear, `${pct(data.bear)}%`);
-      if (elNeut)  setText(elNeut, `${pct(data.neutral)}%`);
-      if (elNet)   setText(elNet, (data.netInflow >= 0 ? "+" : "") + (data.netInflow * 100).toFixed(0) + "%");
+      const tRaw = s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date ?? null;
+      const sec = toUtcSec(tRaw);
+      if (sec == null) continue;
 
-      // If IDs not present, try label-based replacement in Market Pulse card
-      const card = findCardByHeaderText("Market Pulse") || findCardByHeaderText("市场情绪");
-      if (!card) return;
+      const near = nearestSec(sec);
+      if (near == null) continue;
 
-      // Replace the "—" on the right side of each row if present
-      const rows = qsa("div,li,p,span", card).filter(el => {
-        const t = (el.textContent || "").trim();
-        return /Bullish|Bearish|Neutral|Net Inflow|多|空|中性|净流入/i.test(t);
-      });
-
-      for (const r of rows) {
-        if (isInsideBilling(r)) continue;
-        const t = (r.textContent || "");
-        // heuristic: last text node often contains the value
-        // We'll patch only when it contains '—' or ends with ':' etc.
-        if (/Bullish/i.test(t)) {
-          r.innerHTML = r.innerHTML.replace(/—/g, `${pct(data.bull)}%`);
-        } else if (/Bearish/i.test(t)) {
-          r.innerHTML = r.innerHTML.replace(/—/g, `${pct(data.bear)}%`);
-        } else if (/Neutral/i.test(t)) {
-          r.innerHTML = r.innerHTML.replace(/—/g, `${pct(data.neutral)}%`);
-        } else if (/Net Inflow/i.test(t)) {
-          const v = (data.netInflow >= 0 ? "+" : "") + (data.netInflow * 100).toFixed(0) + "%";
-          r.innerHTML = r.innerHTML.replace(/—/g, v);
+      // Decide overlay time format:
+      // - intraday => ALWAYS use utc seconds (number)
+      // - daily/weekly/monthly => allow businessDay if candles are businessDay
+      let t;
+      if (intraday) {
+        t = near;
+      } else {
+        // if candles are businessDay objects, convert near->businessDay by UTC date
+        const c0 = candles[0]?.time;
+        if (isBusinessDay(c0)) {
+          const d = new Date(near * 1000);
+          t = { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+        } else {
+          t = near;
         }
       }
 
-      // Big ring number: look for a single large number text within card
-      const bigNum = qsa("div,span", card).find(el => {
-        const s = (el.textContent || "").trim();
-        return /^\d{1,3}$/.test(s) && (el.getBoundingClientRect().width > 30);
-      });
-      if (bigNum) setText(bigNum, String(data.sentimentScore));
-    });
+      // price
+      const p0 = s.price ?? s.p ?? s.y ?? s.value ?? null;
+      let price = (typeof p0 === 'number' && Number.isFinite(p0)) ? p0 : null;
+      if (price == null) {
+        const k = isBusinessDay(t) ? `${t.year}-${t.month}-${t.day}` : String(t);
+        price = closeByKey.get(k) ?? null;
+      }
+      if (price == null || !Number.isFinite(Number(price))) continue;
+
+      const key = `${isBusinessDay(t) ? `${t.year}-${t.month}-${t.day}` : t}:${side}`;
+      if (used.has(key)) continue; // dedupe prevents vertical spam
+      used.add(key);
+
+      out.push({ time: t, price: Number(price), side });
+    }
+
+    return out;
   }
 
   // -----------------------------
-  // Red box improvements (Manage button + disclaimer block)
-  // - We do NOT change logic, only text/visibility outside billing area
+  // Core derived metrics (simple + stable)
   // -----------------------------
-  function improveRedBoxTexts() {
-    safeRun("improveRedBoxTexts", () => {
-      // Left bottom disclaimer title bilingual polish (if exists)
-      const langTag = qs(".langTag") || qs("[data-lang-tag]") || null;
-      if (langTag && !isInsideBilling(langTag)) {
-        // no-op: keep your existing if you already styled it
+  function deriveTrendRegime(snap, candles) {
+    const emaArr = snap && (snap.ema || snap.emaData || snap.ema14);
+    if (Array.isArray(emaArr) && emaArr.length >= 6) {
+      const a = emaArr[emaArr.length - 1]?.value ?? emaArr[emaArr.length - 1];
+      const b = emaArr[emaArr.length - 6]?.value ?? emaArr[emaArr.length - 6];
+      const slope = (a - b);
+      const eps = Math.abs(a) * 0.0004;
+      if (slope > eps) return 'UP';
+      if (slope < -eps) return 'DOWN';
+      return 'FLAT';
+    }
+    if (candles && candles.length >= 6) {
+      const c1 = candles[candles.length - 1].close;
+      const c0 = candles[candles.length - 6].close;
+      const slope = c1 - c0;
+      const eps = Math.abs(c1) * 0.003;
+      if (slope > eps) return 'UP';
+      if (slope < -eps) return 'DOWN';
+      return 'FLAT';
+    }
+    return 'FLAT';
+  }
+
+  function deriveStability(snap, candles) {
+    let auxFlat = 0.5;
+    let emaFlips = 0.0;
+
+    const auxArr = snap && (snap.aux || snap.auxData || snap.aux40);
+    if (Array.isArray(auxArr) && auxArr.length >= 10) {
+      const a = auxArr[auxArr.length - 1]?.value ?? auxArr[auxArr.length - 1];
+      const b = auxArr[auxArr.length - 6]?.value ?? auxArr[auxArr.length - 6];
+      const slope = Math.abs(a - b);
+      const base = Math.max(1e-9, Math.abs(a));
+      const ratio = slope / base;
+      auxFlat = clamp(1 - ratio * 18, 0, 1);
+    }
+
+    const emaArr = snap && (snap.ema || snap.emaData || snap.ema14);
+    if (Array.isArray(emaArr) && emaArr.length >= 15 && candles && candles.length >= 15) {
+      let flips = 0;
+      let prev = null;
+      const start = Math.max(0, emaArr.length - 15);
+      for (let i = start; i < emaArr.length; i++) {
+        const emaV = emaArr[i]?.value ?? emaArr[i];
+        const close = candles[i]?.close;
+        if (close == null || emaV == null) continue;
+        const sign = close >= emaV ? 1 : -1;
+        if (prev != null && sign !== prev) flips++;
+        prev = sign;
+      }
+      emaFlips = clamp(flips / 8, 0, 1);
+    }
+
+    return clamp((auxFlat * 0.6 + (1 - emaFlips) * 0.4) * 100, 0, 100);
+  }
+
+  function deriveInflectionBias(snap) {
+    const sigs = normalizeOverlaySignals(snap);
+    if (!sigs.length) return 'NEUTRAL';
+    for (let i = sigs.length - 1; i >= 0; i--) {
+      const side = sigs[i].side;
+      if (!side) continue;
+      return side === 'B' ? 'BULL' : 'BEAR';
+    }
+    return 'NEUTRAL';
+  }
+
+  function deriveTradabilityScore(trendRegime, bias, stability) {
+    let base = 35;
+    if (trendRegime === 'UP') base += 18;
+    if (trendRegime === 'DOWN') base += 12;
+    if (trendRegime === 'FLAT') base -= 5;
+    if (bias === 'BULL') base += 12;
+    if (bias === 'BEAR') base += 10;
+    base = base * (0.55 + (stability / 100) * 0.45);
+    return Math.round(clamp(base, 0, 100));
+  }
+
+  // -----------------------------
+  // UI: Market Pulse
+  // -----------------------------
+  function updateMarketPulseUI(snap) {
+    return safe(() => {
+      if (!DOM.pulseScore || !DOM.pulseGaugeMask) return;
+
+      const candles = pickCandles(snap);
+      const trendRegime = deriveTrendRegime(snap, candles);
+      const stability = deriveStability(snap, candles);
+      const bias = deriveInflectionBias(snap);
+      const score = deriveTradabilityScore(trendRegime, bias, stability);
+
+      DOM.pulseScore.textContent = String(score);
+
+      let bull = 16, bear = 15, neu = 69;
+      if (trendRegime === 'UP') { bull = 55; bear = 10; neu = 35; }
+      if (trendRegime === 'DOWN') { bull = 10; bear = 55; neu = 35; }
+      if (bias === 'BULL' && trendRegime !== 'DOWN') { bull += 8; neu -= 8; }
+      if (bias === 'BEAR' && trendRegime !== 'UP') { bear += 8; neu -= 8; }
+
+      const shrink = clamp(1 - (stability / 100), 0, 1);
+      neu = Math.round(neu + shrink * 10);
+      bull = Math.round(bull - shrink * 5);
+      bear = Math.round(bear - shrink * 5);
+
+      bull = clamp(bull, 0, 100);
+      bear = clamp(bear, 0, 100);
+      neu = clamp(neu, 0, 100);
+
+      if (DOM.bullPct) DOM.bullPct.textContent = bull + '%';
+      if (DOM.bearPct) DOM.bearPct.textContent = bear + '%';
+      if (DOM.neuPct) DOM.neuPct.textContent = neu + '%';
+      if (DOM.netInflow) DOM.netInflow.textContent = '—';
+
+      const deg = Math.round(clamp(score, 0, 100) * 3.6);
+      DOM.pulseGaugeMask.style.background =
+        `conic-gradient(rgba(43,226,166,1) 0deg, rgba(76,194,255,1) ${deg}deg, rgba(255,255,255,.10) ${deg}deg, rgba(255,255,255,.10) 360deg)`;
+      DOM.pulseGaugeMask.style.opacity = String(clamp(0.35 + (stability / 100) * 0.55, 0.35, 0.90));
+
+      if (DOM.signalMeta) {
+        const ttxt = trendRegime === 'UP' ? 'EMA up' : (trendRegime === 'DOWN' ? 'EMA down' : 'EMA flat');
+        const btxt = bias === 'BULL' ? 'Bias: B' : (bias === 'BEAR' ? 'Bias: S' : 'Bias: —');
+        const stxt = stability < 40 ? 'Low stability' : 'Stable';
+        DOM.signalMeta.innerHTML = `${ttxt} · ${btxt} · ${stxt}`;
+      }
+    }, 'updateMarketPulseUI');
+  }
+
+  // -----------------------------
+  // UI: Risk Copilot (derived only)
+  // IMPORTANT: if your HTML ids are duplicated, these will appear identical.
+  // -----------------------------
+  function updateRiskCopilotUI(snap) {
+    return safe(() => {
+      if (!DOM.riskEntry || !DOM.riskStop || !DOM.riskTargets || !DOM.riskConf) return;
+
+      // Guard: if IDs accidentally point to the same element, do nothing (prevents "all same number")
+      if (DOM.riskEntry === DOM.riskStop || DOM.riskEntry === DOM.riskTargets || DOM.riskEntry === DOM.riskConf) {
+        return;
       }
 
-      // Right: Manage button label polish (DO NOT TOUCH handlers)
-      const btns = qsa("button, a");
-      for (const b of btns) {
-        if (isInsideBilling(b)) continue;
-        const t = (b.textContent || "").trim();
-        if (/^Manage\b/i.test(t) && /管理/.test(t) === false) {
-          // keep bilingual
-          b.textContent = "Manage · 管理";
+      const candles = pickCandles(snap);
+      if (!candles || candles.length < 20) {
+        DOM.riskEntry.textContent = '—';
+        DOM.riskStop.textContent = '—';
+        DOM.riskTargets.textContent = '—';
+        DOM.riskConf.textContent = '—';
+        if (DOM.riskWR) DOM.riskWR.textContent = '—';
+        return;
+      }
+
+      const c = last(candles);
+      const close = Number(c?.close);
+      if (!Number.isFinite(close)) return;
+
+      let vol = 0;
+      const n = 14;
+      for (let i = candles.length - n; i < candles.length; i++) {
+        const prev = Number(candles[i - 1]?.close);
+        const cur = Number(candles[i]?.close);
+        if (!Number.isFinite(prev) || !Number.isFinite(cur)) continue;
+        vol += Math.abs(cur - prev);
+      }
+      vol = vol / Math.max(1, n - 1);
+
+      const bias = deriveInflectionBias(snap);
+      const dir = (bias === 'BEAR') ? 'SHORT' : 'LONG';
+
+      const entry = close;
+      const stopDist = Math.max(vol * 1.6, close * 0.004);
+      const stop = (dir === 'LONG') ? (entry - stopDist) : (entry + stopDist);
+      const t1 = (dir === 'LONG') ? (entry + stopDist) : (entry - stopDist);
+      const t2 = (dir === 'LONG') ? (entry + stopDist * 2) : (entry - stopDist * 2);
+
+      const trendRegime = deriveTrendRegime(snap, candles);
+      const stability = deriveStability(snap, candles);
+
+      let align = 0.55;
+      if (dir === 'LONG' && trendRegime === 'UP') align = 0.9;
+      else if (dir === 'SHORT' && trendRegime === 'DOWN') align = 0.9;
+      else if (trendRegime === 'FLAT') align = 0.45;
+
+      const conf = Math.round(clamp((stability * 0.55 + align * 100 * 0.45), 0, 100));
+
+      DOM.riskEntry.textContent = fmt(entry, 2);
+      DOM.riskStop.textContent = fmt(stop, 2);
+      DOM.riskTargets.textContent = `${fmt(t1, 2)} / ${fmt(t2, 2)}`;
+      DOM.riskConf.textContent = `${conf}%`;
+
+      if (DOM.riskWR) {
+        const wr = Math.round(clamp(42 + (stability / 100) * 18 + (align - 0.5) * 25, 35, 72));
+        DOM.riskWR.textContent = `${wr}%`;
+      }
+    }, 'updateRiskCopilotUI');
+  }
+
+  // -----------------------------
+  // Overlay (BIG B/S)
+  // -----------------------------
+  function getOverlayHost() {
+    const hostId = (window.DarriusChart && window.DarriusChart.__hostId) ? window.DarriusChart.__hostId : 'chart';
+    return document.getElementById(hostId) || DOM.chart || document.getElementById('chart');
+  }
+
+  function ensureOverlayLayer(host) {
+    return safe(() => {
+      if (!host) return null;
+      if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+
+      let layer = host.querySelector('#bsOverlayLayer');
+      if (!layer) {
+        layer = document.createElement('div');
+        layer.id = 'bsOverlayLayer';
+        layer.style.position = 'absolute';
+        layer.style.left = '0';
+        layer.style.top = '0';
+        layer.style.width = '100%';
+        layer.style.height = '100%';
+        layer.style.pointerEvents = 'none';
+        layer.style.zIndex = '9999';
+        host.appendChild(layer);
+      }
+      return layer;
+    }, 'ensureOverlayLayer');
+  }
+
+  function ensurePulseKeyframes() {
+    safe(() => {
+      if (document.getElementById('bsPulseKeyframes')) return;
+      const style = document.createElement('style');
+      style.id = 'bsPulseKeyframes';
+      style.textContent = `
+        @keyframes darriusPulseGold {
+          0%   { transform: translate(-50%, -50%) scale(1.00); filter: brightness(1); }
+          35%  { transform: translate(-50%, -50%) scale(1.18); filter: brightness(1.25); }
+          70%  { transform: translate(-50%, -50%) scale(1.06); filter: brightness(1.10); }
+          100% { transform: translate(-50%, -50%) scale(1.00); filter: brightness(1); }
         }
+        .darrius-pulse-b { position:absolute; }
+        .darrius-pulse-b::after {
+          content:'';
+          position:absolute;
+          left:50%; top:50%;
+          width:34px; height:34px;
+          border-radius:999px;
+          transform:translate(-50%,-50%);
+          background:rgba(255,193,7,0.18);
+          box-shadow:0 0 18px rgba(255,193,7,0.55), 0 0 44px rgba(255,193,7,0.30);
+          opacity:0;
+          animation:darriusPulseGoldRing 1.2s ease-out 0s 1 both;
+          pointer-events:none;
+          z-index:-1;
+        }
+        @keyframes darriusPulseGoldRing {
+          0%   { transform: translate(-50%,-50%) scale(0.95); opacity:0.0; }
+          25%  { opacity:0.8; }
+          100% { transform: translate(-50%,-50%) scale(2.2); opacity:0.0; }
+        }
+      `;
+      document.head.appendChild(style);
+    }, 'ensurePulseKeyframes');
+  }
+
+  function renderOverlaySignals(snap) {
+    safe(() => {
+      const host = getOverlayHost();
+      if (!host) return;
+
+      const layer = ensureOverlayLayer(host);
+      if (!layer) return;
+
+      layer.innerHTML = '';
+
+      const timeToX = window.DarriusChart && typeof window.DarriusChart.timeToX === 'function'
+        ? window.DarriusChart.timeToX : null;
+      const priceToY = window.DarriusChart && typeof window.DarriusChart.priceToY === 'function'
+        ? window.DarriusChart.priceToY : null;
+      if (!timeToX || !priceToY) return;
+
+      const sigs = normalizeOverlaySignals(snap);
+      if (!sigs.length) return;
+
+      ensurePulseKeyframes();
+
+      // pulse last BUY
+      let lastBIndex = -1;
+      for (let i = sigs.length - 1; i >= 0; i--) {
+        if (sigs[i]?.side === 'B') { lastBIndex = i; break; }
       }
-    });
+
+      // draw last N
+      const start = Math.max(0, sigs.length - 80);
+      for (let i = start; i < sigs.length; i++) {
+        const s = sigs[i];
+        const x = timeToX(s.time);
+        const y = priceToY(s.price);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+
+        const el = document.createElement('div');
+        el.textContent = s.side;
+
+        const isLastBuy = (i === lastBIndex && s.side === 'B');
+        if (isLastBuy) {
+          el.classList.add('darrius-pulse-b');
+          el.style.animation = 'darriusPulseGold 1.2s ease-out 0s 1 both';
+        }
+
+        el.style.position = 'absolute';
+        el.style.transform = 'translate(-50%, -50%)';
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+
+        el.style.width = '34px';
+        el.style.height = '34px';
+        el.style.borderRadius = '999px';
+        el.style.display = 'flex';
+        el.style.alignItems = 'center';
+        el.style.justifyContent = 'center';
+        el.style.fontWeight = '800';
+        el.style.fontSize = '16px';
+
+        if (s.side === 'B') {
+          el.style.color = '#0B0B0B';
+          el.style.background = 'rgba(255,193,7,0.95)';
+          el.style.border = '1px solid rgba(255,255,255,0.75)';
+          el.style.boxShadow = '0 0 10px rgba(255,193,7,0.65), 0 0 26px rgba(255,193,7,0.40)';
+        } else {
+          el.style.color = '#FFFFFF';
+          el.style.background = 'rgba(255,90,90,0.95)';
+          el.style.border = '1px solid rgba(255,255,255,0.65)';
+          el.style.boxShadow = '0 0 10px rgba(255,90,90,0.55), 0 0 26px rgba(255,90,90,0.35)';
+        }
+
+        layer.appendChild(el);
+      }
+    }, 'renderOverlaySignals');
   }
 
   // -----------------------------
-  // Main refresh
+  // Main tick
   // -----------------------------
-  function refreshAll() {
-    safeRun("refreshAll", () => {
-      const coreState = readCoreState();
-      const uiSnap = readUiSnapshot();
-
-      const info = inferDataInfo(coreState, uiSnap);
-      renderDataStatus(info);
-
-      restoreMarkersIfMissing();
-
-      // Step2A: remove yellow-box notes
-      cleanupYellowBoxes();
-
-      // Step2A: restore Market Pulse numbers
-      updateMarketPulseUI(coreState, uiSnap);
-
-      // Small text polish (red box)
-      improveRedBoxTexts();
-    });
+  function tick() {
+    return safe(() => {
+      const snap = getSnapshot();
+      if (!snap) return;
+      updateMarketPulseUI(snap);
+      updateRiskCopilotUI(snap);
+      renderOverlaySignals(snap);
+    }, 'tick');
   }
 
   // -----------------------------
   // Boot
   // -----------------------------
-  function boot() {
-    safeRun("boot", () => {
-      refreshAll();
-      window.addEventListener("darrius:chartUpdated", refreshAll);
+  function start() {
+    bindDOM();
+    tick();
 
-      // Conservative polling: UI might render after chart update
-      setInterval(refreshAll, 2500);
-    });
+    safe(() => {
+      window.addEventListener('darrius:chartUpdated', () => {
+        // let chart layout settle first
+        requestAnimationFrame(() => tick());
+      });
+    }, 'bindChartUpdated');
+
+    setInterval(tick, 600);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    boot();
+    start();
   }
 })();
