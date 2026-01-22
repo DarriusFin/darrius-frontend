@@ -8,8 +8,8 @@
   <!-- Lightweight Charts (required by chart.core.js) -->
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
+  <!-- IMPORTANT: tell chart.core.js not to draw small markers (UI overlay draws BIG B/S) -->
   <script>
-    // IMPORTANT: tell chart.core.js to NOT draw small markers; market.pulse.js will draw BIG overlay instead
     window.__OVERLAY_BIG_SIGS__ = true;
   </script>
 
@@ -27,8 +27,8 @@
       --text:#EAF0F7;
       --muted:#A2B0C2;
 
-      --brand1:#2BE2A6;
-      --brand2:#4CC2FF;
+      --brand1:#2BE2A6; /* green/teal */
+      --brand2:#4CC2FF; /* blue */
       --warn:#FFB86C;
       --danger:#FF5A5A;
 
@@ -445,7 +445,7 @@
       height:100%;
     }
 
-    /* NOTE: #sigOverlay is kept for compatibility; STABLE COMPAT uses its own #bsOverlayLayer inside #chart */
+    /* Overlay host (market.pulse.js will create its own #bsOverlayLayer inside chart host) */
     #sigOverlay{
       position:absolute; inset:0;
       pointer-events:none;
@@ -580,6 +580,7 @@
     </div>
 
     <div id="topRight">
+      <!-- chart.core.js 会更新这里的内容（数据源强提示/Ready/URL等） -->
       <div id="statusBadge" class="pill">
         <span class="dot"></span>
         <span id="statusText">Ready · 前端已就绪</span>
@@ -611,9 +612,11 @@
                 <span>Neutral</span><b id="neuPct">—</b>
                 <span>Net Inflow</span><b id="netInflow" style="color:var(--brand1)">—</b>
               </div>
+
+              <!-- ✅（按你“黄框删”要求）保留一句精简说明： -->
               <div class="small" style="margin-top:10px">
-                <b>Note:</b> Market Pulse is derived only from the main chart.<br/>
-                <b>说明：</b>Market Pulse 完全由主图派生，不引入外部数据。
+                <b>Note:</b> Derived from the main chart only.<br/>
+                <b>说明：</b>完全由主图派生（不引入外部情绪数据）。
               </div>
             </div>
           </div>
@@ -653,7 +656,7 @@
           </div>
         </div>
 
-        <!-- Compliance Disclaimer -->
+        <!-- Compliance Disclaimer（保留） -->
         <div id="leftDisclaimer">
           <div>
             <b>English:</b> Informational use only. Not investment advice. No offer or solicitation to buy/sell any security, futures, FX, crypto, or other financial instrument.
@@ -695,6 +698,7 @@
       <div class="panelBody">
         <div id="chartWrap">
           <div id="chart"></div>
+          <!-- 保留这个占位层（不影响 market.pulse.js 自建 #bsOverlayLayer） -->
           <div id="sigOverlay"></div>
         </div>
       </div>
@@ -717,9 +721,11 @@
               <option value="provider">3rd-Party Provider (Reserved)</option>
             </select>
           </div>
+
+          <!-- ✅（按你“黄框删”要求）右侧这里删掉大段解释，只保留一句合规提示： -->
           <div class="note">
-            <b>Note:</b> For live data, requests should go through a secure backend proxy (not exposed on the front-end).<br/>
-            <b>说明：</b>接入实盘数据时建议通过后端安全代理/签名请求获取 OHLC，避免前端暴露关键实现细节。
+            <b>Note:</b> Live data should be proxied through backend (no keys exposed in browser).<br/>
+            <b>说明：</b>实盘建议通过后端代理获取（不在浏览器暴露密钥/实现）。
           </div>
         </div>
 
@@ -765,7 +771,7 @@
           </div>
         </div>
 
-        <!-- Subscription (DO NOT TOUCH) -->
+        <!-- Subscription（保持原结构/ID，不动逻辑） -->
         <div class="card">
           <div class="cardTitle">
             <b>Subscription · 订阅开通</b>
@@ -827,17 +833,66 @@
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
   </script>
 
-  <!-- 1) 主图系统（冻结） -->
-  <script src="js/chart.core.js?v=20260119"></script>
+  <!-- ✅ Step A：ID 重复/误绑自检（不改任何业务逻辑，只输出诊断） -->
+  <script>
+    (function(){
+      function findDuplicateIds(){
+        const nodes = Array.from(document.querySelectorAll("[id]"));
+        const map = new Map();
+        for (const n of nodes){
+          const id = n.id;
+          if (!id) continue;
+          if (!map.has(id)) map.set(id, []);
+          map.get(id).push(n);
+        }
+        const dupes = [];
+        for (const [id, arr] of map.entries()){
+          if (arr.length > 1) dupes.push({ id, count: arr.length, nodes: arr });
+        }
+        return dupes;
+      }
 
-  <!-- 2) Market Pulse UI（只读快照） -->
+      const dupes = findDuplicateIds();
+      window.__DARRIUS_ID_DUPES__ = dupes.map(d => ({ id: d.id, count: d.count }));
+
+      // 你说的 sameAsEntry 检测：判断 riskEntry/riskStop/riskTargets/riskConf/riskWR 是否意外指向同一个节点
+      window.sameAsEntry = function(){
+        const e  = document.getElementById("riskEntry");
+        const s  = document.getElementById("riskStop");
+        const t  = document.getElementById("riskTargets");
+        const c  = document.getElementById("riskConf");
+        const wr = document.getElementById("riskWR");
+        if (!e || !s || !t || !c || !wr) return { ok:false, reason:"missing ids", ids:{e:!!e,s:!!s,t:!!t,c:!!c,wr:!!wr} };
+        const set = new Set([e, s, t, c, wr]);
+        return { ok:true, same: (set.size !== 5), size:set.size };
+      };
+
+      if (dupes.length){
+        console.warn("[ID] Duplicate IDs found:", dupes.map(d => d.id));
+      } else {
+        console.log("[ID] No duplicate IDs.");
+      }
+      console.log("[ID] sameAsEntry():", window.sameAsEntry());
+    })();
+  </script>
+
+  <!-- 1) 主图系统（冻结，不动） -->
+  <script src="js/chart.core.js?v=20260122"></script>
+
+  <!-- 2) Market Pulse UI（你已替换为 STABLE COMPAT v2026.01.22） -->
   <script src="js/market.pulse.js?v=20260122"></script>
 
-  <!-- 3) 订阅系统（保持原，不碰） -->
-  <script src="js/subscription.js?v=20260119"></script>
+  <!-- 3) 订阅系统（保持原） -->
+  <script src="js/subscription.js?v=20260122"></script>
 
-  <!-- 4) 启动/绑定按钮（保持原，不碰） -->
-  <script src="js/boot.js?v=20260119"></script>
+  <!-- 4) 启动/绑定按钮（保持原） -->
+  <script src="js/boot.js?v=20260122"></script>
 
+  <!-- ✅ 注意：
+       我刻意删除了你原来那段 “SAFETY BRIDGE + setInterval tryRefresh()” 和 “findButtonByText Start/Manage 监听”。
+       这两段会：
+       - 重复调用 / 误调用 market.pulse 内部函数（造成页面偶发崩溃/覆盖）
+       - 抢占订阅按钮事件（影响真实 checkout / portal 逻辑）
+  -->
 </body>
 </html>
