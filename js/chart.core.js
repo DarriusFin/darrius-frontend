@@ -1,24 +1,48 @@
-/* ============================================================================
- * DarriusAI - chart.core.js (FROZEN MAIN CHART)
+/* =========================================================================
+ * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.01.22-DATAMODE
+ *
  * Role:
- * - Render main chart (candles + EMA + AUX + signals)
- * - Fetch OHLCV via backend proxy (Massive/Polygon aggregates)
- * - Output read-only snapshot to window.__DARRIUS_CHART_STATE__
- * - Emit event "darrius:chartUpdated"
+ *  - Render main chart (candles + EMA + AUX + signals)
+ *  - Fetch OHLCV via backend proxy (Massive/Polygon aggregates)
+ *  - Support Data Mode: Demo / Delayed (and future Live) without touching billing
+ *  - Output a read-only snapshot to window.__DARRIUS_CHART_STATE__
+ *  - Emit event "darrius:chartUpdated" with snapshot detail
+ *
+ * Preset 2:
+ *  - EMA 14
+ *  - AUX 40 (HMA-like)
+ *  - confirm window 3
+ *  - Candles colored by EMA trend (EMA slope)
  *
  * Guarantees:
- * 1) Main chart render is highest priority and will not be broken by UI
- * 2) Non-critical parts are wrapped in no-throw safe zones
- * 3) NO billing/subscription/payment code is touched here
- * ========================================================================== */
+ *  1) Main chart render is highest priority and will not be broken by UI
+ *  2) Non-critical parts (snapshot/event/markers) are wrapped in no-throw safe zones
+ *  3) No billing/subscription code touched
+ * ========================================================================= */
+
 (() => {
-  'use strict';
+  "use strict";
 
   // -----------------------------
-  // Safe zone
+  // Global diagnostic (never throw)
   // -----------------------------
+  const DIAG = (window.__DARRIUS_DIAG__ = window.__DARRIUS_DIAG__ || {
+    lastError: null,
+    chartError: null,
+    lastPack: null,
+  });
+
   function safeRun(tag, fn) {
-    try { return fn(); } catch (_) { return null; }
+    try {
+      return fn();
+    } catch (e) {
+      DIAG.lastError = {
+        tag,
+        message: String(e?.message || e),
+        stack: String(e?.stack || ""),
+      };
+      return undefined;
+    }
   }
 
   // -----------------------------
@@ -32,16 +56,15 @@
   // -----------------------------
   const DEFAULT_API_BASE =
     (window.DARRIUS_API_BASE && String(window.DARRIUS_API_BASE)) ||
-    (window.__API_BASE__ && String(window.__API_BASE__)) ||
+    (window._API_BASE_ && String(window._API_BASE_)) ||
     (window.API_BASE && String(window.API_BASE)) ||
-    (window.__API_BASE && String(window.__API_BASE)) ||
     "https://darrius-api.onrender.com";
 
-  // Prefer verified endpoint:
+  // Massive aggregates endpoint (preferred)
   // /api/data/stocks/aggregates?ticker=...&multiplier=...&timespan=...&from=...&to=...
   const MASSIVE_AGGS_PATH = "/api/data/stocks/aggregates";
 
-  // Keep candidates for backward compat
+  // Optional legacy candidates (back-compat)
   const BARS_PATH_CANDIDATES = [
     "/api/market/bars",
     "/api/bars",
@@ -65,13 +88,17 @@
     "/signals",
   ];
 
-  // Preset params (internal; do not surface in UI text)
+  // -----------------------------
+  // Preset 2 params
+  // -----------------------------
   const EMA_PERIOD = 14;
   const AUX_PERIOD = 40;
   const AUX_METHOD = "SMA";
   const CONFIRM_WINDOW = 3;
 
+  // -----------------------------
   // Colors
+  // -----------------------------
   const COLOR_UP = "#2BE2A6";
   const COLOR_DN = "#FF5A5A";
   const COLOR_UP_WICK = "#2BE2A6";
@@ -91,56 +118,48 @@
   let showEMA = true;
   let showAUX = true;
 
-  // DataSource selection (UI-visible), but effective source is gated by subscription.
-  const DATA_SOURCE_KEY = "darrius:dataSourceSelected"; // 'demo' | 'market'
-  function getSelectedDataSource() {
-    const uiSel = ($("dataSourceSelect") && $("dataSourceSelect").value) || "";
-    const v = (uiSel || localStorage.getItem(DATA_SOURCE_KEY) || "demo").toLowerCase();
-    return (v === "market") ? "market" : "demo";
-  }
-  function setSelectedDataSource(v) {
-    const x = (v === "market") ? "market" : "demo";
-    localStorage.setItem(DATA_SOURCE_KEY, x);
-    if ($("dataSourceSelect")) $("dataSourceSelect").value = x;
-  }
-
-  // IMPORTANT: We DO NOT implement subscription here.
-  // We only READ an externally-provided boolean flag if present.
-  function isSubscriptionActive() {
-    // Supported external flags (you can pick one in your subscription module WITHOUT changing logic here):
-    // window.__DARRIUS_SUB_ACTIVE__ = true/false
-    // window.DARRIUS_SUB_ACTIVE = true/false
-    // window.__ACCESS__?.market === true
-    if (window.__DARRIUS_SUB_ACTIVE__ === true) return true;
-    if (window.DARRIUS_SUB_ACTIVE === true) return true;
-    if (window.__ACCESS__ && window.__ACCESS__.market === true) return true;
-    return false;
-  }
-
-  function getEffectiveDataSource() {
-    const selected = getSelectedDataSource();
-    if (!isSubscriptionActive()) return { source: "demo", reason: (selected === "market") ? "no-subscription" : "demo-selected" };
-    return { source: selected, reason: (selected === "market") ? "subscribed" : "demo-selected" };
-  }
-
-  // Data mode label
-  function getDataModeLabel(meta) {
-    const eff = getEffectiveDataSource().source;
-    if (eff === "demo") return { en: "DEMO", cn: "演示" };
-    const mins = meta && Number(meta.delayedMinutes);
-    if (Number.isFinite(mins) && mins > 0) return { en: `MARKET · Delayed (${mins}m)`, cn: `市场 · 延迟（${mins}分钟）` };
-    return { en: "MARKET · Live", cn: "市场 · 实时" };
-  }
-
   // -----------------------------
-  // Time helpers (CRITICAL for B/S accuracy)
+  // Data Mode (Demo / Delayed / Live-ready)
   // -----------------------------
-  function toUnixSec(x) {
-    const n = Number(x);
-    if (!Number.isFinite(n)) return null;
-    // heuristics: ms timestamps are ~13 digits, sec are ~10 digits
-    const sec = (n > 1e12) ? (n / 1000) : n;
-    return Math.floor(sec);
+  function getUiDataMode() {
+    // Priority: explicit global override
+    const g =
+      window.__DATA_MODE__ ||
+      window.__DATA_SOURCE_MODE__ ||
+      window.__DATA_SOURCE__ ||
+      window.DARRIUS_DATA_MODE;
+
+    if (typeof g === "string" && g.trim()) return g.trim().toLowerCase();
+
+    // Then: UI select/inputs if present
+    const el =
+      $("dataMode") ||
+      $("dataSourceMode") ||
+      $("sourceMode") ||
+      qs('select[name="dataMode"]') ||
+      qs('select[name="sourceMode"]');
+
+    const v = el && (el.value || el.textContent);
+    return (v || "delayed").toString().trim().toLowerCase();
+  }
+
+  function normalizeMode(m) {
+    const x = String(m || "").toLowerCase();
+    if (x.includes("demo")) return "demo";
+    if (x.includes("delay")) return "delayed";
+    if (x.includes("live") || x.includes("real")) return "live";
+    return "delayed";
+  }
+
+  function getDelayedMinutes() {
+    // configurable; default 15 for Massive Starter-style delayed feeds
+    const g = window.__DELAYED_MINUTES__ ?? window.DARRIUS_DELAYED_MINUTES;
+    const ui =
+      $("delayedMinutes") ||
+      qs('input[name="delayedMinutes"]') ||
+      qs("#delayedMinutes");
+    const v = ui ? Number(ui.value) : Number(g);
+    return Number.isFinite(v) && v >= 0 ? v : 15;
   }
 
   // -----------------------------
@@ -155,35 +174,18 @@
       qs("#symbol") ||
       qs("#sym");
     const v = el && (el.value || el.textContent);
-    return String(v || "AAPL").trim().toUpperCase();
+    return (v || "AAPL").trim();
   }
 
   function getUiTf() {
     const el =
       $("tfSelect") ||
-      $("timeframe") ||
       $("timeframeSelect") ||
+      $("tf") ||
       qs('select[name="timeframe"]') ||
-      qs("#tf");
+      qs("#timeframe");
     const v = el && (el.value || el.textContent);
-    return String(v || "1d").trim().toLowerCase();
-  }
-
-  function tfToAggParams(tf) {
-    // tf examples: '1m','5m','15m','1h','4h','1d'
-    const t = String(tf || "1d").toLowerCase();
-    if (t.endsWith("m")) return { multiplier: Number(t.replace("m", "")) || 5, timespan: "minute", daysBack: 7 };
-    if (t.endsWith("h")) return { multiplier: Number(t.replace("h", "")) || 1, timespan: "hour", daysBack: 30 };
-    return { multiplier: 1, timespan: "day", daysBack: 365 };
-  }
-
-  function rangeByDaysBack(daysBack) {
-    const now = new Date();
-    const end = new Date(now);
-    const start = new Date(now);
-    start.setDate(start.getDate() - Math.max(2, Number(daysBack) || 30));
-    const iso = (d) => d.toISOString().slice(0, 10);
-    return { from: iso(start), to: iso(end) };
+    return (v || "1d").trim();
   }
 
   // -----------------------------
@@ -201,30 +203,87 @@
     return r.json();
   }
 
-  function normalizeBars(payload) {
-    const arr =
-      payload?.bars ||
-      payload?.results ||
-      payload?.data?.bars ||
-      payload?.data?.results ||
-      [];
-    if (!Array.isArray(arr)) return [];
+  // tf -> multiplier/timespan + a reasonable history window
+  function tfToAggParams(tf) {
+    const m = String(tf || "1d").trim();
+    const map = {
+      "5m": { multiplier: 5, timespan: "minute", daysBack: 20 },
+      "15m": { multiplier: 15, timespan: "minute", daysBack: 35 },
+      "30m": { multiplier: 30, timespan: "minute", daysBack: 60 },
+      "1h": { multiplier: 60, timespan: "minute", daysBack: 90 },
+      "4h": { multiplier: 240, timespan: "minute", daysBack: 180 },
+      "1d": { multiplier: 1, timespan: "day", daysBack: 700 },
+      "1w": { multiplier: 1, timespan: "week", daysBack: 1800 },
+      "1M": { multiplier: 1, timespan: "month", daysBack: 3600 },
+    };
+    return map[m] || map["1d"];
+  }
 
-    // Accept multiple schemas:
-    // Polygon-like: { t(ms), o,h,l,c,v }
-    // Generic: { time, open, high, low, close, volume }
-    const out = [];
-    for (const b of arr) {
-      const t = toUnixSec(b.time ?? b.t ?? b.timestamp ?? b.ts ?? b.date);
-      const o = Number(b.open ?? b.o);
-      const h = Number(b.high ?? b.h);
-      const l = Number(b.low ?? b.l);
-      const c = Number(b.close ?? b.c);
-      const v = Number(b.volume ?? b.v ?? 0);
-      if (!t || ![o, h, l, c].every(Number.isFinite)) continue;
-      out.push({ time: t, open: o, high: h, low: l, close: c, volume: Number.isFinite(v) ? v : 0 });
+  function toYMD(d) {
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${da}`;
+  }
+
+  function rangeByDaysBack(daysBack) {
+    const to = new Date();
+    const from = new Date(Date.now() - daysBack * 24 * 3600 * 1000);
+    return { from: toYMD(from), to: toYMD(to) };
+  }
+
+  function toUnixTime(t) {
+    if (t == null) return null;
+    if (typeof t === "number") {
+      // ms -> s
+      if (t > 2e10) return Math.floor(t / 1000);
+      return t;
     }
-    out.sort((a, b) => a.time - b.time);
+    if (typeof t === "string") {
+      const ms = Date.parse(t);
+      if (!Number.isFinite(ms)) return null;
+      return Math.floor(ms / 1000);
+    }
+    if (typeof t === "object" && t.year && t.month && t.day) return t; // business day
+    return null;
+  }
+
+  function normalizeBars(payload) {
+    const raw = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.results)
+      ? payload.results // Polygon / Massive-style aggs
+      : Array.isArray(payload?.bars)
+      ? payload.bars
+      : Array.isArray(payload?.ohlcv)
+      ? payload.ohlcv
+      : Array.isArray(payload?.data)
+      ? payload.data
+      : [];
+
+    const bars = (raw || [])
+      .map((b) => {
+        const time = toUnixTime(b.time ?? b.t ?? b.timestamp ?? b.ts ?? b.date);
+        const open = Number(b.open ?? b.o ?? b.Open);
+        const high = Number(b.high ?? b.h ?? b.High);
+        const low = Number(b.low ?? b.l ?? b.Low);
+        const close = Number(b.close ?? b.c ?? b.Close);
+        if (!time) return null;
+        if (![open, high, low, close].every(Number.isFinite)) return null;
+        return { time, open, high, low, close };
+      })
+      .filter(Boolean);
+
+    bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+
+    // de-dup by time
+    const out = [];
+    let lastT = null;
+    for (const b of bars) {
+      if (b.time === lastT) continue;
+      lastT = b.time;
+      out.push(b);
+    }
     return out;
   }
 
@@ -236,23 +295,86 @@
       payload?.data?.signals ||
       [];
     if (!Array.isArray(raw)) return [];
-    const out = [];
-    for (const s of raw) {
-      const t = toUnixSec(s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date);
-      const side = String(s.side ?? s.type ?? s.action ?? "").toUpperCase();
-      if (!t) continue;
-      if (side !== "B" && side !== "S") continue;
-      out.push({ time: t, side });
+    return raw
+      .map((s) => {
+        const time = toUnixTime(s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date);
+        const side = String(s.side ?? s.type ?? s.action ?? "").toUpperCase();
+        if (!time || (side !== "B" && side !== "S")) return null;
+        return { time, side, price: Number.isFinite(Number(s.price)) ? Number(s.price) : null };
+      })
+      .filter(Boolean)
+      .sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
+  }
+
+  function computeModeRangeAdjust(mode, fromYmd, toYmd, delayedMinutes) {
+    // For delayed mode, we can optionally "pretend now is earlier" to align expectations
+    // (not strictly required; but helps avoid “why last bar looks behind” confusion).
+    // We keep it minimal: if delayed, we shift the "to" date/time by -delay, but as YMD it rarely changes.
+    // So we keep dates unchanged to avoid edge-case bugs; backend can handle delay.
+    return { from: fromYmd, to: toYmd, delayedMinutes };
+  }
+
+  async function fetchBarsPack(sym, tf) {
+    const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
+    const mode = normalizeMode(getUiDataMode());
+    const delayedMinutes = getDelayedMinutes();
+
+    const cfg = tfToAggParams(tf);
+    const { from, to } = rangeByDaysBack(cfg.daysBack);
+    const adj = computeModeRangeAdjust(mode, from, to, delayedMinutes);
+
+    // preferred: Massive aggs
+    const url = new URL(apiBase + MASSIVE_AGGS_PATH);
+    url.searchParams.set("ticker", String(sym || "AAPL").trim().toUpperCase());
+    url.searchParams.set("multiplier", String(cfg.multiplier));
+    url.searchParams.set("timespan", String(cfg.timespan));
+    url.searchParams.set("from", adj.from);
+    url.searchParams.set("to", adj.to);
+
+    // Pass mode hints (backend may ignore; safe to add)
+    url.searchParams.set("mode", mode); // demo / delayed / live
+    if (mode === "delayed") url.searchParams.set("delayedMinutes", String(delayedMinutes));
+
+    const payload = await fetchJson(url.toString());
+    const bars = normalizeBars(payload);
+
+    if (bars.length) {
+      return {
+        payload,
+        bars,
+        urlUsed: url.toString(),
+        dataMode: mode,
+        dataSource: "massive",
+        delayedMinutes: mode === "delayed" ? delayedMinutes : 0,
+      };
     }
-    out.sort((a, b) => a.time - b.time);
-    // de-dupe
-    const used = new Set();
-    return out.filter(x => {
-      const k = `${x.time}:${x.side}`;
-      if (used.has(k)) return false;
-      used.add(k);
-      return true;
-    });
+
+    // fallback legacy candidates
+    let lastErr = new Error(`Aggs empty. ticker=${sym} tf=${tf} from=${from} to=${to}`);
+    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}&mode=${encodeURIComponent(mode)}`;
+
+    for (const p of BARS_PATH_CANDIDATES) {
+      const u = `${apiBase}${p}?${q}`;
+      try {
+        const pl = await fetchJson(u);
+        const bs = normalizeBars(pl);
+        if (bs.length) {
+          return {
+            payload: pl,
+            bars: bs,
+            urlUsed: u,
+            dataMode: mode,
+            dataSource: "legacy",
+            delayedMinutes: mode === "delayed" ? delayedMinutes : 0,
+          };
+        }
+        lastErr = new Error(`bars empty from ${u}`);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    throw new Error(`All bars endpoints failed. Last error: ${lastErr?.message || lastErr}`);
   }
 
   async function fetchOptionalSignals(sym, tf) {
@@ -262,125 +384,28 @@
       const url = `${apiBase}${p}?${q}`;
       try {
         const payload = await fetchJson(url);
-        const sigs = normalizeSignals(payload);
-        if (sigs.length) return sigs;
+        return normalizeSignals(payload);
       } catch (_) {}
     }
     return [];
   }
 
   // -----------------------------
-  // Demo bars generator (front-end only; no provider exposure)
-  // -----------------------------
-  function generateDemoBars(sym, tf) {
-    const cfg = tfToAggParams(tf);
-    const nowSec = Math.floor(Date.now() / 1000);
-    const stepSec =
-      (cfg.timespan === "minute") ? (60 * cfg.multiplier) :
-      (cfg.timespan === "hour") ? (3600 * cfg.multiplier) :
-      (86400 * cfg.multiplier);
-
-    const n = (cfg.timespan === "day") ? 240 : 400;
-    const start = nowSec - n * stepSec;
-
-    // deterministic seed from symbol
-    let seed = 0;
-    for (let i = 0; i < sym.length; i++) seed = (seed * 31 + sym.charCodeAt(i)) >>> 0;
-    const rand = () => {
-      // xorshift
-      seed ^= seed << 13; seed >>>= 0;
-      seed ^= seed >> 17; seed >>>= 0;
-      seed ^= seed << 5;  seed >>>= 0;
-      return (seed % 10000) / 10000;
-    };
-
-    let price = 80 + (rand() * 40);
-    const out = [];
-    for (let i = 0; i < n; i++) {
-      const t = start + i * stepSec;
-      const drift = (rand() - 0.5) * 0.8;
-      const vol = 0.6 + rand() * 1.4;
-      const o = price;
-      const c = Math.max(1, o + drift * vol);
-      const hi = Math.max(o, c) + rand() * vol;
-      const lo = Math.min(o, c) - rand() * vol;
-      price = c;
-      out.push({ time: t, open: o, high: hi, low: lo, close: c, volume: 0 });
-    }
-    return out;
-  }
-
-  // -----------------------------
-  // Fetch pack (bars + payload/meta)
-  // -----------------------------
-  async function fetchBarsPack(sym, tf) {
-    const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
-    const cfg = tfToAggParams(tf);
-    const { from, to } = rangeByDaysBack(cfg.daysBack);
-
-    const eff = getEffectiveDataSource();
-    if (eff.source === "demo") {
-      const bars = generateDemoBars(sym, tf);
-      return {
-        payload: { meta: { dataSource: "demo" } },
-        bars,
-        urlUsed: "demo://local",
-        meta: { dataSource: "demo" }
-      };
-    }
-
-    // market: use verified endpoint first
-    const url = new URL(apiBase + MASSIVE_AGGS_PATH);
-    url.searchParams.set("ticker", String(sym || "AAPL").trim().toUpperCase());
-    url.searchParams.set("multiplier", String(cfg.multiplier));
-    url.searchParams.set("timespan", String(cfg.timespan));
-    url.searchParams.set("from", from);
-    url.searchParams.set("to", to);
-
-    const payload = await fetchJson(url.toString());
-    const bars = normalizeBars(payload);
-    if (bars.length) {
-      const delayedMinutes =
-        Number(payload?.meta?.delayedMinutes ?? payload?.delayedMinutes ?? payload?.meta?.delayMinutes);
-      return {
-        payload,
-        bars,
-        urlUsed: url.toString(),
-        meta: {
-          dataSource: "market",
-          delayedMinutes: Number.isFinite(delayedMinutes) ? delayedMinutes : null
-        }
-      };
-    }
-
-    // fallback candidates (optional)
-    let lastErr = new Error(`Aggs returned empty. ticker=${sym} tf=${tf} from=${from} to=${to}`);
-    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
-    for (const p of BARS_PATH_CANDIDATES) {
-      const u = `${apiBase}${p}?${q}`;
-      try {
-        const pl = await fetchJson(u);
-        const bs = normalizeBars(pl);
-        if (bs.length) return { payload: pl, bars: bs, urlUsed: u, meta: { dataSource: "market" } };
-        lastErr = new Error(`bars empty from ${u}`);
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-    throw lastErr;
-  }
-
-  // -----------------------------
   // Math
   // -----------------------------
+  const sgn = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
+
   function ema(values, period) {
     const k = 2 / (period + 1);
     let e = null;
     const out = new Array(values.length);
     for (let i = 0; i < values.length; i++) {
       const v = values[i];
-      if (!Number.isFinite(v)) { out[i] = NaN; continue; }
-      e = (e === null) ? v : (v * k + e * (1 - k));
+      if (!Number.isFinite(v)) {
+        out[i] = NaN;
+        continue;
+      }
+      e = e == null ? v : v * k + e * (1 - k);
       out[i] = e;
     }
     return out;
@@ -398,82 +423,107 @@
     return sum / period;
   }
 
-  function computeAuxByYourAlgo(values, period, method) {
-    // minimal: SMA (kept compatible)
+  function wmaAt(values, endIdx, period) {
+    const start = endIdx - period + 1;
+    if (start < 0) return NaN;
+    let num = 0,
+      den = 0;
+    for (let i = start; i <= endIdx; i++) {
+      const v = values[i];
+      if (!Number.isFinite(v)) return NaN;
+      const w = i - start + 1;
+      num += v * w;
+      den += w;
+    }
+    return den ? num / den : NaN;
+  }
+
+  function maOnArray(values, period, method) {
     const m = String(method || "SMA").toUpperCase();
     const out = new Array(values.length).fill(NaN);
-    if (m === "SMA") {
-      for (let i = 0; i < values.length; i++) out[i] = smaAt(values, i, period);
+
+    if (period <= 1) {
+      for (let i = 0; i < values.length; i++) out[i] = values[i];
       return out;
     }
-    // fallback: SMA
+
+    if (m === "EMA") {
+      const k = 2 / (period + 1);
+      let e = null;
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (!Number.isFinite(v)) {
+          out[i] = NaN;
+          continue;
+        }
+        e = e == null ? v : v * k + e * (1 - k);
+        out[i] = e;
+      }
+      return out;
+    }
+
+    if (m === "WMA") {
+      for (let i = 0; i < values.length; i++) out[i] = wmaAt(values, i, period);
+      return out;
+    }
+
     for (let i = 0; i < values.length; i++) out[i] = smaAt(values, i, period);
     return out;
   }
 
   function buildLinePoints(bars, values) {
-    const out = [];
+    const pts = new Array(bars.length);
     for (let i = 0; i < bars.length; i++) {
+      const t = bars[i].time;
       const v = values[i];
-      if (!Number.isFinite(v)) continue;
-      out.push({ time: bars[i].time, value: v });
+      pts[i] = { time: t, value: Number.isFinite(v) ? v : null };
     }
-    return out;
+    return pts;
   }
 
-  function colorCandlesByEmaTrend(bars, emaVals) {
-    const out = [];
-    for (let i = 0; i < bars.length; i++) {
-      const b = bars[i];
-      const e0 = emaVals[i - 1];
-      const e1 = emaVals[i];
-      const up = Number.isFinite(e0) && Number.isFinite(e1) ? (e1 >= e0) : true;
-      out.push({
-        time: b.time,
-        open: b.open,
-        high: b.high,
-        low: b.low,
-        close: b.close,
-        color: up ? COLOR_UP : COLOR_DN,
-        wickColor: up ? COLOR_UP_WICK : COLOR_DN_WICK,
-        borderColor: up ? COLOR_UP : COLOR_DN
-      });
+  function computeAuxByYourAlgo(closes, period, method) {
+    const n = Math.max(2, Math.floor(period || 40));
+    const half = Math.max(1, Math.floor(n / 2));
+    const p = Math.max(1, Math.round(Math.sqrt(n)));
+
+    const vect = new Array(closes.length).fill(NaN);
+    for (let i = 0; i < closes.length; i++) {
+      const w1 = wmaAt(closes, i, half);
+      const w2 = wmaAt(closes, i, n);
+      vect[i] = Number.isFinite(w1) && Number.isFinite(w2) ? 2 * w1 - w2 : NaN;
     }
-    return out;
+    return maOnArray(vect, p, method || "SMA");
   }
 
-  // -----------------------------
-  // Signal computation (Cross + Hysteresis + Confirm)
-  // -----------------------------
-  function medianAbsDelta(vals, lookback) {
-    const n = vals.length;
-    const arr = [];
-    for (let i = Math.max(1, n - (lookback || 50)); i < n; i++) {
-      const a = vals[i - 1], b = vals[i];
-      if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
-      arr.push(Math.abs(b - a));
+  function computeTrendFromAux(auxVals) {
+    const trend = new Array(auxVals.length).fill(0);
+    let last = 0;
+    for (let i = 1; i < auxVals.length; i++) {
+      const a0 = auxVals[i - 1];
+      const a1 = auxVals[i];
+      if (!Number.isFinite(a0) || !Number.isFinite(a1)) {
+        trend[i] = last;
+        continue;
+      }
+      if (a1 > a0) last = 1;
+      else if (a1 < a0) last = -1;
+      trend[i] = last;
     }
-    if (!arr.length) return 0;
-    arr.sort((x, y) => x - y);
-    return arr[Math.floor(arr.length / 2)];
+    trend[0] = trend[1] || 0;
+    return trend;
   }
 
-  function computeSignalsCrossStable(bars, emaPts, auxPts, confirmWindow) {
+  function computeSignalsCrossPlusInflection(bars, emaPts, auxPts, confirmWindow) {
     const n = bars.length;
-    if (n < 10) return [];
+    if (n < 5) return [];
 
-    const emaV = emaPts.map(p => p.value);
-    const auxV = auxPts.map(p => p.value);
+    const emaV = emaPts.map((p) => p.value);
+    const auxV = auxPts.map((p) => p.value);
+    const trend = computeTrendFromAux(auxV);
 
-    // dynamic band reduces chatter; proportional to recent median move
-    const closes = bars.map(b => b.close);
-    const m = medianAbsDelta(closes, 80);
-    const band = Math.max(0, m * 0.6); // hysteresis band
-
+    const cw = Math.max(0, Math.floor(confirmWindow ?? 3));
     const sigs = [];
     const used = new Set();
-
-    const cw = Math.max(1, Math.min(6, Math.floor((confirmWindow || 3))));
 
     function addSig(i, side) {
       const t = bars[i].time;
@@ -483,54 +533,47 @@
       sigs.push({ time: t, side });
     }
 
-    // cross detector with hysteresis:
-    // d = ema-aux; require crossing beyond +/-band
-    for (let i = 2; i < n; i++) {
-      const d0 = emaV[i - 1] - auxV[i - 1];
-      const d1 = emaV[i] - auxV[i];
-      if (![d0, d1].every(Number.isFinite)) continue;
-
-      const wasBelow = d0 < -band;
-      const wasAbove = d0 > band;
-      const nowAbove = d1 > band;
-      const nowBelow = d1 < -band;
-
-      // candidate cross up: below -> above
-      if (wasBelow && nowAbove) {
-        // confirm: within cw bars, ema slope stays positive OR close continues higher
-        let ok = false;
-        for (let j = i; j <= Math.min(n - 1, i + cw); j++) {
-          const ePrev = emaV[j - 1], eCur = emaV[j];
-          if (Number.isFinite(ePrev) && Number.isFinite(eCur) && eCur > ePrev) { ok = true; break; }
-          if (bars[j].close > bars[i].close) { ok = true; break; }
+    function findConfirmIndex(startIdx, wantTrend) {
+      for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
+        const prev = trend[j - 1];
+        const curr = trend[j];
+        if (wantTrend > 0) {
+          if (prev <= 0 && curr > 0) return j;
+        } else {
+          if (prev >= 0 && curr < 0) return j;
         }
-        if (ok) addSig(i, "B");
       }
+      return -1;
+    }
 
-      // candidate cross down: above -> below
-      if (wasAbove && nowBelow) {
-        let ok = false;
-        for (let j = i; j <= Math.min(n - 1, i + cw); j++) {
-          const ePrev = emaV[j - 1], eCur = emaV[j];
-          if (Number.isFinite(ePrev) && Number.isFinite(eCur) && eCur < ePrev) { ok = true; break; }
-          if (bars[j].close < bars[i].close) { ok = true; break; }
-        }
-        if (ok) addSig(i, "S");
+    for (let i = 1; i < n; i++) {
+      const e0 = emaV[i - 1],
+        e1 = emaV[i];
+      const a0 = auxV[i - 1],
+        a1 = auxV[i];
+      if (![e0, e1, a0, a1].every(Number.isFinite)) continue;
+
+      const crossUp = e0 <= a0 && e1 > a1;
+      const crossDn = e0 >= a0 && e1 < a1;
+
+      if (crossUp) {
+        const k = findConfirmIndex(i, +1);
+        if (k >= 0) addSig(k, "B");
+      } else if (crossDn) {
+        const k = findConfirmIndex(i, -1);
+        if (k >= 0) addSig(k, "S");
       }
     }
 
-    sigs.sort((a, b) => a.time - b.time);
+    sigs.sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
     return sigs;
   }
 
-  // -----------------------------
-  // Markers
-  // -----------------------------
   function applyMarkers(sigs) {
     safeRun("applyMarkers", () => {
       if (!candleSeries) return;
 
-      // If overlay is enabled, keep series markers empty.
+      // If overlay is enabled, we keep series markers empty.
       if (window.__OVERLAY_BIG_SIGS__ === true) {
         candleSeries.setMarkers([]);
         return;
@@ -538,26 +581,289 @@
 
       const arr = Array.isArray(sigs) ? sigs : [];
       candleSeries.setMarkers(
-        arr.map(s => ({
+        arr.map((s) => ({
           time: s.time,
           position: s.side === "B" ? "belowBar" : "aboveBar",
-          color: s.side === "B" ? "#2BE2A6" : "#FF5A5A",
+          color: s.side === "B" ? "#FFD400" : "#FF5A5A",
           shape: s.side === "B" ? "arrowUp" : "arrowDown",
-          text: s.side
+          text: s.side,
         }))
       );
     });
   }
 
+  function colorCandlesByEMATrend(bars, emaVals) {
+    const out = new Array(bars.length);
+    let lastSlope = 0;
+
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i];
+      const e0 = emaVals[i - 1];
+      const e1 = emaVals[i];
+      let slope = 0;
+
+      if (i >= 1 && Number.isFinite(e0) && Number.isFinite(e1)) {
+        slope = e1 - e0;
+        if (slope !== 0) lastSlope = slope;
+        else slope = lastSlope;
+      }
+
+      const isUp = slope > 0;
+      const isDn = slope < 0;
+      const fallbackUp = b.close >= b.open;
+      const useUp = isUp ? true : isDn ? false : fallbackUp;
+
+      out[i] = {
+        ...b,
+        color: useUp ? COLOR_UP : COLOR_DN,
+        wickColor: useUp ? COLOR_UP_WICK : COLOR_DN_WICK,
+        borderColor: useUp ? COLOR_UP : COLOR_DN,
+      };
+    }
+    return out;
+  }
+
   // -----------------------------
-  // Chart init
+  // Snapshot output (read-only)
+  // -----------------------------
+  function publishSnapshot(snapshot) {
+    safeRun("publishSnapshot", () => {
+      const s = Object.freeze(snapshot);
+      window.__DARRIUS_CHART_STATE__ = s;
+      try {
+        window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: s }));
+      } catch (_) {}
+    });
+  }
+
+  // -----------------------------
+  // Toggles
+  // -----------------------------
+  function applyToggles() {
+    safeRun("applyToggles", () => {
+      const emaChecked =
+        $("toggleEMA")?.checked ??
+        $("emaToggle")?.checked ??
+        $("tgEMA")?.checked ??
+        $("emaCheck")?.checked;
+
+      const auxChecked =
+        $("toggleAUX")?.checked ??
+        $("auxToggle")?.checked ??
+        $("tgAux")?.checked ??
+        $("auxCheck")?.checked;
+
+      if (typeof emaChecked === "boolean") showEMA = emaChecked;
+      if (typeof auxChecked === "boolean") showAUX = auxChecked;
+
+      if (emaSeries) emaSeries.applyOptions({ visible: !!showEMA });
+      if (auxSeries) auxSeries.applyOptions({ visible: !!showAUX });
+    });
+  }
+
+  // -----------------------------
+  // Core load (MAIN FIRST)
+  // -----------------------------
+  async function load() {
+    if (!chart || !candleSeries) return;
+
+    const sym = getUiSymbol();
+    const tf = getUiTf();
+
+    safeRun("hintLoading", () => {
+      if ($("hintText")) $("hintText").textContent = "Loading...";
+    });
+
+    let pack;
+    try {
+      pack = await fetchBarsPack(sym, tf);
+      DIAG.lastPack = pack;
+    } catch (e) {
+      safeRun("hintFail", () => {
+        if ($("hintText")) $("hintText").textContent = `加载失败：${e.message || e}`;
+      });
+      throw e;
+    }
+
+    const { payload, bars, urlUsed, dataMode, dataSource, delayedMinutes } = pack;
+    if (!bars.length) throw new Error("bars empty after normalization");
+
+    // -------- MAIN CHART: never let UI break this --------
+    const closes = bars.map((b) => b.close);
+    const emaVals = ema(closes, EMA_PERIOD);
+    const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
+
+    const coloredBars = colorCandlesByEMATrend(bars, emaVals);
+    candleSeries.setData(coloredBars);
+
+    const emaPts = buildLinePoints(bars, emaVals);
+    const auxPts = buildLinePoints(bars, auxVals);
+    if (emaSeries) emaSeries.setData(emaPts);
+    if (auxSeries) auxSeries.setData(auxPts);
+
+    // signals: try payload then optional endpoints then compute fallback
+    let sigs = normalizeSignals(payload);
+    if (!sigs.length) sigs = await fetchOptionalSignals(sym, tf);
+    if (!sigs.length) sigs = computeSignalsCrossPlusInflection(bars, emaPts, auxPts, CONFIRM_WINDOW);
+
+    applyMarkers(sigs);
+
+    safeRun("fitContent", () => chart.timeScale().fitContent());
+
+    safeRun("topText", () => {
+      const last = bars[bars.length - 1];
+      if ($("symText")) $("symText").textContent = sym;
+      if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
+
+      // Strong hint line
+      const modeLabel =
+        dataMode === "demo"
+          ? "Demo"
+          : dataMode === "delayed"
+          ? `Delayed (${delayedMinutes}m)`
+          : "Live";
+
+      if ($("hintText"))
+        $("hintText").textContent =
+          `Loaded · ${modeLabel} · TF=${tf} · bars=${bars.length} · sigs=${sigs.length}`;
+    });
+
+    // ===== Snapshot: export for market.pulse.js (READ-ONLY) =====
+    safeRun("setSnapshotForUI", () => {
+      try {
+        const snapMeta = {
+          symbol: sym || null,
+          timeframe: tf || null,
+          bars: Array.isArray(bars) ? bars.length : 0,
+
+          // new: explicit mode fields (for UI strong提示)
+          dataSource: dataSource || "massive",
+          dataMode: dataMode || "delayed",
+          delayedMinutes: delayedMinutes || 0,
+
+          emaPeriod: EMA_PERIOD || 14,
+          auxPeriod: AUX_PERIOD || 40,
+          confirmWindow: CONFIRM_WINDOW || 3,
+        };
+
+        // closeByTime for signal price fill
+        const closeByTime = new Map();
+        for (const b of bars) closeByTime.set(b.time, b.close);
+
+        const snapSignals = (Array.isArray(sigs) ? sigs : [])
+          .map((s, idx) => {
+            const t = s.time ?? s.t ?? null;
+            const sideRaw = (s.side || s.type || s.signal || "").toString().toUpperCase();
+            const side = sideRaw === "S" ? "S" : "B";
+            const price = Number.isFinite(s.price) ? s.price : closeByTime.get(t);
+            return {
+              time: t,
+              price: Number.isFinite(price) ? price : null,
+              side,
+              i: typeof s.i === "number" ? s.i : typeof s.index === "number" ? s.index : idx,
+              reason: s.reason || s.note || null,
+              strength: typeof s.strength === "number" ? s.strength : null,
+            };
+          })
+          .filter((x) => x.time != null && x.price != null);
+
+        // trend summary (EMA slope)
+        const n = Math.min(10, emaVals.length - 1);
+        let emaSlope = null;
+        let emaRegime = null;
+        let emaColor = null;
+
+        if (n >= 2) {
+          const eNow = emaVals[emaVals.length - 1];
+          const ePrev = emaVals[emaVals.length - 1 - n];
+          if (Number.isFinite(eNow) && Number.isFinite(ePrev)) {
+            emaSlope = (eNow - ePrev) / n;
+            if (emaSlope > 0) emaRegime = "UP";
+            else if (emaSlope < 0) emaRegime = "DOWN";
+            else emaRegime = "FLAT";
+          }
+        }
+        if (emaRegime === "UP") emaColor = "GREEN";
+        else if (emaRegime === "DOWN") emaColor = "RED";
+        else emaColor = "NEUTRAL";
+
+        const snapTrend = {
+          emaSlope,
+          emaRegime,
+          emaColor,
+          flipCount: null,
+        };
+
+        const snapRisk = {
+          entry: null,
+          stop: null,
+          targets: null,
+          confidence: null,
+          winrate: null,
+        };
+
+        if (window.DarriusChart && typeof window.DarriusChart.__setSnapshot === "function") {
+          window.DarriusChart.__setSnapshot({
+            meta: snapMeta,
+            candles: Array.isArray(bars) ? bars : [],
+            ema: Array.isArray(emaPts) ? emaPts : [],
+            aux: Array.isArray(auxPts) ? auxPts : [],
+            signals: snapSignals,
+            trend: snapTrend,
+            risk: snapRisk,
+          });
+        }
+      } catch (e) {
+        // swallow
+      }
+    });
+
+    // -------- SNAPSHOT OUTPUT (consumer only) --------
+    const N = Math.min(200, bars.length);
+    const start = bars.length - N;
+
+    const snapshot = {
+      version: "2026.01.22-DATAMODE",
+      ts: Date.now(),
+
+      apiBase: DEFAULT_API_BASE,
+      urlUsed,
+
+      symbol: sym,
+      tf,
+
+      // new mode fields (for UI strong提示)
+      dataSource: dataSource || "massive",
+      dataMode: dataMode || "delayed",
+      delayedMinutes: delayedMinutes || 0,
+
+      params: { EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW },
+
+      barsCount: bars.length,
+      bars: bars.slice(start),
+      ema: emaVals.slice(start),
+      aux: auxVals.slice(start),
+      sigs: sigs.slice(Math.max(0, sigs.length - 200)),
+      lastClose: bars[bars.length - 1].close,
+    };
+
+    publishSnapshot(snapshot);
+
+    applyToggles();
+    return { urlUsed, bars: bars.length, sigs: sigs.length, dataMode, dataSource, delayedMinutes };
+  }
+
+  // -----------------------------
+  // Init
   // -----------------------------
   function init(opts) {
     opts = opts || {};
     const containerId = opts.containerId || "chart";
+
     containerEl = $(containerId);
     if (!containerEl) throw new Error("Chart container missing: #" + containerId);
     if (!window.LightweightCharts) throw new Error("LightweightCharts missing");
+    if (chart) return;
 
     chart = window.LightweightCharts.createChart(containerEl, {
       layout: { background: { color: "transparent" }, textColor: "#EAF0F7" },
@@ -578,182 +884,187 @@
       borderVisible: false,
     });
 
-    emaSeries = chart.addLineSeries({ color: COLOR_EMA, lineWidth: 2, visible: true });
-    auxSeries = chart.addLineSeries({ color: COLOR_AUX, lineWidth: 2, visible: true });
-
-    hookDataSourceSelect();
-    hookToggles();
-  }
-
-  function hookToggles() {
-    const emaCb = $("toggleEMA");
-    const auxCb = $("toggleAUX");
-    if (emaCb) emaCb.addEventListener("change", () => { showEMA = !!emaCb.checked; if (emaSeries) emaSeries.applyOptions({ visible: showEMA }); });
-    if (auxCb) auxCb.addEventListener("change", () => { showAUX = !!auxCb.checked; if (auxSeries) auxSeries.applyOptions({ visible: showAUX }); });
-  }
-
-  function hookDataSourceSelect() {
-    const sel = $("dataSourceSelect");
-    if (!sel) return;
-
-    // normalize options
-    const want = ["demo", "market"];
-    safeRun("normalizeSelect", () => {
-      const exist = Array.from(sel.options || []).map(o => String(o.value || "").toLowerCase());
-      // if select is old (Demo(Local)/Reserved), just map by value text
-      for (const opt of Array.from(sel.options || [])) {
-        const t = String(opt.textContent || "").toLowerCase();
-        const v = String(opt.value || "").toLowerCase();
-        if (t.includes("demo")) opt.value = "demo";
-        if (t.includes("market") || t.includes("3rd") || t.includes("provider")) opt.value = "market";
-        if (v === "") opt.value = (t.includes("demo")) ? "demo" : opt.value;
-      }
+    emaSeries = chart.addLineSeries({
+      color: COLOR_EMA,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
 
-    // apply saved selection
-    setSelectedDataSource(getSelectedDataSource());
-
-    sel.addEventListener("change", () => {
-      const v = getSelectedDataSource();
-      setSelectedDataSource(v);
-      // refresh chart
-      load().catch(() => {});
-    });
-  }
-
-  // -----------------------------
-  // Load
-  // -----------------------------
-  async function load() {
-    if (!chart || !candleSeries) return;
-
-    const sym = getUiSymbol();
-    const tf = getUiTf();
-
-    safeRun("hintLoading", () => {
-      if ($("hintText")) $("hintText").textContent = "Loading...";
+    auxSeries = chart.addLineSeries({
+      color: COLOR_AUX,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
 
-    let pack;
-    try {
-      pack = await fetchBarsPack(sym, tf);
-    } catch (e) {
-      safeRun("hintFail", () => {
-        if ($("hintText")) $("hintText").textContent = "加载失败: " + (e && e.message ? e.message : String(e));
+    // -----------------------------
+    // Read-only coordinate bridge (for market.pulse.js overlay)
+    // -----------------------------
+    safeRun("bridgeExpose", () => {
+      window.DarriusChart = window.DarriusChart || {};
+
+      window.DarriusChart.timeToX = (t) =>
+        safeRun("timeToX", () => {
+          if (!chart || !chart.timeScale) return null;
+          return chart.timeScale().timeToCoordinate(t);
+        });
+
+      window.DarriusChart.priceToY = (p) =>
+        safeRun("priceToY", () => {
+          if (!candleSeries || !candleSeries.priceToCoordinate) return null;
+          return candleSeries.priceToCoordinate(p);
+        });
+
+      window.DarriusChart.__hostId = containerId || "chart";
+    });
+
+    const resize = () =>
+      safeRun("resize", () => {
+        const r = containerEl.getBoundingClientRect();
+        chart.applyOptions({
+          width: Math.max(1, Math.floor(r.width)),
+          height: Math.max(1, Math.floor(r.height)),
+        });
       });
-      throw e;
-    }
 
-    const { payload, bars, urlUsed, meta } = pack;
-    if (!bars.length) throw new Error("bars empty after normalization");
-
-    // main series
-    const closes = bars.map(b => b.close);
-    const emaVals = ema(closes, EMA_PERIOD);
-    const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
-
-    const coloredBars = colorCandlesByEmaTrend(bars, emaVals);
-    candleSeries.setData(coloredBars);
-
-    const emaPts = buildLinePoints(bars, emaVals);
-    const auxPts = buildLinePoints(bars, auxVals);
-    emaSeries.setData(emaPts);
-    auxSeries.setData(auxPts);
-    emaSeries.applyOptions({ visible: !!showEMA });
-    auxSeries.applyOptions({ visible: !!showAUX });
-
-    // signals: prefer payload, then optional endpoint, then fallback compute
-    let sigs = normalizeSignals(payload);
-    if (!sigs.length) sigs = await fetchOptionalSignals(sym, tf);
-    if (!sigs.length) sigs = computeSignalsCrossStable(bars, emaPts, auxPts, CONFIRM_WINDOW);
-
-    applyMarkers(sigs);
-
-    safeRun("fitContent", () => chart.timeScale().fitContent());
-
-    // top text
-    safeRun("topText", () => {
-      const last = bars[bars.length - 1];
-      if ($("symText")) $("symText").textContent = sym;
-      if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
-      if ($("hintText")) $("hintText").textContent = `Loaded TF=${tf} bars=${bars.length} sigs=${sigs.length}`;
-    });
-
-    // snapshot output (consumer only)
-    const N = Math.min(200, bars.length);
-    const start = bars.length - N;
-    const modeLabel = getDataModeLabel(meta);
-
-    const snapshot = {
-      version: "2026.01.22-FIX-DATASOURCE-SIGNALS",
-      ts: Date.now(),
-      apiBase: DEFAULT_API_BASE,
-      urlUsed,
-      symbol: sym,
-      tf,
-      dataSource: getEffectiveDataSource().source,
-      dataSourceReason: getEffectiveDataSource().reason,
-      dataMode: modeLabel, // {en, cn}
-      delayedMinutes: meta && meta.delayedMinutes != null ? meta.delayedMinutes : null,
-      params: { EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW },
-      barsCount: bars.length,
-      bars: bars.slice(start),
-      ema: emaVals.slice(start),
-      aux: auxVals.slice(start),
-      sigs: sigs.slice(Math.max(0, sigs.length - 200)),
-      lastClose: bars[bars.length - 1].close,
-    };
-
-    window.__DARRIUS_CHART_STATE__ = snapshot;
-    safeRun("emit", () => {
-      window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: snapshot }));
-    });
-
-    // Optional: update any badge element if present
-    safeRun("badge", () => {
-      const el = $("dataModeBadge");
-      if (!el) return;
-      // show bilingual
-      el.textContent = `${modeLabel.en} / ${modeLabel.cn}`;
-      // dim when forced demo
-      el.style.opacity = (snapshot.dataSource === "demo" && snapshot.dataSourceReason === "no-subscription") ? "0.8" : "1";
-    });
-
-    // Optional: enforce UI disable market when no subscription (UX only)
-    safeRun("lockMarket", () => {
-      const sel = $("dataSourceSelect");
-      if (!sel) return;
-      const active = isSubscriptionActive();
-      // If not active and user chose market, we keep selection visible but effective will be demo.
-      // You may also disable the market option to reduce confusion.
-      for (const opt of Array.from(sel.options || [])) {
-        if (String(opt.value).toLowerCase() === "market") {
-          opt.disabled = !active;
-        }
+    safeRun("observeResize", () => {
+      try {
+        new ResizeObserver(resize).observe(containerEl);
+      } catch (_) {
+        window.addEventListener("resize", resize);
       }
     });
+    resize();
+
+    // Accept various checkbox ids
+    $("toggleEMA")?.addEventListener("change", applyToggles);
+    $("emaToggle")?.addEventListener("change", applyToggles);
+    $("tgEMA")?.addEventListener("change", applyToggles);
+    $("emaCheck")?.addEventListener("change", applyToggles);
+
+    $("toggleAUX")?.addEventListener("change", applyToggles);
+    $("auxToggle")?.addEventListener("change", applyToggles);
+    $("tgAux")?.addEventListener("change", applyToggles);
+    $("auxCheck")?.addEventListener("change", applyToggles);
+
+    // Data mode selector -> reload
+    const modeEl =
+      $("dataMode") ||
+      $("dataSourceMode") ||
+      $("sourceMode") ||
+      qs('select[name="dataMode"]') ||
+      qs('select[name="sourceMode"]');
+
+    modeEl?.addEventListener("change", () => {
+      // Just reload chart data; does not touch billing
+      load().catch((e) => {
+        DIAG.chartError = { message: String(e?.message || e), stack: String(e?.stack || "") };
+      });
+    });
+
+    if (opts.autoLoad !== false)
+      load().catch((e) => {
+        DIAG.chartError = { message: String(e?.message || e), stack: String(e?.stack || "") };
+      });
   }
 
-  // -----------------------------
-  // Public entry
-  // -----------------------------
-  function boot() {
-    safeRun("init", () => init({ containerId: "chart" }));
-    // initial load
-    load().catch(() => {});
-  }
+  window.ChartCore = { init, load, applyToggles };
+})();
 
-  // Auto boot
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot);
-  } else {
-    boot();
-  }
+/* =========================
+ * Snapshot Export (READ-ONLY)
+ * - UI层（market.pulse.js）只读这里
+ * - 不允许 UI 层反向修改主图内部
+ * ========================= */
 
-  // expose minimal controls
-  window.DarriusChart = {
-    reload: () => load(),
-    setDataSource: (v) => { setSelectedDataSource(v); load().catch(() => {}); },
-    getDataSource: () => getEffectiveDataSource(),
+(function () {
+  "use strict";
+
+  const __SNAPSHOT = {
+    version: "snapshot_v1",
+    ts: 0,
+
+    meta: {
+      symbol: null,
+      timeframe: null,
+      bars: 0,
+
+      // new: data mode fields
+      dataSource: "massive",
+      dataMode: "delayed",
+      delayedMinutes: 15,
+
+      emaPeriod: null,
+      auxPeriod: null,
+      confirmWindow: null,
+    },
+
+    candles: [], // [{time, open, high, low, close}]
+    ema: [], // [{time, value}]
+    aux: [], // [{time, value}]
+
+    signals: [], // [{time, price, side:'B'|'S', i, reason?, strength?}]
+
+    trend: {
+      emaSlope: null,
+      emaRegime: null,
+      emaColor: null,
+      flipCount: null,
+    },
+
+    risk: {
+      entry: null,
+      stop: null,
+      targets: null,
+      confidence: null,
+      winrate: null,
+    },
   };
+
+  function __setSnapshot(patch) {
+    try {
+      if (!patch || typeof patch !== "object") return;
+
+      __SNAPSHOT.ts = Date.now();
+
+      if (patch.meta) __SNAPSHOT.meta = Object.assign({}, __SNAPSHOT.meta, patch.meta);
+      if (Array.isArray(patch.candles)) __SNAPSHOT.candles = patch.candles.slice();
+      if (Array.isArray(patch.ema)) __SNAPSHOT.ema = patch.ema.slice();
+      if (Array.isArray(patch.aux)) __SNAPSHOT.aux = patch.aux.slice();
+      if (Array.isArray(patch.signals)) __SNAPSHOT.signals = patch.signals.slice();
+
+      if (patch.trend) __SNAPSHOT.trend = Object.assign({}, __SNAPSHOT.trend, patch.trend);
+      if (patch.risk) __SNAPSHOT.risk = Object.assign({}, __SNAPSHOT.risk, patch.risk);
+    } catch (e) {
+      // never throw
+    }
+  }
+
+  function __getSnapshot() {
+    try {
+      return {
+        version: __SNAPSHOT.version,
+        ts: __SNAPSHOT.ts,
+        meta: Object.assign({}, __SNAPSHOT.meta),
+        candles: (__SNAPSHOT.candles || []).slice(),
+        ema: (__SNAPSHOT.ema || []).slice(),
+        aux: (__SNAPSHOT.aux || []).slice(),
+        signals: (__SNAPSHOT.signals || []).slice(),
+        trend: Object.assign({}, __SNAPSHOT.trend),
+        risk: Object.assign({}, __SNAPSHOT.risk),
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  window.DarriusChart = window.DarriusChart || {};
+  window.DarriusChart.getSnapshot = __getSnapshot;
+
+  if (typeof window.getChartSnapshot !== "function") {
+    window.getChartSnapshot = __getSnapshot;
+  }
+
+  window.DarriusChart.__setSnapshot = __setSnapshot;
 })();
