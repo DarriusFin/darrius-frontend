@@ -7,9 +7,12 @@
 
   <!-- Lightweight Charts (required by chart.core.js) -->
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
- <script>
+
+  <script>
+    // IMPORTANT: tell chart.core.js to NOT draw small markers; market.pulse.js will draw BIG overlay instead
     window.__OVERLAY_BIG_SIGS__ = true;
   </script>
+
   <style>
     :root{
       --bg:#0B0F17;
@@ -24,8 +27,8 @@
       --text:#EAF0F7;
       --muted:#A2B0C2;
 
-      --brand1:#2BE2A6; /* green/teal */
-      --brand2:#4CC2FF; /* blue */
+      --brand1:#2BE2A6;
+      --brand2:#4CC2FF;
       --warn:#FFB86C;
       --danger:#FF5A5A;
 
@@ -442,36 +445,11 @@
       height:100%;
     }
 
-    /* Overlay for BIG glowing B/S */
+    /* NOTE: #sigOverlay is kept for compatibility; STABLE COMPAT uses its own #bsOverlayLayer inside #chart */
     #sigOverlay{
       position:absolute; inset:0;
       pointer-events:none;
       z-index:20;
-    }
-    .sigMark{
-      position:absolute;
-      transform: translate(-50%, -50%);
-      font-weight:950;
-      letter-spacing:.5px;
-      font-size:22px;
-      padding:2px 8px;
-      border-radius:12px;
-      border:1px solid rgba(255,255,255,.18);
-      background: rgba(0,0,0,.22);
-      backdrop-filter: blur(2px);
-      box-shadow: 0 10px 24px rgba(0,0,0,.28);
-      white-space:nowrap;
-      opacity: 0.98;
-    }
-    .sigMark.buy{
-      color: rgba(43,226,166,1);
-      text-shadow: 0 0 10px rgba(43,226,166,.45), 0 0 18px rgba(43,226,166,.25);
-      border-color: rgba(43,226,166,.35);
-    }
-    .sigMark.sell{
-      color: rgba(255,90,90,1);
-      text-shadow: 0 0 10px rgba(255,90,90,.45), 0 0 18px rgba(255,90,90,.25);
-      border-color: rgba(255,90,90,.35);
     }
 
     /* ===== Right Controls ===== */
@@ -570,19 +548,6 @@
     .note b{ color: var(--text); }
 
     .hidden{ display:none !important; }
-
-    #logBox{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size:11px;
-      background: rgba(0,0,0,.20);
-      border:1px solid rgba(255,255,255,.08);
-      border-radius: var(--r12);
-      padding:10px;
-      color: rgba(234,240,247,.86);
-      height:120px;
-      overflow:auto;
-      white-space:pre-wrap;
-    }
 
     @media (max-width: 1180px){
       body{ overflow:auto; }
@@ -800,7 +765,7 @@
           </div>
         </div>
 
-        <!-- Subscription -->
+        <!-- Subscription (DO NOT TOUCH) -->
         <div class="card">
           <div class="cardTitle">
             <b>Subscription · 订阅开通</b>
@@ -861,86 +826,18 @@
     window.API_BASE = "https://darrius-api.onrender.com";
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
   </script>
-  
+
   <!-- 1) 主图系统（冻结） -->
   <script src="js/chart.core.js?v=20260119"></script>
 
   <!-- 2) Market Pulse UI（只读快照） -->
-  <script src="js/market.pulse.js?v=20260119"></script>
+  <script src="js/market.pulse.js?v=20260122"></script>
 
-  <!-- 3) 订阅系统（保持原） -->
+  <!-- 3) 订阅系统（保持原，不碰） -->
   <script src="js/subscription.js?v=20260119"></script>
 
-  <!-- 4) 启动/绑定按钮（保持原） -->
+  <!-- 4) 启动/绑定按钮（保持原，不碰） -->
   <script src="js/boot.js?v=20260119"></script>
-
-  <!-- =========================
-       SAFETY BRIDGE (绝不抛错，不影响主图)
-       - 目的：让 market.pulse.js / overlay 在拿到主图快照时自动刷新
-       - 即使拿不到，也绝不报错
-       ========================= -->
-  <script>
-    (function(){
-      function safe(fn){
-        try { fn && fn(); } catch(e){ /* swallow */ }
-      }
-
-      function tryRefresh(){
-        // 1) overlay（如果你已有 renderOverlaySignals）
-        safe(function(){
-          if (typeof window.renderOverlaySignals === "function") window.renderOverlaySignals();
-        });
-
-        // 2) Market Pulse（兼容不同导出名）
-        safe(function(){
-          // 如果 market.pulse.js 暴露了 window.updateMarketPulseUI()
-          if (typeof window.updateMarketPulseUI === "function") {
-            window.updateMarketPulseUI();
-            return;
-          }
-          // 如果 market.pulse.js 暴露了 window.DarriusMarketPulse.updateFromSnapshot()
-          if (window.DarriusMarketPulse && typeof window.DarriusMarketPulse.updateFromSnapshot === "function") {
-            var snap = window.__DARRIUS_CHART_STATE__ || null;
-            window.DarriusMarketPulse.updateFromSnapshot(snap);
-          }
-        });
-      }
-
-      // 监听主图更新事件（如果 chart.core.js 有派发）
-      window.addEventListener("darrius:chartUpdated", function(){ tryRefresh(); });
-
-      // 定时兜底：就算事件没派发，也不会空着
-      setInterval(function(){ tryRefresh(); }, 1200);
-    })();
-  </script>
-  <script>
-(function () {
-  function findButtonByText(txt) {
-    const buttons = Array.from(document.querySelectorAll("button"));
-    return buttons.find(b => (b.textContent || "").trim().includes(txt));
-  }
-
-  const startBtn  = findButtonByText("Start")  || findButtonByText("开通");
-  const manageBtn = findButtonByText("Manage") || findButtonByText("管理");
-
-  if (!startBtn) console.error("[SUB] Start button not found");
-  if (!manageBtn) console.warn("[SUB] Manage button not found");
-
-  if (startBtn) {
-    startBtn.addEventListener("click", () => {
-      console.log("[SUB] Start clicked");
-      // TODO: 这里后面再接你的 checkout 请求
-    }, { capture: true });
-  }
-
-  if (manageBtn) {
-    manageBtn.addEventListener("click", () => {
-      console.log("[SUB] Manage clicked");
-      // TODO: 这里后面再接你的 portal 请求
-    }, { capture: true });
-  }
-})();
-</script>
 
 </body>
 </html>
