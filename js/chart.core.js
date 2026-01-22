@@ -1,18 +1,18 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.01.22-DATAMODE
+ * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.01.22-DATAMODE-SAFE
  *
  * Role:
  *  - Render main chart (candles + EMA + AUX + signals)
- *  - Fetch OHLCV via backend proxy (Massive/Polygon aggregates)
- *  - Support Data Mode: Demo / Delayed (and future Live) without touching billing
- *  - Output a read-only snapshot to window.__DARRIUS_CHART_STATE__
+ *  - Fetch OHLCV via backend proxy (Massive/Polygon aggregates preferred)
+ *  - Output snapshot to:
+ *      1) window.__DARRIUS_CHART_STATE__
+ *      2) window.DarriusChart.__setSnapshot (for UI overlay / market.pulse.js)
  *  - Emit event "darrius:chartUpdated" with snapshot detail
  *
- * Preset 2:
- *  - EMA 14
- *  - AUX 40 (HMA-like)
- *  - confirm window 3
- *  - Candles colored by EMA trend (EMA slope)
+ * Safety changes:
+ *  - Never let B/S disappear: keep series markers by default even when overlay enabled
+ *    (unless window.__OVERLAY_BIG_SIGS_STRICT__ === true)
+ *  - Anti-whipsaw: reduce repeated EMA/AUX cross inside trend using AUX trend lock + min gap
  *
  * Guarantees:
  *  1) Main chart render is highest priority and will not be broken by UI
@@ -29,18 +29,14 @@
   const DIAG = (window.__DARRIUS_DIAG__ = window.__DARRIUS_DIAG__ || {
     lastError: null,
     chartError: null,
-    lastPack: null,
+    lastBarsUrl: null,
+    lastMode: null,
   });
 
   function safeRun(tag, fn) {
-    try {
-      return fn();
-    } catch (e) {
-      DIAG.lastError = {
-        tag,
-        message: String(e?.message || e),
-        stack: String(e?.stack || ""),
-      };
+    try { return fn(); }
+    catch (e) {
+      DIAG.lastError = { tag, message: String(e?.message || e), stack: String(e?.stack || "") };
       return undefined;
     }
   }
@@ -60,11 +56,9 @@
     (window.API_BASE && String(window.API_BASE)) ||
     "https://darrius-api.onrender.com";
 
-  // Massive aggregates endpoint (preferred)
-  // /api/data/stocks/aggregates?ticker=...&multiplier=...&timespan=...&from=...&to=...
   const MASSIVE_AGGS_PATH = "/api/data/stocks/aggregates";
 
-  // Optional legacy candidates (back-compat)
+  // fallback candidates (legacy)
   const BARS_PATH_CANDIDATES = [
     "/api/market/bars",
     "/api/bars",
@@ -96,6 +90,10 @@
   const AUX_METHOD = "SMA";
   const CONFIRM_WINDOW = 3;
 
+  // Anti-whipsaw controls
+  const MIN_SIG_GAP_BARS = 6;        // min bars between any two signals
+  const TREND_LOCK_BARS = 10;        // after a signal, require AUX trend flip and hold before opposite
+
   // -----------------------------
   // Colors
   // -----------------------------
@@ -103,6 +101,7 @@
   const COLOR_DN = "#FF5A5A";
   const COLOR_UP_WICK = "#2BE2A6";
   const COLOR_DN_WICK = "#FF5A5A";
+
   const COLOR_EMA = "#FFD400";
   const COLOR_AUX = "#FFFFFF";
 
@@ -117,50 +116,6 @@
 
   let showEMA = true;
   let showAUX = true;
-
-  // -----------------------------
-  // Data Mode (Demo / Delayed / Live-ready)
-  // -----------------------------
-  function getUiDataMode() {
-    // Priority: explicit global override
-    const g =
-      window.__DATA_MODE__ ||
-      window.__DATA_SOURCE_MODE__ ||
-      window.__DATA_SOURCE__ ||
-      window.DARRIUS_DATA_MODE;
-
-    if (typeof g === "string" && g.trim()) return g.trim().toLowerCase();
-
-    // Then: UI select/inputs if present
-    const el =
-      $("dataMode") ||
-      $("dataSourceMode") ||
-      $("sourceMode") ||
-      qs('select[name="dataMode"]') ||
-      qs('select[name="sourceMode"]');
-
-    const v = el && (el.value || el.textContent);
-    return (v || "delayed").toString().trim().toLowerCase();
-  }
-
-  function normalizeMode(m) {
-    const x = String(m || "").toLowerCase();
-    if (x.includes("demo")) return "demo";
-    if (x.includes("delay")) return "delayed";
-    if (x.includes("live") || x.includes("real")) return "live";
-    return "delayed";
-  }
-
-  function getDelayedMinutes() {
-    // configurable; default 15 for Massive Starter-style delayed feeds
-    const g = window.__DELAYED_MINUTES__ ?? window.DARRIUS_DELAYED_MINUTES;
-    const ui =
-      $("delayedMinutes") ||
-      qs('input[name="delayedMinutes"]') ||
-      qs("#delayedMinutes");
-    const v = ui ? Number(ui.value) : Number(g);
-    return Number.isFinite(v) && v >= 0 ? v : 15;
-  }
 
   // -----------------------------
   // UI readers
@@ -203,18 +158,18 @@
     return r.json();
   }
 
-  // tf -> multiplier/timespan + a reasonable history window
+  // tf -> multiplier/timespan + history window
   function tfToAggParams(tf) {
     const m = String(tf || "1d").trim();
     const map = {
-      "5m": { multiplier: 5, timespan: "minute", daysBack: 20 },
-      "15m": { multiplier: 15, timespan: "minute", daysBack: 35 },
-      "30m": { multiplier: 30, timespan: "minute", daysBack: 60 },
-      "1h": { multiplier: 60, timespan: "minute", daysBack: 90 },
-      "4h": { multiplier: 240, timespan: "minute", daysBack: 180 },
-      "1d": { multiplier: 1, timespan: "day", daysBack: 700 },
-      "1w": { multiplier: 1, timespan: "week", daysBack: 1800 },
-      "1M": { multiplier: 1, timespan: "month", daysBack: 3600 },
+      "5m":  { multiplier: 5,   timespan: "minute", daysBack: 20 },
+      "15m": { multiplier: 15,  timespan: "minute", daysBack: 35 },
+      "30m": { multiplier: 30,  timespan: "minute", daysBack: 60 },
+      "1h":  { multiplier: 60,  timespan: "minute", daysBack: 90 },
+      "4h":  { multiplier: 240, timespan: "minute", daysBack: 180 },
+      "1d":  { multiplier: 1,   timespan: "day",    daysBack: 700 },
+      "1w":  { multiplier: 1,   timespan: "week",   daysBack: 1800 },
+      "1M":  { multiplier: 1,   timespan: "month",  daysBack: 3600 },
     };
     return map[m] || map["1d"];
   }
@@ -228,15 +183,14 @@
 
   function rangeByDaysBack(daysBack) {
     const to = new Date();
-    const from = new Date(Date.now() - daysBack * 24 * 3600 * 1000);
+    const from = new Date(Date.now() - (daysBack * 24 * 3600 * 1000));
     return { from: toYMD(from), to: toYMD(to) };
   }
 
   function toUnixTime(t) {
     if (t == null) return null;
     if (typeof t === "number") {
-      // ms -> s
-      if (t > 2e10) return Math.floor(t / 1000);
+      if (t > 2e10) return Math.floor(t / 1000); // ms -> s
       return t;
     }
     if (typeof t === "string") {
@@ -249,25 +203,21 @@
   }
 
   function normalizeBars(payload) {
-    const raw = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.results)
-      ? payload.results // Polygon / Massive-style aggs
-      : Array.isArray(payload?.bars)
-      ? payload.bars
-      : Array.isArray(payload?.ohlcv)
-      ? payload.ohlcv
-      : Array.isArray(payload?.data)
-      ? payload.data
-      : [];
+    const raw =
+      Array.isArray(payload) ? payload :
+      Array.isArray(payload?.results) ? payload.results :      // Polygon aggregates
+      Array.isArray(payload?.bars) ? payload.bars :
+      Array.isArray(payload?.ohlcv) ? payload.ohlcv :
+      Array.isArray(payload?.data) ? payload.data :
+      [];
 
     const bars = (raw || [])
       .map((b) => {
         const time = toUnixTime(b.time ?? b.t ?? b.timestamp ?? b.ts ?? b.date);
         const open = Number(b.open ?? b.o ?? b.Open);
         const high = Number(b.high ?? b.h ?? b.High);
-        const low = Number(b.low ?? b.l ?? b.Low);
-        const close = Number(b.close ?? b.c ?? b.Close);
+        const low  = Number(b.low  ?? b.l ?? b.Low);
+        const close= Number(b.close?? b.c ?? b.Close);
         if (!time) return null;
         if (![open, high, low, close].every(Number.isFinite)) return null;
         return { time, open, high, low, close };
@@ -276,7 +226,7 @@
 
     bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
 
-    // de-dup by time
+    // dedupe time
     const out = [];
     let lastT = null;
     for (const b of bars) {
@@ -298,80 +248,55 @@
     return raw
       .map((s) => {
         const time = toUnixTime(s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date);
-        const side = String(s.side ?? s.type ?? s.action ?? "").toUpperCase();
-        if (!time || (side !== "B" && side !== "S")) return null;
-        return { time, side, price: Number.isFinite(Number(s.price)) ? Number(s.price) : null };
+        const side = String(s.side ?? s.type ?? s.action ?? s.text ?? "").toUpperCase();
+        const ss = (side.includes("BUY") ? "B" : side.includes("SELL") ? "S" : side);
+        if (!time || (ss !== "B" && ss !== "S")) return null;
+        return { time, side: ss, price: (Number.isFinite(Number(s.price)) ? Number(s.price) : null) };
       })
       .filter(Boolean)
       .sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
   }
 
-  function computeModeRangeAdjust(mode, fromYmd, toYmd, delayedMinutes) {
-    // For delayed mode, we can optionally "pretend now is earlier" to align expectations
-    // (not strictly required; but helps avoid “why last bar looks behind” confusion).
-    // We keep it minimal: if delayed, we shift the "to" date/time by -delay, but as YMD it rarely changes.
-    // So we keep dates unchanged to avoid edge-case bugs; backend can handle delay.
-    return { from: fromYmd, to: toYmd, delayedMinutes };
-  }
-
+  // Prefer Massive aggregates endpoint.
   async function fetchBarsPack(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
-    const mode = normalizeMode(getUiDataMode());
-    const delayedMinutes = getDelayedMinutes();
-
     const cfg = tfToAggParams(tf);
     const { from, to } = rangeByDaysBack(cfg.daysBack);
-    const adj = computeModeRangeAdjust(mode, from, to, delayedMinutes);
 
-    // preferred: Massive aggs
+    // build aggregates URL
     const url = new URL(apiBase + MASSIVE_AGGS_PATH);
     url.searchParams.set("ticker", String(sym || "AAPL").trim().toUpperCase());
     url.searchParams.set("multiplier", String(cfg.multiplier));
     url.searchParams.set("timespan", String(cfg.timespan));
-    url.searchParams.set("from", adj.from);
-    url.searchParams.set("to", adj.to);
+    url.searchParams.set("from", from);
+    url.searchParams.set("to", to);
 
-    // Pass mode hints (backend may ignore; safe to add)
-    url.searchParams.set("mode", mode); // demo / delayed / live
-    if (mode === "delayed") url.searchParams.set("delayedMinutes", String(delayedMinutes));
-
+    // try aggregates first
     const payload = await fetchJson(url.toString());
     const bars = normalizeBars(payload);
-
     if (bars.length) {
       return {
         payload,
         bars,
         urlUsed: url.toString(),
-        dataMode: mode,
-        dataSource: "massive",
-        delayedMinutes: mode === "delayed" ? delayedMinutes : 0,
+        mode: "MARKET_DELAYED",
+        delayedMinutes: (cfg.timespan === "minute" ? 15 : 0) || 15,
       };
     }
 
-    // fallback legacy candidates
+    // fallback legacy
     let lastErr = new Error(`Aggs empty. ticker=${sym} tf=${tf} from=${from} to=${to}`);
-    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}&mode=${encodeURIComponent(mode)}`;
-
+    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
     for (const p of BARS_PATH_CANDIDATES) {
       const u = `${apiBase}${p}?${q}`;
       try {
         const pl = await fetchJson(u);
         const bs = normalizeBars(pl);
         if (bs.length) {
-          return {
-            payload: pl,
-            bars: bs,
-            urlUsed: u,
-            dataMode: mode,
-            dataSource: "legacy",
-            delayedMinutes: mode === "delayed" ? delayedMinutes : 0,
-          };
+          return { payload: pl, bars: bs, urlUsed: u, mode: "DEMO_LOCAL", delayedMinutes: 0 };
         }
         lastErr = new Error(`bars empty from ${u}`);
-      } catch (e) {
-        lastErr = e;
-      }
+      } catch (e) { lastErr = e; }
     }
 
     throw new Error(`All bars endpoints failed. Last error: ${lastErr?.message || lastErr}`);
@@ -384,7 +309,8 @@
       const url = `${apiBase}${p}?${q}`;
       try {
         const payload = await fetchJson(url);
-        return normalizeSignals(payload);
+        const sigs = normalizeSignals(payload);
+        if (sigs.length) return sigs;
       } catch (_) {}
     }
     return [];
@@ -393,18 +319,13 @@
   // -----------------------------
   // Math
   // -----------------------------
-  const sgn = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
-
   function ema(values, period) {
     const k = 2 / (period + 1);
     let e = null;
     const out = new Array(values.length);
     for (let i = 0; i < values.length; i++) {
       const v = values[i];
-      if (!Number.isFinite(v)) {
-        out[i] = NaN;
-        continue;
-      }
+      if (!Number.isFinite(v)) { out[i] = NaN; continue; }
       e = e == null ? v : v * k + e * (1 - k);
       out[i] = e;
     }
@@ -426,8 +347,7 @@
   function wmaAt(values, endIdx, period) {
     const start = endIdx - period + 1;
     if (start < 0) return NaN;
-    let num = 0,
-      den = 0;
+    let num = 0, den = 0;
     for (let i = start; i <= endIdx; i++) {
       const v = values[i];
       if (!Number.isFinite(v)) return NaN;
@@ -435,7 +355,7 @@
       num += v * w;
       den += w;
     }
-    return den ? num / den : NaN;
+    return den ? (num / den) : NaN;
   }
 
   function maOnArray(values, period, method) {
@@ -452,10 +372,7 @@
       let e = null;
       for (let i = 0; i < values.length; i++) {
         const v = values[i];
-        if (!Number.isFinite(v)) {
-          out[i] = NaN;
-          continue;
-        }
+        if (!Number.isFinite(v)) { out[i] = NaN; continue; }
         e = e == null ? v : v * k + e * (1 - k);
         out[i] = e;
       }
@@ -481,6 +398,7 @@
     return pts;
   }
 
+  // AUX: HMA-like vector then MA smoothing
   function computeAuxByYourAlgo(closes, period, method) {
     const n = Math.max(2, Math.floor(period || 40));
     const half = Math.max(1, Math.floor(n / 2));
@@ -490,21 +408,19 @@
     for (let i = 0; i < closes.length; i++) {
       const w1 = wmaAt(closes, i, half);
       const w2 = wmaAt(closes, i, n);
-      vect[i] = Number.isFinite(w1) && Number.isFinite(w2) ? 2 * w1 - w2 : NaN;
+      vect[i] = (Number.isFinite(w1) && Number.isFinite(w2)) ? (2 * w1 - w2) : NaN;
     }
     return maOnArray(vect, p, method || "SMA");
   }
 
-  function computeTrendFromAux(auxVals) {
+  function computeAuxTrend(auxVals) {
+    // returns -1/0/+1
     const trend = new Array(auxVals.length).fill(0);
     let last = 0;
     for (let i = 1; i < auxVals.length; i++) {
       const a0 = auxVals[i - 1];
       const a1 = auxVals[i];
-      if (!Number.isFinite(a0) || !Number.isFinite(a1)) {
-        trend[i] = last;
-        continue;
-      }
+      if (!Number.isFinite(a0) || !Number.isFinite(a1)) { trend[i] = last; continue; }
       if (a1 > a0) last = 1;
       else if (a1 < a0) last = -1;
       trend[i] = last;
@@ -513,24 +429,58 @@
     return trend;
   }
 
+  // -----------------------------
+  // Signals: EMA/AUX cross + confirm window + anti-whipsaw lock
+  // -----------------------------
   function computeSignalsCrossPlusInflection(bars, emaPts, auxPts, confirmWindow) {
     const n = bars.length;
-    if (n < 5) return [];
+    if (n < 8) return [];
 
-    const emaV = emaPts.map((p) => p.value);
-    const auxV = auxPts.map((p) => p.value);
-    const trend = computeTrendFromAux(auxV);
+    const emaV = emaPts.map(p => p.value);
+    const auxV = auxPts.map(p => p.value);
+    const trend = computeAuxTrend(auxV);
 
     const cw = Math.max(0, Math.floor(confirmWindow ?? 3));
     const sigs = [];
     const used = new Set();
 
+    let lastSigIndex = -999999;
+    let lockSide = "";        // "B" or "S"
+    let lockUntilTrend = 0;   // +1 or -1 required before opposite signal allowed
+    let lockStartIdx = -1;
+
     function addSig(i, side) {
       const t = bars[i].time;
       const key = `${t}:${side}`;
       if (used.has(key)) return;
+
+      // min gap
+      if (i - lastSigIndex < MIN_SIG_GAP_BARS) return;
+
       used.add(key);
-      sigs.push({ time: t, side });
+      sigs.push({ time: t, side, i });
+
+      lastSigIndex = i;
+
+      // lock: after B, only allow S after AUX trend turns DOWN and holds; vice versa
+      lockSide = side;
+      lockStartIdx = i;
+      lockUntilTrend = (side === "B") ? -1 : +1;
+    }
+
+    function trendHasFlippedAndHeld(fromIdx, wantTrend, holdBars) {
+      const end = Math.min(n - 1, fromIdx + holdBars);
+      let okCount = 0;
+      for (let j = Math.max(1, fromIdx); j <= end; j++) {
+        const v = trend[j];
+        if (wantTrend > 0) {
+          if (v > 0) okCount++; else okCount = 0;
+        } else {
+          if (v < 0) okCount++; else okCount = 0;
+        }
+        if (okCount >= 2) return true; // require at least 2 consecutive confirms
+      }
+      return false;
     }
 
     function findConfirmIndex(startIdx, wantTrend) {
@@ -547,14 +497,28 @@
     }
 
     for (let i = 1; i < n; i++) {
-      const e0 = emaV[i - 1],
-        e1 = emaV[i];
-      const a0 = auxV[i - 1],
-        a1 = auxV[i];
+      const e0 = emaV[i - 1], e1 = emaV[i];
+      const a0 = auxV[i - 1], a1 = auxV[i];
       if (![e0, e1, a0, a1].every(Number.isFinite)) continue;
 
-      const crossUp = e0 <= a0 && e1 > a1;
-      const crossDn = e0 >= a0 && e1 < a1;
+      const crossUp = (e0 <= a0 && e1 > a1);
+      const crossDn = (e0 >= a0 && e1 < a1);
+
+      // If locked, only allow opposite when AUX trend flipped and held enough
+      if (lockSide) {
+        const needTrend = lockUntilTrend;
+        const ok = trendHasFlippedAndHeld(lockStartIdx + 1, needTrend, TREND_LOCK_BARS);
+        if (!ok) {
+          // still locked: ignore opposite cross attempts
+          if (lockSide === "B" && crossDn) continue;
+          if (lockSide === "S" && crossUp) continue;
+        } else {
+          // unlock
+          lockSide = "";
+          lockUntilTrend = 0;
+          lockStartIdx = -1;
+        }
+      }
 
       if (crossUp) {
         const k = findConfirmIndex(i, +1);
@@ -569,17 +533,27 @@
     return sigs;
   }
 
+  // -----------------------------
+  // Markers (SAFE): never disappear by default
+  // -----------------------------
   function applyMarkers(sigs) {
     safeRun("applyMarkers", () => {
       if (!candleSeries) return;
 
-      // If overlay is enabled, we keep series markers empty.
-      if (window.__OVERLAY_BIG_SIGS__ === true) {
+      const arr = Array.isArray(sigs) ? sigs : [];
+
+      // overlay policy:
+      // - if __OVERLAY_BIG_SIGS__ === true:
+      //    - default: KEEP markers (safety)
+      //    - strict mode: clear markers
+      const overlayOn = (window.__OVERLAY_BIG_SIGS__ === true);
+      const strict = (window.__OVERLAY_BIG_SIGS_STRICT__ === true);
+
+      if (overlayOn && strict) {
         candleSeries.setMarkers([]);
         return;
       }
 
-      const arr = Array.isArray(sigs) ? sigs : [];
       candleSeries.setMarkers(
         arr.map((s) => ({
           time: s.time,
@@ -610,7 +584,7 @@
 
       const isUp = slope > 0;
       const isDn = slope < 0;
-      const fallbackUp = b.close >= b.open;
+      const fallbackUp = (b.close >= b.open);
       const useUp = isUp ? true : isDn ? false : fallbackUp;
 
       out[i] = {
@@ -630,9 +604,8 @@
     safeRun("publishSnapshot", () => {
       const s = Object.freeze(snapshot);
       window.__DARRIUS_CHART_STATE__ = s;
-      try {
-        window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: s }));
-      } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: s })); }
+      catch (_) {}
     });
   }
 
@@ -641,17 +614,8 @@
   // -----------------------------
   function applyToggles() {
     safeRun("applyToggles", () => {
-      const emaChecked =
-        $("toggleEMA")?.checked ??
-        $("emaToggle")?.checked ??
-        $("tgEMA")?.checked ??
-        $("emaCheck")?.checked;
-
-      const auxChecked =
-        $("toggleAUX")?.checked ??
-        $("auxToggle")?.checked ??
-        $("tgAux")?.checked ??
-        $("auxCheck")?.checked;
+      const emaChecked = $("toggleEMA")?.checked ?? $("emaToggle")?.checked ?? $("tgEMA")?.checked ?? $("emaCheck")?.checked;
+      const auxChecked = $("toggleAUX")?.checked ?? $("auxToggle")?.checked ?? $("tgAux")?.checked ?? $("auxCheck")?.checked;
 
       if (typeof emaChecked === "boolean") showEMA = emaChecked;
       if (typeof auxChecked === "boolean") showAUX = auxChecked;
@@ -677,7 +641,6 @@
     let pack;
     try {
       pack = await fetchBarsPack(sym, tf);
-      DIAG.lastPack = pack;
     } catch (e) {
       safeRun("hintFail", () => {
         if ($("hintText")) $("hintText").textContent = `加载失败：${e.message || e}`;
@@ -685,11 +648,14 @@
       throw e;
     }
 
-    const { payload, bars, urlUsed, dataMode, dataSource, delayedMinutes } = pack;
+    const { payload, bars, urlUsed, mode, delayedMinutes } = pack;
+    DIAG.lastBarsUrl = urlUsed;
+    DIAG.lastMode = mode;
+
     if (!bars.length) throw new Error("bars empty after normalization");
 
-    // -------- MAIN CHART: never let UI break this --------
-    const closes = bars.map((b) => b.close);
+    // -------- MAIN CHART --------
+    const closes = bars.map(b => b.close);
     const emaVals = ema(closes, EMA_PERIOD);
     const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
 
@@ -698,13 +664,23 @@
 
     const emaPts = buildLinePoints(bars, emaVals);
     const auxPts = buildLinePoints(bars, auxVals);
-    if (emaSeries) emaSeries.setData(emaPts);
-    if (auxSeries) auxSeries.setData(auxPts);
+    emaSeries.setData(emaPts);
+    auxSeries.setData(auxPts);
 
-    // signals: try payload then optional endpoints then compute fallback
+    // signals: try payload -> optional endpoint -> computed
     let sigs = normalizeSignals(payload);
     if (!sigs.length) sigs = await fetchOptionalSignals(sym, tf);
     if (!sigs.length) sigs = computeSignalsCrossPlusInflection(bars, emaPts, auxPts, CONFIRM_WINDOW);
+
+    // price fill for signals
+    const closeByTime = new Map();
+    for (const b of bars) closeByTime.set(b.time, b.close);
+    sigs = (sigs || []).map(s => ({
+      time: s.time,
+      side: s.side,
+      price: (Number.isFinite(s.price) ? s.price : (closeByTime.get(s.time) ?? null)),
+      i: (typeof s.i === "number" ? s.i : null)
+    })).filter(s => s.time != null && (s.side === "B" || s.side === "S"));
 
     applyMarkers(sigs);
 
@@ -715,142 +691,87 @@
       if ($("symText")) $("symText").textContent = sym;
       if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
 
-      // Strong hint line
-      const modeLabel =
-        dataMode === "demo"
-          ? "Demo"
-          : dataMode === "delayed"
-          ? `Delayed (${delayedMinutes}m)`
-          : "Live";
-
-      if ($("hintText"))
-        $("hintText").textContent =
-          `Loaded · ${modeLabel} · TF=${tf} · bars=${bars.length} · sigs=${sigs.length}`;
+      const dm = (mode === "MARKET_DELAYED") ? `Delayed(${delayedMinutes || 15}m)` : "Demo(Local)";
+      if ($("hintText")) $("hintText").textContent = `Loaded · ${dm} · TF=${tf} · bars=${bars.length} · sigs=${sigs.length}`;
     });
 
-    // ===== Snapshot: export for market.pulse.js (READ-ONLY) =====
+    // ===== Snapshot for UI layer =====
     safeRun("setSnapshotForUI", () => {
       try {
         const snapMeta = {
           symbol: sym || null,
           timeframe: tf || null,
-          bars: Array.isArray(bars) ? bars.length : 0,
-
-          // new: explicit mode fields (for UI strong提示)
-          dataSource: dataSource || "massive",
-          dataMode: dataMode || "delayed",
-          delayedMinutes: delayedMinutes || 0,
-
-          emaPeriod: EMA_PERIOD || 14,
-          auxPeriod: AUX_PERIOD || 40,
-          confirmWindow: CONFIRM_WINDOW || 3,
+          bars: bars.length,
+          source: (mode === "MARKET_DELAYED" ? "market_delayed" : "demo_local"),
+          delayedMinutes: (mode === "MARKET_DELAYED" ? (delayedMinutes || 15) : 0),
+          urlUsed,
+          emaPeriod: EMA_PERIOD,
+          auxPeriod: AUX_PERIOD,
+          confirmWindow: CONFIRM_WINDOW,
         };
-
-        // closeByTime for signal price fill
-        const closeByTime = new Map();
-        for (const b of bars) closeByTime.set(b.time, b.close);
-
-        const snapSignals = (Array.isArray(sigs) ? sigs : [])
-          .map((s, idx) => {
-            const t = s.time ?? s.t ?? null;
-            const sideRaw = (s.side || s.type || s.signal || "").toString().toUpperCase();
-            const side = sideRaw === "S" ? "S" : "B";
-            const price = Number.isFinite(s.price) ? s.price : closeByTime.get(t);
-            return {
-              time: t,
-              price: Number.isFinite(price) ? price : null,
-              side,
-              i: typeof s.i === "number" ? s.i : typeof s.index === "number" ? s.index : idx,
-              reason: s.reason || s.note || null,
-              strength: typeof s.strength === "number" ? s.strength : null,
-            };
-          })
-          .filter((x) => x.time != null && x.price != null);
 
         // trend summary (EMA slope)
         const n = Math.min(10, emaVals.length - 1);
         let emaSlope = null;
         let emaRegime = null;
-        let emaColor = null;
-
         if (n >= 2) {
           const eNow = emaVals[emaVals.length - 1];
           const ePrev = emaVals[emaVals.length - 1 - n];
           if (Number.isFinite(eNow) && Number.isFinite(ePrev)) {
             emaSlope = (eNow - ePrev) / n;
-            if (emaSlope > 0) emaRegime = "UP";
-            else if (emaSlope < 0) emaRegime = "DOWN";
-            else emaRegime = "FLAT";
+            emaRegime = (emaSlope > 0) ? "UP" : (emaSlope < 0) ? "DOWN" : "FLAT";
           }
         }
-        if (emaRegime === "UP") emaColor = "GREEN";
-        else if (emaRegime === "DOWN") emaColor = "RED";
-        else emaColor = "NEUTRAL";
 
         const snapTrend = {
           emaSlope,
           emaRegime,
-          emaColor,
+          emaColor: (emaRegime === "UP" ? "GREEN" : emaRegime === "DOWN" ? "RED" : "NEUTRAL"),
           flipCount: null,
         };
 
-        const snapRisk = {
-          entry: null,
-          stop: null,
-          targets: null,
-          confidence: null,
-          winrate: null,
-        };
+        const snapRisk = { entry: null, stop: null, targets: null, confidence: null, winrate: null };
 
-        if (window.DarriusChart && typeof window.DarriusChart.__setSnapshot === "function") {
+        window.DarriusChart = window.DarriusChart || {};
+        if (typeof window.DarriusChart.__setSnapshot === "function") {
           window.DarriusChart.__setSnapshot({
             meta: snapMeta,
-            candles: Array.isArray(bars) ? bars : [],
-            ema: Array.isArray(emaPts) ? emaPts : [],
-            aux: Array.isArray(auxPts) ? auxPts : [],
-            signals: snapSignals,
+            candles: bars,
+            ema: emaPts,
+            aux: auxPts,
+            signals: sigs,
             trend: snapTrend,
             risk: snapRisk,
           });
         }
-      } catch (e) {
-        // swallow
-      }
+      } catch (_) {}
     });
 
-    // -------- SNAPSHOT OUTPUT (consumer only) --------
-    const N = Math.min(200, bars.length);
+    // -------- Public snapshot (consumer only) --------
+    const N = Math.min(220, bars.length);
     const start = bars.length - N;
 
     const snapshot = {
-      version: "2026.01.22-DATAMODE",
+      version: "2026.01.22-DATAMODE-SAFE",
       ts: Date.now(),
-
       apiBase: DEFAULT_API_BASE,
       urlUsed,
-
       symbol: sym,
       tf,
-
-      // new mode fields (for UI strong提示)
-      dataSource: dataSource || "massive",
-      dataMode: dataMode || "delayed",
-      delayedMinutes: delayedMinutes || 0,
-
-      params: { EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW },
-
+      mode,
+      delayedMinutes: (mode === "MARKET_DELAYED" ? (delayedMinutes || 15) : 0),
+      params: { EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW, MIN_SIG_GAP_BARS, TREND_LOCK_BARS },
       barsCount: bars.length,
       bars: bars.slice(start),
       ema: emaVals.slice(start),
       aux: auxVals.slice(start),
-      sigs: sigs.slice(Math.max(0, sigs.length - 200)),
+      sigs: sigs.slice(Math.max(0, sigs.length - 220)),
       lastClose: bars[bars.length - 1].close,
     };
 
     publishSnapshot(snapshot);
-
     applyToggles();
-    return { urlUsed, bars: bars.length, sigs: sigs.length, dataMode, dataSource, delayedMinutes };
+    return { urlUsed, mode, bars: bars.length, sigs: sigs.length };
   }
 
   // -----------------------------
@@ -898,46 +819,38 @@
       lastValueVisible: false,
     });
 
-    // -----------------------------
-    // Read-only coordinate bridge (for market.pulse.js overlay)
-    // -----------------------------
+    // Read-only coordinate bridge (for overlay)
     safeRun("bridgeExpose", () => {
       window.DarriusChart = window.DarriusChart || {};
 
-      window.DarriusChart.timeToX = (t) =>
-        safeRun("timeToX", () => {
-          if (!chart || !chart.timeScale) return null;
-          return chart.timeScale().timeToCoordinate(t);
-        });
+      window.DarriusChart.timeToX = (t) => safeRun("timeToX", () => {
+        if (!chart || !chart.timeScale) return null;
+        return chart.timeScale().timeToCoordinate(t);
+      });
 
-      window.DarriusChart.priceToY = (p) =>
-        safeRun("priceToY", () => {
-          if (!candleSeries || !candleSeries.priceToCoordinate) return null;
-          return candleSeries.priceToCoordinate(p);
-        });
+      window.DarriusChart.priceToY = (p) => safeRun("priceToY", () => {
+        if (!candleSeries || !candleSeries.priceToCoordinate) return null;
+        return candleSeries.priceToCoordinate(p);
+      });
 
       window.DarriusChart.__hostId = containerId || "chart";
     });
 
-    const resize = () =>
-      safeRun("resize", () => {
-        const r = containerEl.getBoundingClientRect();
-        chart.applyOptions({
-          width: Math.max(1, Math.floor(r.width)),
-          height: Math.max(1, Math.floor(r.height)),
-        });
+    const resize = () => safeRun("resize", () => {
+      const r = containerEl.getBoundingClientRect();
+      chart.applyOptions({
+        width: Math.max(1, Math.floor(r.width)),
+        height: Math.max(1, Math.floor(r.height)),
       });
+    });
 
     safeRun("observeResize", () => {
-      try {
-        new ResizeObserver(resize).observe(containerEl);
-      } catch (_) {
-        window.addEventListener("resize", resize);
-      }
+      try { new ResizeObserver(resize).observe(containerEl); }
+      catch (_) { window.addEventListener("resize", resize); }
     });
     resize();
 
-    // Accept various checkbox ids
+    // toggle events
     $("toggleEMA")?.addEventListener("change", applyToggles);
     $("emaToggle")?.addEventListener("change", applyToggles);
     $("tgEMA")?.addEventListener("change", applyToggles);
@@ -948,25 +861,11 @@
     $("tgAux")?.addEventListener("change", applyToggles);
     $("auxCheck")?.addEventListener("change", applyToggles);
 
-    // Data mode selector -> reload
-    const modeEl =
-      $("dataMode") ||
-      $("dataSourceMode") ||
-      $("sourceMode") ||
-      qs('select[name="dataMode"]') ||
-      qs('select[name="sourceMode"]');
-
-    modeEl?.addEventListener("change", () => {
-      // Just reload chart data; does not touch billing
+    if (opts.autoLoad !== false) {
       load().catch((e) => {
         DIAG.chartError = { message: String(e?.message || e), stack: String(e?.stack || "") };
       });
-    });
-
-    if (opts.autoLoad !== false)
-      load().catch((e) => {
-        DIAG.chartError = { message: String(e?.message || e), stack: String(e?.stack || "") };
-      });
+    }
   }
 
   window.ChartCore = { init, load, applyToggles };
@@ -975,70 +874,44 @@
 /* =========================
  * Snapshot Export (READ-ONLY)
  * - UI层（market.pulse.js）只读这里
- * - 不允许 UI 层反向修改主图内部
  * ========================= */
-
 (function () {
   "use strict";
 
   const __SNAPSHOT = {
     version: "snapshot_v1",
     ts: 0,
-
     meta: {
       symbol: null,
       timeframe: null,
       bars: 0,
-
-      // new: data mode fields
-      dataSource: "massive",
-      dataMode: "delayed",
-      delayedMinutes: 15,
-
+      source: "demo_local",
+      delayedMinutes: 0,
+      urlUsed: null,
       emaPeriod: null,
       auxPeriod: null,
       confirmWindow: null,
     },
-
-    candles: [], // [{time, open, high, low, close}]
-    ema: [], // [{time, value}]
-    aux: [], // [{time, value}]
-
-    signals: [], // [{time, price, side:'B'|'S', i, reason?, strength?}]
-
-    trend: {
-      emaSlope: null,
-      emaRegime: null,
-      emaColor: null,
-      flipCount: null,
-    },
-
-    risk: {
-      entry: null,
-      stop: null,
-      targets: null,
-      confidence: null,
-      winrate: null,
-    },
+    candles: [],
+    ema: [],
+    aux: [],
+    signals: [],
+    trend: { emaSlope: null, emaRegime: null, emaColor: null, flipCount: null },
+    risk: { entry: null, stop: null, targets: null, confidence: null, winrate: null },
   };
 
   function __setSnapshot(patch) {
     try {
       if (!patch || typeof patch !== "object") return;
-
       __SNAPSHOT.ts = Date.now();
-
       if (patch.meta) __SNAPSHOT.meta = Object.assign({}, __SNAPSHOT.meta, patch.meta);
       if (Array.isArray(patch.candles)) __SNAPSHOT.candles = patch.candles.slice();
       if (Array.isArray(patch.ema)) __SNAPSHOT.ema = patch.ema.slice();
       if (Array.isArray(patch.aux)) __SNAPSHOT.aux = patch.aux.slice();
       if (Array.isArray(patch.signals)) __SNAPSHOT.signals = patch.signals.slice();
-
       if (patch.trend) __SNAPSHOT.trend = Object.assign({}, __SNAPSHOT.trend, patch.trend);
       if (patch.risk) __SNAPSHOT.risk = Object.assign({}, __SNAPSHOT.risk, patch.risk);
-    } catch (e) {
-      // never throw
-    }
+    } catch (_) {}
   }
 
   function __getSnapshot() {
@@ -1054,17 +927,12 @@
         trend: Object.assign({}, __SNAPSHOT.trend),
         risk: Object.assign({}, __SNAPSHOT.risk),
       };
-    } catch (e) {
-      return null;
-    }
+    } catch (_) { return null; }
   }
 
   window.DarriusChart = window.DarriusChart || {};
   window.DarriusChart.getSnapshot = __getSnapshot;
-
-  if (typeof window.getChartSnapshot !== "function") {
-    window.getChartSnapshot = __getSnapshot;
-  }
-
   window.DarriusChart.__setSnapshot = __setSnapshot;
+
+  if (typeof window.getChartSnapshot !== "function") window.getChartSnapshot = __getSnapshot;
 })();
