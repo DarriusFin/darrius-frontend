@@ -465,7 +465,7 @@
     /* ✅ Mutant 面板：固定在中间面板底部 */
     #mutantPanel{
       width:100%;
-      flex: 0 0 140px;       /* ✅ 固定高度（你要更高可调） */
+      flex: 0 0 160px;       /* ✅ 固定高度（你要更高可调） */
       margin-top:10px;
       border-radius:14px;
       background: rgba(255,255,255,0.03);
@@ -632,7 +632,7 @@
       <!-- chart.core.js 会更新这里的内容（数据源强提示/Ready/URL等） -->
       <div id="statusBadge" class="pill">
         <span class="dot"></span>
-        <span id="statusText">Ready · 前端已就绪</span>
+        <span id="statusText">Ready · 前端就绪</span>
       </div>
       <div id="copyright">© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
     </div>
@@ -822,14 +822,14 @@
 
           <div class="note" style="margin-top:8px">
             <b>Note:</b> EMA/AUX parameters are internal.<br/>
-            <b>说明：</b>EMA/AUX 参数为内部策略要素，系统会按周期自动适配。
+            <b>说明：</b>EMA/AUX 参数为内部策略要素，系统按周期自动适配。
           </div>
         </div>
 
         <!-- Subscription（保持原结构/ID，不动逻辑） -->
         <div class="card">
           <div class="cardTitle">
-            <b>Subscription · 订阅开通</b>
+            <b>Subscription · 订阅选择</b>
             <span class="small" id="planStatus">从后端拉取…</span>
           </div>
 
@@ -856,7 +856,7 @@
           </div>
 
           <div class="row2" style="margin-top:0">
-            <button class="btn" id="subscribeBtn" disabled>Order Start · 订单开通</button>
+            <button class="btn" id="subscribeBtn" disabled>Order Start ·  订单开通</button>
             <button class="btnGhost" id="manageBtn" disabled>Order Manage · 订单管理</button>
           </div>
 
