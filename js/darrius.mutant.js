@@ -1,5 +1,5 @@
-/* forex.mutant.js (UI plugin) v2026.01.23
- * FOREX-MUTANT SYSTEM indicator panel (bottom sub-panel)
+/* darrius.mutant.js (UI plugin) v2026.01.23
+ * DARRIUS-MUTANT indicator panel (bottom sub-panel)
  *
  * Role:
  *  - Render a compact histogram panel aligned to main chart time scale
@@ -17,7 +17,7 @@
   // -----------------------------
   // Absolute no-throw safe zone
   // -----------------------------
-  function safe(fn, tag = 'forex.mutant') {
+  function safe(fn, tag = 'darrius.mutant') {
     try { return fn(); } catch (_) { return null; }
   }
 
@@ -44,7 +44,7 @@
     gridLines: 2,                 // top/mid lines; keep subtle
 
     // Label
-    title: 'FOREX-MUTANT SYSTEM',
+    title: 'DARRIUS-MUTANT',
     titleAlpha: 0.85,
 
     // Smoothing / normalization
