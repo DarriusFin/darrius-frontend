@@ -377,6 +377,15 @@
     /* ===== Center Chart ===== */
     #chartPanel .panelBody{ padding:0; }
 
+    /* ✅ 关键修复：让主图占满剩余高度，Mutant 固定在中间面板最底部 */
+    #chartPanel .panelBody{
+      display:flex;
+      flex-direction:column;
+      height:100%;
+      min-height:0;
+      overflow:hidden; /* 不让中间乱滚，避免 Mutant 被顶上去 */
+    }
+
     #chartTop{
       padding:10px 14px;
       display:flex;
@@ -434,20 +443,11 @@
       background: rgba(76,194,255,.10);
     }
 
-    /* ====== 关键修复：让主图 + Mutant 在中间列稳定纵向布局 ====== */
-    #chartPanel .panelBody{
-      display:flex;
-      flex-direction:column;
-      overflow:hidden; /* 避免 mutant 被 panelBody 的滚动/裁切干扰 */
-      min-height:0;
-    }
-
     #chartWrap{
       position:relative;
       width:100%;
-      flex: 1 1 auto;     /* 主图吃掉剩余高度 */
-      min-height:420px;
-      height:auto;        /* 覆盖你之前的 calc 固定高度，避免挤掉 mutant */
+      flex: 1 1 auto;   /* ✅ 主图吃掉剩余高度 */
+      min-height: 0;    /* ✅ 允许缩放，不撑开把 Mutant 顶上去 */
     }
     #chart{
       position:absolute; inset:0;
@@ -462,16 +462,29 @@
       z-index:20;
     }
 
-    /* Mutant 在主图下端：固定高度 */
+    /* ✅ Mutant 面板：固定在中间面板底部 */
     #mutantPanel{
-      flex: 0 0 96px;
-      height:96px;
-      margin:10px 14px 14px 14px; /* 跟 panelBody 视觉一致 */
+      width:100%;
+      flex: 0 0 140px;       /* ✅ 固定高度（你要更高可调） */
+      margin-top:10px;
       border-radius:14px;
       background: rgba(255,255,255,0.03);
       border: 1px solid rgba(255,255,255,0.06);
       overflow:hidden;
       position:relative;
+    }
+    #mutantTitle{
+      position:absolute;
+      left:10px; top:8px;
+      font-size:12px;
+      letter-spacing:.2px;
+      color: rgba(234,240,247,.72);
+      z-index:2;
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.18);
+      pointer-events:none;
     }
 
     /* ===== Right Controls ===== */
@@ -571,17 +584,30 @@
 
     .hidden{ display:none !important; }
 
+    /* ✅ 你要求：右侧 Manage 按钮背景和 Start 一样（纯 UI，不动订阅逻辑） */
+    #manageBtn{
+      border: 0 !important;
+      color:#081119 !important;
+      font-weight:950 !important;
+      letter-spacing:.3px !important;
+      background: var(--gradBrand) !important;
+      box-shadow: var(--shadow2) !important;
+    }
+    #manageBtn:hover{ filter: brightness(1.04); }
+    #manageBtn:active{ transform: translateY(1px); }
+    #manageBtn:disabled{ opacity:.55; cursor:not-allowed; }
+
     @media (max-width: 1180px){
       body{ overflow:auto; }
       #main{
         height:auto;
         grid-template-columns: 1fr;
       }
-      /* 小屏时，给 chartWrap 一个固定高度，mutant 仍然显示在下方 */
-      #chartWrap{ min-height:560px; }
+      #chartWrap{ height: 560px; }
       #brand{ min-width:0; }
       #topRight{ min-width:0; }
       #tfQuick{ justify-content:flex-start; }
+      #chartPanel .panelBody{ overflow:auto; } /* 小屏允许滚动 */
     }
   </style>
 </head>
@@ -636,6 +662,7 @@
                 <span>Net Inflow</span><b id="netInflow" style="color:var(--brand1)">—</b>
               </div>
 
+              <!-- ✅（按你“黄框删”要求）保留一句精简说明： -->
               <div class="small" style="margin-top:10px">
                 <b>Note:</b> Derived from the main chart only.<br/>
                 <b>说明：</b>完全由主图派生。
@@ -719,15 +746,17 @@
       </div>
 
       <div class="panelBody">
-        <!-- 主图 -->
         <div id="chartWrap">
           <div id="chart"></div>
           <!-- 保留这个占位层（不影响 market.pulse.js 自建 #bsOverlayLayer） -->
           <div id="sigOverlay"></div>
         </div>
 
-        <!-- Mutant：主图下端（稳定显示） -->
-        <div id="mutantPanel"></div>
+        <!-- ✅ Mutant：固定在中间面板最底部 -->
+        <div id="mutantPanel">
+          <div id="mutantTitle">Darrius Mutant</div>
+          <!-- forex.mutant.js 会在这里绘制（canvas 或 DOM 都可） -->
+        </div>
       </div>
     </div>
 
@@ -742,7 +771,7 @@
         <div class="card">
           <div class="cardTitle"><b>Data Source · 数据源</b><span class="small">预留接口</span></div>
           <div class="field">
-            <div class="label"><span>Source · 来源</span><span class="small">接第三方实盘</span></div>
+            <div class="label"><span>Source · 来源</span><span class="small">第三方实盘</span></div>
             <select id="dataSource">
               <option value="demo">Demo (Local)</option>
               <option value="provider">3rd-Party Provider (Reserved)</option>
@@ -827,8 +856,8 @@
           </div>
 
           <div class="row2" style="margin-top:0">
-            <button class="btn" id="subscribeBtn" disabled>Start · 开通</button>
-            <button class="btnGhost" id="manageBtn" disabled>Subscription Manage · 订单管理</button>
+            <button class="btn" id="subscribeBtn" disabled>Order Start · 订单开通</button>
+            <button class="btnGhost" id="manageBtn" disabled>Order Manage · 订单管理</button>
           </div>
 
           <div class="note" style="margin-top:10px">
@@ -852,7 +881,7 @@
   </div>
 
   <!-- =========================
-       CONFIG (keep)
+       GLOBALS (must be before external JS if they read API_BASE on load)
        ========================= -->
   <script>
     window.API_BASE = "https://darrius-api.onrender.com";
@@ -881,6 +910,7 @@
       const dupes = findDuplicateIds();
       window.__DARRIUS_ID_DUPES__ = dupes.map(d => ({ id: d.id, count: d.count }));
 
+      // sameAsEntry 检测：判断 riskEntry/riskStop/riskTargets/riskConf/riskWR 是否意外指向同一个节点
       window.sameAsEntry = function(){
         const e  = document.getElementById("riskEntry");
         const s  = document.getElementById("riskStop");
@@ -903,20 +933,16 @@
 
   <!-- =========================
        SCRIPTS (ORDER IS CRITICAL)
-       1) chart core
-       2) overlay ui
-       3) mutant
-       4) subscription
-       5) boot
+       不动订阅/支付：subscription.js + boot.js 保持原
        ========================= -->
 
   <!-- 1) 主图系统（冻结，不动） -->
   <script src="js/chart.core.js?v=20260122"></script>
 
-  <!-- 2) Market Pulse UI（overlay, eB/eS + BIG B/S） -->
+  <!-- 2) Market Pulse UI（你已替换为 STABLE COMPAT v2026.01.22） -->
   <script src="js/market.pulse.js?v=20260122"></script>
 
-  <!-- 3) Mutant（单独文件，不碰订阅/支付） -->
+  <!-- 3) Mutant（单独文件） -->
   <script src="js/forex.mutant.js?v=20260122"></script>
 
   <!-- 4) 订阅系统（保持原） -->
@@ -924,5 +950,6 @@
 
   <!-- 5) 启动/绑定按钮（保持原） -->
   <script src="js/boot.js?v=20260122"></script>
+
 </body>
 </html>
