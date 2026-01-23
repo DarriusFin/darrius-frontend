@@ -487,6 +487,10 @@
       pointer-events:none;
     }
 
+    /* ✅ FIX: 你现在的 darrius.mutant.js 会在 canvas 里自己画标题，
+       DOM 这个 #mutantTitle 会导致出现两行“Darrius Mutant”，所以隐藏它即可 */
+    #mutantTitle{ display:none !important; }
+
     /* ===== Right Controls ===== */
     .field{ margin-bottom:10px; }
     .label{
@@ -752,11 +756,12 @@
           <div id="sigOverlay"></div>
         </div>
 
-        <!-- ✅ Mutant：固定在中间面板最底部 -->
+        <!-- ✅ Mutant：固定在中间面板最底部（只保留一个 mutantPanel，杜绝崩溃） -->
         <div id="mutantPanel">
-        <div id="mutantPanel">
-  <!-- Darrius Mutant canvas rendered here -->
-</div>
+          <div id="mutantTitle">Darrius Mutant</div>
+          <!-- Darrius Mutant canvas rendered here by js/darrius.mutant.js -->
+        </div>
+      </div>
     </div>
 
     <!-- RIGHT -->
