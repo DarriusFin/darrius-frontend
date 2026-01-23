@@ -1,9 +1,15 @@
-/* market.pulse.js (STABLE COMPAT - REPLACEABLE) v2026.01.22 + eB/eS PATCH
+/* market.pulse.js (STABLE COMPAT - REPLACEABLE) v2026.01.23
  * UI-only layer. Must NOT mutate chart.core.js internals.
  * - Reads snapshot (multiple schemas)
  * - Renders Market Pulse
  * - Renders Risk Copilot
  * - Renders BIG glowing B/S overlay (independent from chart markers)
+ *
+ * Patch v2026.01.23:
+ * - Anchor BIG signals to EMA/AUX lines:
+ *   - B/eB => always BELOW EMA
+ *   - S/eS => always ABOVE AUX
+ * - Pulse the last: B, eB, S, eS (like last B effect)
  *
  * Safety:
  * - Never throws
@@ -29,7 +35,6 @@
 
   // -----------------------------
   // DOM binding (IDs must be UNIQUE in index.html)
-  // If your index.html has different ids, add fallbacks here.
   // -----------------------------
   const DOM = {
     // Market Pulse
@@ -77,12 +82,10 @@
   // Snapshot reader (multiple fallbacks)
   // -----------------------------
   function getSnapshot() {
-    // Preferred: DarriusChart snapshot
     if (window.DarriusChart && typeof window.DarriusChart.getSnapshot === 'function') {
       const s = safe(() => window.DarriusChart.getSnapshot(), 'getSnapshot:DarriusChart');
       if (s) return s;
     }
-    // Fallbacks
     if (typeof window.getChartSnapshot === 'function') {
       const s = safe(() => window.getChartSnapshot(), 'getSnapshot:getChartSnapshot');
       if (s) return s;
@@ -122,7 +125,6 @@
       return Math.floor(ms / 1000);
     }
     if (isBusinessDay(t)) {
-      // businessDay treated as UTC midnight
       const ms = Date.UTC(t.year, (t.month || 1) - 1, t.day || 1, 0, 0, 0);
       return Math.floor(ms / 1000);
     }
@@ -153,24 +155,18 @@
   }
 
   function normSide(s) {
-    // eB/eS PATCH: support early signals
     const raw = (s?.side ?? s?.type ?? s?.text ?? s?.signal ?? s?.action ?? '').toString().trim();
     const t = raw.toUpperCase();
 
-    // exact early
     if (raw === 'eB' || raw === 'eS') return raw;
-
-    // tolerant early forms
     if (t === 'EB' || t === 'E B' || t.includes('EBUY')) return 'eB';
     if (t === 'ES' || t === 'E S' || t.includes('ESELL')) return 'eS';
 
-    // confirmed
     if (t.includes('BUY') || t === 'B') return 'B';
     if (t.includes('SELL') || t === 'S') return 'S';
     return '';
   }
 
-  // Detect timeframe string for special handling
   function getTfFromSnap(snap) {
     const tf =
       snap?.meta?.timeframe ??
@@ -182,13 +178,14 @@
     return (tf == null ? '' : String(tf)).trim();
   }
 
-  // IMPORTANT:
-  // If TF is intraday (m/h), we MUST keep utc seconds for overlay (avoid businessDay collapse).
   function isIntradayTF(tf) {
     const s = String(tf || '').toLowerCase();
     return s.includes('m') || s.includes('h');
   }
 
+  // -----------------------------
+  // Normalize overlay signals
+  // -----------------------------
   function normalizeOverlaySignals(snap) {
     const raw = pickSignalsRaw(snap);
     const arr = asArrayMaybe(raw);
@@ -198,7 +195,6 @@
     const tf = getTfFromSnap(snap);
     const intraday = isIntradayTF(tf);
 
-    // map close by candle time key (supports both number sec & businessDay)
     const closeByKey = new Map();
     const candleTimesSec = [];
 
@@ -230,7 +226,6 @@
       return (Math.abs(a - target) <= Math.abs(b - target)) ? a : b;
     }
 
-    // eB/eS PATCH: for EARLY signals, bias alignment to the left (floor) to avoid “dragging later”
     function floorSec(target) {
       if (!candleTimesSec.length || target == null) return null;
       let lo = 0, hi = candleTimesSec.length - 1;
@@ -241,7 +236,6 @@
         if (v < target) lo = mid + 1;
         else hi = mid - 1;
       }
-      // hi is the last index with value < target
       const idx = Math.max(0, Math.min(hi, candleTimesSec.length - 1));
       return candleTimesSec[idx] ?? null;
     }
@@ -249,7 +243,6 @@
     const out = [];
     const used = new Set();
 
-    // last 160 only
     const start = Math.max(0, arr.length - 160);
     for (let i = start; i < arr.length; i++) {
       const s = arr[i] || {};
@@ -260,19 +253,14 @@
       const sec = toUtcSec(tRaw);
       if (sec == null) continue;
 
-      // eB/eS PATCH: early aligns to floor (earlier bar) -> visually earlier & less “slow”
       const isEarly = (side === 'eB' || side === 'eS');
       const near = isEarly ? floorSec(sec) : nearestSec(sec);
       if (near == null) continue;
 
-      // Decide overlay time format:
-      // - intraday => ALWAYS use utc seconds (number)
-      // - daily/weekly/monthly => allow businessDay if candles are businessDay
       let t;
       if (intraday) {
         t = near;
       } else {
-        // if candles are businessDay objects, convert near->businessDay by UTC date
         const c0 = candles[0]?.time;
         if (isBusinessDay(c0)) {
           const d = new Date(near * 1000);
@@ -282,7 +270,6 @@
         }
       }
 
-      // price
       const p0 = s.price ?? s.p ?? s.y ?? s.value ?? null;
       let price = (typeof p0 === 'number' && Number.isFinite(p0)) ? p0 : null;
       if (price == null) {
@@ -292,13 +279,82 @@
       if (price == null || !Number.isFinite(Number(price))) continue;
 
       const key = `${isBusinessDay(t) ? `${t.year}-${t.month}-${t.day}` : t}:${side}`;
-      if (used.has(key)) continue; // dedupe prevents vertical spam
+      if (used.has(key)) continue;
       used.add(key);
 
       out.push({ time: t, price: Number(price), side });
     }
 
     return out;
+  }
+
+  // -----------------------------
+  // Line anchoring helpers (EMA/AUX)
+  // -----------------------------
+  function pickEmaLine(snap) {
+    return (
+      snap?.emaLine ||
+      snap?.ema ||
+      snap?.emaData ||
+      snap?.ema14 ||
+      snap?.indicators?.ema ||
+      snap?.lines?.ema ||
+      snap?.series?.ema ||
+      null
+    );
+  }
+
+  function pickAuxLine(snap) {
+    return (
+      snap?.auxLine ||
+      snap?.aux ||
+      snap?.auxData ||
+      snap?.aux40 ||
+      snap?.indicators?.aux ||
+      snap?.lines?.aux ||
+      snap?.series?.aux ||
+      null
+    );
+  }
+
+  function normalizeLineArr(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'object') {
+      return Object.keys(raw).map(k => raw[k]).filter(Boolean);
+    }
+    return [];
+  }
+
+  function linePointTimeSec(p) {
+    const t = p?.time ?? p?.t ?? p?.timestamp ?? p?.ts ?? null;
+    return toUtcSec(t);
+  }
+
+  function linePointValue(p) {
+    const v = (p?.value != null) ? p.value : (p?.price != null ? p.price : p?.y);
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function nearestLineValueAtSec(lineArr, targetSec) {
+    if (!Array.isArray(lineArr) || !lineArr.length || targetSec == null) return null;
+
+    // Fast path: if already sorted-ish, still safe to scan (line length typically <= bars)
+    let best = null;
+    let bestDt = Infinity;
+    for (let i = 0; i < lineArr.length; i++) {
+      const p = lineArr[i];
+      const sec = linePointTimeSec(p);
+      if (sec == null) continue;
+      const dt = Math.abs(sec - targetSec);
+      if (dt < bestDt) {
+        bestDt = dt;
+        best = p;
+      }
+    }
+    if (!best) return null;
+    return linePointValue(best);
   }
 
   // -----------------------------
@@ -361,12 +417,11 @@
   }
 
   function deriveInflectionBias(snap) {
-    const sigs = normalizeOverlaySignals(snap); // now includes eB/eS
+    const sigs = normalizeOverlaySignals(snap);
     if (!sigs.length) return 'NEUTRAL';
     for (let i = sigs.length - 1; i >= 0; i--) {
       const side = sigs[i].side;
       if (!side) continue;
-      // treat eB as bullish, eS as bearish
       if (side === 'B' || side === 'eB') return 'BULL';
       if (side === 'S' || side === 'eS') return 'BEAR';
     }
@@ -435,13 +490,11 @@
 
   // -----------------------------
   // UI: Risk Copilot (derived only)
-  // IMPORTANT: if your HTML ids are duplicated, these will appear identical.
   // -----------------------------
   function updateRiskCopilotUI(snap) {
     return safe(() => {
       if (!DOM.riskEntry || !DOM.riskStop || !DOM.riskTargets || !DOM.riskConf) return;
 
-      // Guard: if IDs accidentally point to the same element, do nothing (prevents "all same number")
       if (DOM.riskEntry === DOM.riskStop || DOM.riskEntry === DOM.riskTargets || DOM.riskEntry === DOM.riskConf) {
         return;
       }
@@ -537,35 +590,79 @@
       const style = document.createElement('style');
       style.id = 'bsPulseKeyframes';
       style.textContent = `
-        @keyframes darriusPulseGold {
+        @keyframes darriusPulseGlow {
           0%   { transform: translate(-50%, -50%) scale(1.00); filter: brightness(1); }
-          35%  { transform: translate(-50%, -50%) scale(1.18); filter: brightness(1.25); }
-          70%  { transform: translate(-50%, -50%) scale(1.06); filter: brightness(1.10); }
+          35%  { transform: translate(-50%, -50%) scale(1.18); filter: brightness(1.28); }
+          70%  { transform: translate(-50%, -50%) scale(1.06); filter: brightness(1.12); }
           100% { transform: translate(-50%, -50%) scale(1.00); filter: brightness(1); }
         }
-        .darrius-pulse-b { position:absolute; }
-        .darrius-pulse-b::after {
+
+        /* ring uses css var --pulseRgb like: 255,193,7 */
+        .darrius-pulse-sig { position:absolute; }
+        .darrius-pulse-sig::after{
           content:'';
           position:absolute;
           left:50%; top:50%;
           width:34px; height:34px;
           border-radius:999px;
           transform:translate(-50%,-50%);
-          background:rgba(255,193,7,0.18);
-          box-shadow:0 0 18px rgba(255,193,7,0.55), 0 0 44px rgba(255,193,7,0.30);
+          background: rgba(var(--pulseRgb, 255,193,7), 0.18);
+          box-shadow: 0 0 18px rgba(var(--pulseRgb, 255,193,7), 0.55),
+                      0 0 44px rgba(var(--pulseRgb, 255,193,7), 0.30);
           opacity:0;
-          animation:darriusPulseGoldRing 1.2s ease-out 0s 1 both;
+          animation: darriusPulseRing 1.2s ease-out 0s infinite;
           pointer-events:none;
           z-index:-1;
         }
-        @keyframes darriusPulseGoldRing {
+        @keyframes darriusPulseRing{
           0%   { transform: translate(-50%,-50%) scale(0.95); opacity:0.0; }
-          25%  { opacity:0.8; }
+          25%  { opacity:0.85; }
           100% { transform: translate(-50%,-50%) scale(2.2); opacity:0.0; }
         }
       `;
       document.head.appendChild(style);
     }, 'ensurePulseKeyframes');
+  }
+
+  function findLastIndexBySide(sigs, side) {
+    for (let i = sigs.length - 1; i >= 0; i--) {
+      if (sigs[i]?.side === side) return i;
+    }
+    return -1;
+  }
+
+  // Anchor y to EMA/AUX instead of candle price
+  function computeAnchoredY(snap, sig, priceToY, gapPx) {
+    // gap rules:
+    // - BUY => below EMA => y + gap
+    // - SELL => above AUX => y - gap
+    const side = sig?.side || '';
+    const sec = toUtcSec(sig?.time);
+    if (sec == null) return null;
+
+    const emaRaw = pickEmaLine(snap);
+    const auxRaw = pickAuxLine(snap);
+    const emaArr = normalizeLineArr(emaRaw);
+    const auxArr = normalizeLineArr(auxRaw);
+
+    const isBuy = (side === 'B' || side === 'eB');
+    const isSell = (side === 'S' || side === 'eS');
+
+    let anchorPrice = null;
+    if (isBuy) anchorPrice = nearestLineValueAtSec(emaArr, sec);
+    if (isSell) anchorPrice = nearestLineValueAtSec(auxArr, sec);
+
+    // fallback (never disappear)
+    if (anchorPrice == null || !Number.isFinite(Number(anchorPrice))) {
+      anchorPrice = sig?.price;
+    }
+
+    const y0 = priceToY(Number(anchorPrice));
+    if (!Number.isFinite(y0)) return null;
+
+    if (isBuy) return y0 + gapPx;
+    if (isSell) return y0 - gapPx;
+    return y0;
   }
 
   function renderOverlaySignals(snap) {
@@ -584,32 +681,37 @@
         ? window.DarriusChart.priceToY : null;
       if (!timeToX || !priceToY) return;
 
-      const sigs = normalizeOverlaySignals(snap); // includes eB/eS now
+      const sigs = normalizeOverlaySignals(snap);
       if (!sigs.length) return;
 
       ensurePulseKeyframes();
 
-      // eB/eS PATCH: pulse ONLY last CONFIRMED BUY (B), not eB
-      let lastConfirmedBIndex = -1;
-      for (let i = sigs.length - 1; i >= 0; i--) {
-        if (sigs[i]?.side === 'B') { lastConfirmedBIndex = i; break; }
-      }
+      // last indices (pulse these)
+      const lastB  = findLastIndexBySide(sigs, 'B');
+      const lastEB = findLastIndexBySide(sigs, 'eB');
+      const lastS  = findLastIndexBySide(sigs, 'S');
+      const lastES = findLastIndexBySide(sigs, 'eS');
 
       // draw last N
       const start = Math.max(0, sigs.length - 80);
+      const gapPx = 12; // 你要更“贴线明显”，调 14/16 都行
+
       for (let i = start; i < sigs.length; i++) {
         const s = sigs[i];
         const x = timeToX(s.time);
-        const y = priceToY(s.price);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        if (!Number.isFinite(x)) continue;
+
+        // ✅ anchor y to EMA/AUX
+        const y = computeAnchoredY(snap, s, priceToY, gapPx);
+        if (!Number.isFinite(y)) continue;
 
         const el = document.createElement('div');
         el.textContent = s.side; // 'eB','eS','B','S'
 
-        const isLastBuy = (i === lastConfirmedBIndex && s.side === 'B');
-        if (isLastBuy) {
-          el.classList.add('darrius-pulse-b');
-          el.style.animation = 'darriusPulseGold 1.2s ease-out 0s 1 both';
+        const isPulse = (i === lastB) || (i === lastEB) || (i === lastS) || (i === lastES);
+        if (isPulse) {
+          el.classList.add('darrius-pulse-sig');
+          el.style.animation = 'darriusPulseGlow 1.2s ease-in-out 0s infinite';
         }
 
         el.style.position = 'absolute';
@@ -617,9 +719,7 @@
         el.style.left = `${x}px`;
         el.style.top = `${y}px`;
 
-        // eB/eS PATCH: early looks smaller + lighter
         const isEarly = (s.side === 'eB' || s.side === 'eS');
-
         el.style.width = isEarly ? '28px' : '34px';
         el.style.height = isEarly ? '28px' : '34px';
         el.style.borderRadius = '999px';
@@ -631,6 +731,8 @@
         el.style.opacity = isEarly ? '0.78' : '1';
 
         if (s.side === 'B' || s.side === 'eB') {
+          // BUY
+          el.style.setProperty('--pulseRgb', '255,193,7'); // gold
           el.style.color = '#0B0B0B';
           el.style.background = isEarly ? 'rgba(255,193,7,0.78)' : 'rgba(255,193,7,0.95)';
           el.style.border = '1px solid rgba(255,255,255,0.75)';
@@ -638,6 +740,8 @@
             ? '0 0 8px rgba(255,193,7,0.45), 0 0 18px rgba(255,193,7,0.25)'
             : '0 0 10px rgba(255,193,7,0.65), 0 0 26px rgba(255,193,7,0.40)';
         } else {
+          // SELL
+          el.style.setProperty('--pulseRgb', '255,90,90'); // red glow ring (matches your S/eS bg)
           el.style.color = '#FFFFFF';
           el.style.background = isEarly ? 'rgba(255,90,90,0.78)' : 'rgba(255,90,90,0.95)';
           el.style.border = '1px solid rgba(255,255,255,0.65)';
@@ -673,7 +777,6 @@
 
     safe(() => {
       window.addEventListener('darrius:chartUpdated', () => {
-        // let chart layout settle first
         requestAnimationFrame(() => tick());
       });
     }, 'bindChartUpdated');
