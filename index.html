@@ -376,6 +376,7 @@
 
     /* ===== Center Chart ===== */
     #chartPanel .panelBody{ padding:0; }
+
     #chartTop{
       padding:10px 14px;
       display:flex;
@@ -433,11 +434,20 @@
       background: rgba(76,194,255,.10);
     }
 
+    /* ====== 关键修复：让主图 + Mutant 在中间列稳定纵向布局 ====== */
+    #chartPanel .panelBody{
+      display:flex;
+      flex-direction:column;
+      overflow:hidden; /* 避免 mutant 被 panelBody 的滚动/裁切干扰 */
+      min-height:0;
+    }
+
     #chartWrap{
       position:relative;
       width:100%;
-      height: calc(100vh - 78px - 16px - 16px - 52px);
+      flex: 1 1 auto;     /* 主图吃掉剩余高度 */
       min-height:420px;
+      height:auto;        /* 覆盖你之前的 calc 固定高度，避免挤掉 mutant */
     }
     #chart{
       position:absolute; inset:0;
@@ -450,6 +460,18 @@
       position:absolute; inset:0;
       pointer-events:none;
       z-index:20;
+    }
+
+    /* Mutant 在主图下端：固定高度 */
+    #mutantPanel{
+      flex: 0 0 96px;
+      height:96px;
+      margin:10px 14px 14px 14px; /* 跟 panelBody 视觉一致 */
+      border-radius:14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      overflow:hidden;
+      position:relative;
     }
 
     /* ===== Right Controls ===== */
@@ -555,7 +577,8 @@
         height:auto;
         grid-template-columns: 1fr;
       }
-      #chartWrap{ height: 560px; }
+      /* 小屏时，给 chartWrap 一个固定高度，mutant 仍然显示在下方 */
+      #chartWrap{ min-height:560px; }
       #brand{ min-width:0; }
       #topRight{ min-width:0; }
       #tfQuick{ justify-content:flex-start; }
@@ -613,10 +636,9 @@
                 <span>Net Inflow</span><b id="netInflow" style="color:var(--brand1)">—</b>
               </div>
 
-              <!-- ✅（按你“黄框删”要求）保留一句精简说明： -->
               <div class="small" style="margin-top:10px">
                 <b>Note:</b> Derived from the main chart only.<br/>
-                <b>说明：</b>完全由主图派生（不引入外部情绪数据）。
+                <b>说明：</b>完全由主图派生。
               </div>
             </div>
           </div>
@@ -651,19 +673,19 @@
           <div class="cardTitle"><b>Affiliate · 推荐人</b><span class="small">入口</span></div>
           <button class="btnGhost" id="affiliateBtn">Affiliate / 推荐入口</button>
           <div class="note" style="margin-top:10px">
-            <b>Note:</b> Commission terms are disclosed only in the dashboard and agreement (not on the public front-end).<br/>
-            <b>说明：</b>返佣比例与结算规则仅在后台与合同中呈现，不在前端公开展示。
+            <b>Note:</b> Commission terms are disclosed only in the dashboard and agreement.<br/>
+            <b>说明：</b>返佣比例与结算规则仅在后台与合同中呈现。
           </div>
         </div>
 
         <!-- Compliance Disclaimer（保留） -->
         <div id="leftDisclaimer">
           <div>
-            <b>English:</b> Informational use only. Not investment advice. No offer or solicitation to buy/sell any security, futures, FX, crypto, or other financial instrument.
+            <b>Disclaimer:</b> Informational use only. Not investment advice. No offer or solicitation to buy/sell any security, futures, FX, crypto, or other financial instrument.
             Signals are algorithmic estimates and may be inaccurate, delayed, or incomplete. Past performance is not indicative of future results. You are solely responsible for your trading decisions and risk.
           </div>
           <div style="margin-top:8px">
-            <b>中文：</b> 本系统仅用于信息展示，不构成任何投资建议、要约或招揽。算法信号可能存在误差、延迟或不完整；历史表现不代表未来收益。任何交易决策与风险均由用户自行承担。
+            <b>免责声明：</b> 本系统仅用于信息展示，不构成任何投资建议、要约或招揽。算法信号可能存在误差、延迟或不完整；历史表现不代表未来收益。任何交易决策与风险均由用户自行承担。
           </div>
           <div class="mut" style="margin-top:8px">
             Links:
@@ -695,36 +717,17 @@
           <button class="tfBtn" data-tf="1M">1M</button>
         </div>
       </div>
+
       <div class="panelBody">
+        <!-- 主图 -->
         <div id="chartWrap">
           <div id="chart"></div>
           <!-- 保留这个占位层（不影响 market.pulse.js 自建 #bsOverlayLayer） -->
           <div id="sigOverlay"></div>
-         </div>   <!-- 结束 #chartWrap -->
-
-<!-- Mutant：主图下端 -->
-<div id="mutantPanel" style="
-  width:100%;
-  height:96px;
-  margin-top:10px;
-  border-radius:14px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  overflow:hidden;
-  position:relative;
-"></div>
-
-  width:100%;
-  height:96px;              /* 你可改：80 / 96 / 110 / 120 */
-  margin-top:10px;
-  border-radius:14px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  overflow:hidden;
-  position:relative;
-"></div>
-
         </div>
+
+        <!-- Mutant：主图下端（稳定显示） -->
+        <div id="mutantPanel"></div>
       </div>
     </div>
 
@@ -739,17 +742,16 @@
         <div class="card">
           <div class="cardTitle"><b>Data Source · 数据源</b><span class="small">预留接口</span></div>
           <div class="field">
-            <div class="label"><span>Source · 来源</span><span class="small">未来接第三方实盘</span></div>
+            <div class="label"><span>Source · 来源</span><span class="small">接第三方实盘</span></div>
             <select id="dataSource">
               <option value="demo">Demo (Local)</option>
               <option value="provider">3rd-Party Provider (Reserved)</option>
             </select>
           </div>
 
-          <!-- ✅（按你“黄框删”要求）右侧这里删掉大段解释，只保留一句合规提示： -->
           <div class="note">
-            <b>Note:</b> Live data should be proxied through backend (no keys exposed in browser).<br/>
-            <b>说明：</b>实盘建议通过后端代理获取（不在浏览器暴露密钥/实现）。
+            <b>Note:</b> Live data should be proxied through backend.<br/>
+            <b>说明：</b>实盘通过后端代理获取。
           </div>
         </div>
 
@@ -790,8 +792,8 @@
           </div>
 
           <div class="note" style="margin-top:8px">
-            <b>Note:</b> EMA/AUX parameters are internal and hidden from end users.<br/>
-            <b>说明：</b>EMA/AUX 参数为内部策略要素，对客户隐藏；系统会按周期自动适配。
+            <b>Note:</b> EMA/AUX parameters are internal.<br/>
+            <b>说明：</b>EMA/AUX 参数为内部策略要素，系统会按周期自动适配。
           </div>
         </div>
 
@@ -813,7 +815,7 @@
           </div>
 
           <div class="field">
-            <div class="label"><span>Email · 邮箱</span><span class="small">（建议填）</span></div>
+            <div class="label"><span>Email · 邮箱</span><span class="small">（必填）</span></div>
             <input id="email" placeholder="用于收据 / 首次兜底匹配"/>
           </div>
 
@@ -826,7 +828,7 @@
 
           <div class="row2" style="margin-top:0">
             <button class="btn" id="subscribeBtn" disabled>Start · 开通</button>
-            <button class="btnGhost" id="manageBtn" disabled>Manage · 管理</button>
+            <button class="btnGhost" id="manageBtn" disabled>Subscription Manage · 订单管理</button>
           </div>
 
           <div class="note" style="margin-top:10px">
@@ -849,12 +851,8 @@
     </div>
   </div>
 
-  <script src="js/chart.core.js"></script>
-<script src="js/market.pulse.js"></script>
-<script src="js/forex.mutant.js"></script>
-
   <!-- =========================
-       SCRIPTS (ORDER IS CRITICAL)
+       CONFIG (keep)
        ========================= -->
   <script>
     window.API_BASE = "https://darrius-api.onrender.com";
@@ -883,7 +881,6 @@
       const dupes = findDuplicateIds();
       window.__DARRIUS_ID_DUPES__ = dupes.map(d => ({ id: d.id, count: d.count }));
 
-      // 你说的 sameAsEntry 检测：判断 riskEntry/riskStop/riskTargets/riskConf/riskWR 是否意外指向同一个节点
       window.sameAsEntry = function(){
         const e  = document.getElementById("riskEntry");
         const s  = document.getElementById("riskStop");
@@ -904,23 +901,28 @@
     })();
   </script>
 
+  <!-- =========================
+       SCRIPTS (ORDER IS CRITICAL)
+       1) chart core
+       2) overlay ui
+       3) mutant
+       4) subscription
+       5) boot
+       ========================= -->
+
   <!-- 1) 主图系统（冻结，不动） -->
   <script src="js/chart.core.js?v=20260122"></script>
 
-  <!-- 2) Market Pulse UI（你已替换为 STABLE COMPAT v2026.01.22） -->
+  <!-- 2) Market Pulse UI（overlay, eB/eS + BIG B/S） -->
   <script src="js/market.pulse.js?v=20260122"></script>
 
-  <!-- 3) 订阅系统（保持原） -->
+  <!-- 3) Mutant（单独文件，不碰订阅/支付） -->
+  <script src="js/forex.mutant.js?v=20260122"></script>
+
+  <!-- 4) 订阅系统（保持原） -->
   <script src="js/subscription.js?v=20260122"></script>
 
-  <!-- 4) 启动/绑定按钮（保持原） -->
+  <!-- 5) 启动/绑定按钮（保持原） -->
   <script src="js/boot.js?v=20260122"></script>
-
-  <!-- ✅ 注意：
-       我刻意删除了你原来那段 “SAFETY BRIDGE + setInterval tryRefresh()” 和 “findButtonByText Start/Manage 监听”。
-       这两段会：
-       - 重复调用 / 误调用 market.pulse 内部函数（造成页面偶发崩溃/覆盖）
-       - 抢占订阅按钮事件（影响真实 checkout / portal 逻辑）
-  -->
 </body>
 </html>
