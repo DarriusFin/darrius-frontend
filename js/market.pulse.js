@@ -1,4 +1,4 @@
-/* market.pulse.js (STABLE COMPAT - REPLACEABLE) v2026.01.22
+/* market.pulse.js (STABLE COMPAT - REPLACEABLE) v2026.01.22 + eB/eS PATCH
  * UI-only layer. Must NOT mutate chart.core.js internals.
  * - Reads snapshot (multiple schemas)
  * - Renders Market Pulse
@@ -153,7 +153,18 @@
   }
 
   function normSide(s) {
-    const t = (s?.side ?? s?.type ?? s?.text ?? s?.signal ?? s?.action ?? '').toString().toUpperCase();
+    // eB/eS PATCH: support early signals
+    const raw = (s?.side ?? s?.type ?? s?.text ?? s?.signal ?? s?.action ?? '').toString().trim();
+    const t = raw.toUpperCase();
+
+    // exact early
+    if (raw === 'eB' || raw === 'eS') return raw;
+
+    // tolerant early forms
+    if (t === 'EB' || t === 'E B' || t.includes('EBUY')) return 'eB';
+    if (t === 'ES' || t === 'E S' || t.includes('ESELL')) return 'eS';
+
+    // confirmed
     if (t.includes('BUY') || t === 'B') return 'B';
     if (t.includes('SELL') || t === 'S') return 'S';
     return '';
@@ -219,6 +230,22 @@
       return (Math.abs(a - target) <= Math.abs(b - target)) ? a : b;
     }
 
+    // eB/eS PATCH: for EARLY signals, bias alignment to the left (floor) to avoid “dragging later”
+    function floorSec(target) {
+      if (!candleTimesSec.length || target == null) return null;
+      let lo = 0, hi = candleTimesSec.length - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const v = candleTimesSec[mid];
+        if (v === target) return v;
+        if (v < target) lo = mid + 1;
+        else hi = mid - 1;
+      }
+      // hi is the last index with value < target
+      const idx = Math.max(0, Math.min(hi, candleTimesSec.length - 1));
+      return candleTimesSec[idx] ?? null;
+    }
+
     const out = [];
     const used = new Set();
 
@@ -233,7 +260,9 @@
       const sec = toUtcSec(tRaw);
       if (sec == null) continue;
 
-      const near = nearestSec(sec);
+      // eB/eS PATCH: early aligns to floor (earlier bar) -> visually earlier & less “slow”
+      const isEarly = (side === 'eB' || side === 'eS');
+      const near = isEarly ? floorSec(sec) : nearestSec(sec);
       if (near == null) continue;
 
       // Decide overlay time format:
@@ -332,12 +361,14 @@
   }
 
   function deriveInflectionBias(snap) {
-    const sigs = normalizeOverlaySignals(snap);
+    const sigs = normalizeOverlaySignals(snap); // now includes eB/eS
     if (!sigs.length) return 'NEUTRAL';
     for (let i = sigs.length - 1; i >= 0; i--) {
       const side = sigs[i].side;
       if (!side) continue;
-      return side === 'B' ? 'BULL' : 'BEAR';
+      // treat eB as bullish, eS as bearish
+      if (side === 'B' || side === 'eB') return 'BULL';
+      if (side === 'S' || side === 'eS') return 'BEAR';
     }
     return 'NEUTRAL';
   }
@@ -471,7 +502,7 @@
   }
 
   // -----------------------------
-  // Overlay (BIG B/S)
+  // Overlay (BIG eB/eS + B/S)
   // -----------------------------
   function getOverlayHost() {
     const hostId = (window.DarriusChart && window.DarriusChart.__hostId) ? window.DarriusChart.__hostId : 'chart';
@@ -553,15 +584,15 @@
         ? window.DarriusChart.priceToY : null;
       if (!timeToX || !priceToY) return;
 
-      const sigs = normalizeOverlaySignals(snap);
+      const sigs = normalizeOverlaySignals(snap); // includes eB/eS now
       if (!sigs.length) return;
 
       ensurePulseKeyframes();
 
-      // pulse last BUY
-      let lastBIndex = -1;
+      // eB/eS PATCH: pulse ONLY last CONFIRMED BUY (B), not eB
+      let lastConfirmedBIndex = -1;
       for (let i = sigs.length - 1; i >= 0; i--) {
-        if (sigs[i]?.side === 'B') { lastBIndex = i; break; }
+        if (sigs[i]?.side === 'B') { lastConfirmedBIndex = i; break; }
       }
 
       // draw last N
@@ -573,9 +604,9 @@
         if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
 
         const el = document.createElement('div');
-        el.textContent = s.side;
+        el.textContent = s.side; // 'eB','eS','B','S'
 
-        const isLastBuy = (i === lastBIndex && s.side === 'B');
+        const isLastBuy = (i === lastConfirmedBIndex && s.side === 'B');
         if (isLastBuy) {
           el.classList.add('darrius-pulse-b');
           el.style.animation = 'darriusPulseGold 1.2s ease-out 0s 1 both';
@@ -586,25 +617,33 @@
         el.style.left = `${x}px`;
         el.style.top = `${y}px`;
 
-        el.style.width = '34px';
-        el.style.height = '34px';
+        // eB/eS PATCH: early looks smaller + lighter
+        const isEarly = (s.side === 'eB' || s.side === 'eS');
+
+        el.style.width = isEarly ? '28px' : '34px';
+        el.style.height = isEarly ? '28px' : '34px';
         el.style.borderRadius = '999px';
         el.style.display = 'flex';
         el.style.alignItems = 'center';
         el.style.justifyContent = 'center';
         el.style.fontWeight = '800';
-        el.style.fontSize = '16px';
+        el.style.fontSize = isEarly ? '14px' : '16px';
+        el.style.opacity = isEarly ? '0.78' : '1';
 
-        if (s.side === 'B') {
+        if (s.side === 'B' || s.side === 'eB') {
           el.style.color = '#0B0B0B';
-          el.style.background = 'rgba(255,193,7,0.95)';
+          el.style.background = isEarly ? 'rgba(255,193,7,0.78)' : 'rgba(255,193,7,0.95)';
           el.style.border = '1px solid rgba(255,255,255,0.75)';
-          el.style.boxShadow = '0 0 10px rgba(255,193,7,0.65), 0 0 26px rgba(255,193,7,0.40)';
+          el.style.boxShadow = isEarly
+            ? '0 0 8px rgba(255,193,7,0.45), 0 0 18px rgba(255,193,7,0.25)'
+            : '0 0 10px rgba(255,193,7,0.65), 0 0 26px rgba(255,193,7,0.40)';
         } else {
           el.style.color = '#FFFFFF';
-          el.style.background = 'rgba(255,90,90,0.95)';
+          el.style.background = isEarly ? 'rgba(255,90,90,0.78)' : 'rgba(255,90,90,0.95)';
           el.style.border = '1px solid rgba(255,255,255,0.65)';
-          el.style.boxShadow = '0 0 10px rgba(255,90,90,0.55), 0 0 26px rgba(255,90,90,0.35)';
+          el.style.boxShadow = isEarly
+            ? '0 0 8px rgba(255,90,90,0.40), 0 0 18px rgba(255,90,90,0.22)'
+            : '0 0 10px rgba(255,90,90,0.55), 0 0 26px rgba(255,90,90,0.35)';
         }
 
         layer.appendChild(el);
@@ -639,6 +678,7 @@
       });
     }, 'bindChartUpdated');
 
+    // UI-only refresh (NO data provider hits)
     setInterval(tick, 600);
   }
 
