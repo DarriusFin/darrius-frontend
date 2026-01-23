@@ -1,7 +1,8 @@
-/* darrius.mutant.js (UI plugin) v2026.01.23d
+/* darrius.mutant.js (UI plugin) v2026.01.23e
  * Darrius Mutant indicator panel (bottom sub-panel)
- * - Robust: will render bars even if DarriusChart.timeToX is missing / returns NaN
- * - Arrows: ONLY at trend-confirm / reversal-confirm turning points (clean & readable)
+ * - Robust: renders bars even if DarriusChart.timeToX is missing / returns NaN
+ * - CLEAN arrows: only at trend-confirm / reversal-confirm turning points
+ * - Fix: remove duplicate legacy canvases/titles in #mutantPanel (e.g., leftover forex.mutant)
  * - Read-only; does NOT touch subscription/billing
  */
 (() => {
@@ -28,33 +29,29 @@
 
     // Arrow overlay (CLEAN MODE)
     showArrow: true,
-    arrowMode: 'turns',          // 'turns' | 'last' (turns recommended)
+    arrowMode: 'turns',          // 'turns' | 'last'
 
-    arrowAlpha: 0.95,
+    arrowAlpha: 0.97,
     arrowSize: 7,
 
     // Trend thresholds (hysteresis)
-    // Enter trend when |v| >= enterThr, exit to neutral when |v| <= exitThr
     arrowEnterThr: 0.22,
     arrowExitThr: 0.10,
-    arrowConfirmBars: 2,         // require N consecutive bars to confirm trend change
+    arrowConfirmBars: 2,
 
-    // Arrow colors (decoupled from bar colors; easier to read)
-    arrowUpColor: 'rgba(43,226,166,0.98)',
-    arrowDownColor: 'rgba(255,90,90,0.98)',
-    arrowStroke: 'rgba(255,255,255,0.90)',
-    arrowGlow: 10,
+    // Arrow colors (per your request)
+    arrowUpColor: 'rgba(255, 212, 0, 0.98)',     // GOLD
+    arrowDownColor: 'rgba(255, 255, 255, 0.98)', // PURE WHITE
+    arrowStroke: 'rgba(0,0,0,0.35)',             // subtle dark edge for white arrow readability
+    arrowGlow: 12,
 
-    // Mutant computation
     lookback: 260,
     smooth: 3,
-    power: 0.92,
 
     posThr: 0.18,
     negThr: -0.18,
 
     tickMs: 700,
-    debugOnce: false,
   };
 
   function getSnapshot() {
@@ -109,10 +106,8 @@
       raw[i] = Math.log(c / p) * 260;
     }
 
-    // gentle smoothing
     const sm = emaOnArray(raw, Math.max(3, CFG.smooth + 2));
 
-    // robust normalize to [-1,1] using p95
     const absVals = sm.filter(Number.isFinite).map(x => Math.abs(x)).sort((a, b) => a - b);
     const p95 = absVals.length ? absVals[Math.floor(absVals.length * 0.95)] : 1;
     const scale = Math.max(1e-9, p95);
@@ -125,7 +120,7 @@
   }
 
   // ---- Canvas ----
-  const STATE = { host: null, canvas: null, ctx: null, w: 0, h: 0, dpr: 1, debugged: false };
+  const STATE = { host: null, canvas: null, ctx: null, w: 0, h: 0, dpr: 1 };
 
   function ensureHost() {
     return safe(() => {
@@ -136,13 +131,32 @@
     });
   }
 
+  // remove legacy canvases that cause "double title"
+  function purgeLegacyCanvases(host) {
+    safe(() => {
+      if (!host) return;
+
+      // remove any canvas in the host that is NOT ours
+      const all = Array.from(host.querySelectorAll('canvas'));
+      for (const c of all) {
+        const mine = c.getAttribute('data-darrius-mutant') === '1';
+        if (!mine) c.remove();
+      }
+    });
+  }
+
   function ensureCanvas(host) {
     return safe(() => {
       if (!host) return null;
-      let c = host.querySelector('canvas[data-mutant="1"]');
+
+      // 1) purge old/legacy canvases first (fix duplicate titles)
+      purgeLegacyCanvases(host);
+
+      // 2) ensure our canvas exists
+      let c = host.querySelector('canvas[data-darrius-mutant="1"]');
       if (!c) {
         c = document.createElement('canvas');
-        c.setAttribute('data-mutant', '1');
+        c.setAttribute('data-darrius-mutant', '1');
         c.style.position = 'absolute';
         c.style.inset = '0';
         c.style.width = '100%';
@@ -194,14 +208,17 @@
     ctx.save();
     ctx.strokeStyle = `rgba(255,255,255,${CFG.gridAlpha})`;
     ctx.lineWidth = 1;
+
     const lines = Math.max(0, CFG.gridLines | 0);
     for (let i = 1; i <= lines; i++) {
       const y = Math.floor((h * i) / (lines + 1)) + 0.5;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
     }
+
     const y0 = Math.floor(h / 2) + 0.5;
     ctx.strokeStyle = `rgba(255,255,255,${CFG.baselineAlpha})`;
     ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(w, y0); ctx.stroke();
+
     ctx.restore();
   }
 
@@ -226,21 +243,33 @@
     return clamp(Math.floor(dx * 0.62), CFG.barMinW, CFG.barMaxW);
   }
 
+  function drawArrowShape(ctx, x, y, dir, s) {
+    ctx.beginPath();
+    if (dir > 0) {
+      ctx.moveTo(x, y - s);
+      ctx.lineTo(x - s, y + s);
+      ctx.lineTo(x + s, y + s);
+    } else {
+      ctx.moveTo(x, y + s);
+      ctx.lineTo(x - s, y - s);
+      ctx.lineTo(x + s, y - s);
+    }
+    ctx.closePath();
+  }
+
   function renderTurningArrows(ctx, drawPts, w, h) {
     if (!CFG.showArrow || CFG.arrowMode !== 'turns' || !drawPts || drawPts.length < 3) return;
 
-    // sort by x to enforce time direction
     const seq = drawPts
       .map(p => ({ x: p.x, v: p.v }))
       .sort((a, b) => a.x - b.x);
 
-    const enterUp = Number(CFG.arrowEnterThr);
-    const enterDn = -Number(CFG.arrowEnterThr);
+    const enterThr = Number(CFG.arrowEnterThr);
     const exitAbs = Math.abs(Number(CFG.arrowExitThr));
     const need = Math.max(1, CFG.arrowConfirmBars | 0);
 
-    let state = 0;          // confirmed trend: -1,0,+1
-    let pending = 0;        // pending target state
+    let state = 0;        // -1,0,+1
+    let pending = 0;
     let pendingCount = 0;
 
     const turns = [];
@@ -248,32 +277,25 @@
     for (let i = 0; i < seq.length; i++) {
       const v = seq[i].v;
 
-      let target = 0;
-      if (v >= enterUp) target = +1;
-      else if (v <= enterDn) target = -1;
+      let target = state;
+      if (v >= enterThr) target = +1;
+      else if (v <= -enterThr) target = -1;
       else if (Math.abs(v) <= exitAbs) target = 0;
 
       if (target === state) {
-        pending = 0;
-        pendingCount = 0;
+        pending = 0; pendingCount = 0;
         continue;
       }
 
-      if (pending !== target) {
-        pending = target;
-        pendingCount = 1;
-      } else {
-        pendingCount++;
-      }
+      if (pending !== target) { pending = target; pendingCount = 1; }
+      else pendingCount++;
 
       if (pendingCount >= need) {
-        // draw only when entering a trend (+1 or -1), not when returning to neutral
         if (pending === +1 || pending === -1) {
           turns.push({ idx: i, dir: pending });
         }
         state = pending;
-        pending = 0;
-        pendingCount = 0;
+        pending = 0; pendingCount = 0;
       }
     }
 
@@ -298,23 +320,14 @@
       ctx.shadowColor = col;
       ctx.shadowBlur = CFG.arrowGlow;
 
-      ctx.beginPath();
-      if (dir > 0) {
-        ctx.moveTo(p.x, yPos - s);
-        ctx.lineTo(p.x - s, yPos + s);
-        ctx.lineTo(p.x + s, yPos + s);
-      } else {
-        ctx.moveTo(p.x, yPos + s);
-        ctx.lineTo(p.x - s, yPos - s);
-        ctx.lineTo(p.x + s, yPos - s);
-      }
-      ctx.closePath();
+      drawArrowShape(ctx, Math.round(p.x), Math.round(yPos), dir, s);
 
       ctx.fillStyle = col;
       ctx.fill();
 
-      // stroke (white edge)
-      ctx.lineWidth = 1.2;
+      // edge stroke
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 1.3;
       ctx.strokeStyle = CFG.arrowStroke;
       ctx.stroke();
 
@@ -342,22 +355,13 @@
     ctx.shadowColor = col;
     ctx.shadowBlur = CFG.arrowGlow;
 
-    ctx.beginPath();
-    if (dir > 0) {
-      ctx.moveTo(last.x, yPos - s);
-      ctx.lineTo(last.x - s, yPos + s);
-      ctx.lineTo(last.x + s, yPos + s);
-    } else {
-      ctx.moveTo(last.x, yPos + s);
-      ctx.lineTo(last.x - s, yPos - s);
-      ctx.lineTo(last.x + s, yPos - s);
-    }
-    ctx.closePath();
+    drawArrowShape(ctx, Math.round(last.x), Math.round(yPos), dir, s);
 
     ctx.fillStyle = col;
     ctx.fill();
 
-    ctx.lineWidth = 1.2;
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 1.3;
     ctx.strokeStyle = CFG.arrowStroke;
     ctx.stroke();
 
@@ -382,16 +386,10 @@
       const mutant = computeMutantFromCandles(candles);
       if (!mutant || mutant.length < 2) return;
 
-      // X mapping:
-      // - Prefer timeToX when available and returns finite
-      // - Otherwise fallback to equal spacing
       const timeToX = (window.DarriusChart && typeof window.DarriusChart.timeToX === 'function')
         ? window.DarriusChart.timeToX : null;
 
-      const pts = [];
-      for (let i = 0; i < mutant.length; i++) {
-        pts.push({ t: mutant[i].time, v: clamp(mutant[i].v, -1, 1), i });
-      }
+      const pts = mutant.map(p => ({ t: p.time, v: clamp(p.v, -1, 1) }));
 
       let useTimeToX = false;
       if (timeToX && pts.length) {
@@ -411,8 +409,7 @@
 
       if (!drawPts.length) {
         const n = pts.length;
-        const leftPad = 10;
-        const rightPad = 10;
+        const leftPad = 10, rightPad = 10;
         const usableW = Math.max(1, w - leftPad - rightPad);
         for (let i = 0; i < n; i++) {
           const x = leftPad + (usableW * (i + 0.5) / n);
@@ -435,12 +432,9 @@
         ctx.fillRect(x0, top, barW, hh);
       }
 
-      // arrows (turning points only)
-      if (CFG.arrowMode === 'turns') {
-        renderTurningArrows(ctx, drawPts, w, h);
-      } else if (CFG.arrowMode === 'last') {
-        renderLastArrow(ctx, drawPts, h);
-      }
+      // arrows
+      if (CFG.arrowMode === 'turns') renderTurningArrows(ctx, drawPts, w, h);
+      else if (CFG.arrowMode === 'last') renderLastArrow(ctx, drawPts, h);
     });
   }
 
