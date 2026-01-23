@@ -1,5 +1,5 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.01.22-DATAMODE-STABLE
+ * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.01.23-EBES-TRENDLOCK
  *
  * Role:
  *  - Render main chart (candles + EMA + AUX + signals)
@@ -248,9 +248,18 @@
     const out = raw
       .map((s) => {
         const time = toUnixSec(s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date);
-        const side = String(s.side ?? s.type ?? s.action ?? s.text ?? "").toUpperCase();
-        const side2 = side.includes("BUY") ? "B" : side.includes("SELL") ? "S" : side;
-        if (!time || (side2 !== "B" && side2 !== "S")) return null;
+        const sideRaw = String(s.side ?? s.type ?? s.action ?? s.text ?? "").trim();
+        const sideUp = sideRaw.toUpperCase();
+
+        // support eB/eS if backend ever sends
+        let side2 = "";
+        if (sideRaw === "eB" || sideUp === "EB") side2 = "eB";
+        else if (sideRaw === "eS" || sideUp === "ES") side2 = "eS";
+        else if (sideUp.includes("BUY")) side2 = "B";
+        else if (sideUp.includes("SELL")) side2 = "S";
+        else if (sideUp === "B" || sideUp === "S") side2 = sideUp;
+
+        if (!time || !side2) return null;
         return { time, side: side2 };
       })
       .filter(Boolean)
@@ -464,7 +473,7 @@
     return trend;
   }
 
-  // Cross + confirm (your discussed fallback). Returns unique {time, side}
+  // Cross + confirm (legacy fallback). Returns unique {time, side}
   function computeSignalsCrossPlusConfirm(bars, emaPts, auxPts, confirmWindow) {
     const n = bars.length;
     if (n < 5) return [];
@@ -520,6 +529,148 @@
     return sigs;
   }
 
+  // Early + Confirm with Trend-Lock + Dead-zone
+  // Output sides: 'eB','eS','B','S' (unique by time+side)
+  function computeSignalsEarlyConfirmTrendLock(bars, emaPts, auxPts, confirmWindow) {
+    const n = bars.length;
+    if (n < 8) return [];
+
+    const emaV = emaPts.map(p => p.value);
+    const auxV = auxPts.map(p => p.value);
+    const auxTrend = computeTrendFromAux(auxV);
+
+    const cw = Math.max(0, Math.floor(confirmWindow ?? 3));
+    const sigs = [];
+    const used = new Set();
+
+    // ---- knobs (stable defaults) ----
+    const DEADZONE_K = 0.00018;     // 0.018% of price as dead-zone baseline
+    const DEADZONE_MIN = 1e-6;
+    const COOLDOWN_BARS = Math.max(2, cw);   // avoid spam
+
+    let lastSigIdx = -99999;
+
+    // Trend lock:
+    //  0 = unlocked, +1 = locked UP, -1 = locked DOWN
+    let lock = 0;
+
+    function addSig(i, side, reason) {
+      const t = bars[i].time;
+      const k = `${t}:${side}`;
+      if (used.has(k)) return;
+      used.add(k);
+      sigs.push({ time: t, side, i, reason: reason || null });
+      lastSigIdx = i;
+    }
+
+    function deadZoneOk(i) {
+      const e = emaV[i], a = auxV[i];
+      if (![e, a].every(Number.isFinite)) return false;
+      const base = Math.max(DEADZONE_MIN, Math.abs(e));
+      const eps = Math.max(DEADZONE_MIN, base * DEADZONE_K);
+      return Math.abs(e - a) >= eps;
+    }
+
+    function findConfirmIndex(startIdx, wantTrend) {
+      // wantTrend: +1 confirm up, -1 confirm down
+      for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
+        const prev = auxTrend[j - 1];
+        const curr = auxTrend[j];
+        if (wantTrend > 0) {
+          if (prev <= 0 && curr > 0) return j;
+        } else {
+          if (prev >= 0 && curr < 0) return j;
+        }
+      }
+      return -1;
+    }
+
+    function maybeUnlock(i) {
+      // unlock only when aux trend has flipped and stayed for 2 bars
+      if (lock === 1) {
+        if (auxTrend[i] < 0 && auxTrend[i - 1] < 0) lock = 0;
+      } else if (lock === -1) {
+        if (auxTrend[i] > 0 && auxTrend[i - 1] > 0) lock = 0;
+      }
+    }
+
+    for (let i = 2; i < n; i++) {
+      maybeUnlock(i);
+
+      const e0 = emaV[i - 1], e1 = emaV[i];
+      const a0 = auxV[i - 1], a1 = auxV[i];
+      if (![e0, e1, a0, a1].every(Number.isFinite)) continue;
+
+      // cooldown
+      if (i - lastSigIdx < COOLDOWN_BARS) continue;
+
+      // dead-zone filter (ignore tiny wiggles)
+      if (!deadZoneOk(i) || !deadZoneOk(i - 1)) continue;
+
+      const crossUp = (e0 <= a0 && e1 > a1);
+      const crossDn = (e0 >= a0 && e1 < a1);
+
+      if (crossUp) {
+        if (lock === -1) continue;            // locked down => ignore
+        addSig(i, "eB", "crossUp");           // EARLY appears immediately (earlier than confirm)
+        const k = findConfirmIndex(i, +1);
+        if (k >= 0) {
+          addSig(k, "B", "confirmUp");
+          lock = 1;                           // lock up after confirm
+        }
+      } else if (crossDn) {
+        if (lock === 1) continue;             // locked up => ignore
+        addSig(i, "eS", "crossDn");
+        const k = findConfirmIndex(i, -1);
+        if (k >= 0) {
+          addSig(k, "S", "confirmDn");
+          lock = -1;                          // lock down after confirm
+        }
+      }
+    }
+
+    sigs.sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
+    return sigs;
+  }
+
+  // Merge confirmed (B/S) from backend with locally computed early (eB/eS).
+  // This guarantees eB/eS exists even when backend only gives confirmed.
+  function mergeConfirmedWithEarly(confirmedSigs, earlyAllSigs) {
+    const conf = Array.isArray(confirmedSigs) ? confirmedSigs : [];
+    const early = Array.isArray(earlyAllSigs) ? earlyAllSigs : [];
+
+    const out = [];
+    const used = new Set();
+
+    function pushSig(s) {
+      if (!s || s.time == null || !s.side) return;
+      const k = `${s.time}:${s.side}`;
+      if (used.has(k)) return;
+      used.add(k);
+      out.push({ time: s.time, side: s.side, i: s.i, reason: s.reason, strength: s.strength });
+    }
+
+    // 1) push early (eB/eS) first (earlier)
+    for (const s of early) {
+      if (s.side === "eB" || s.side === "eS") pushSig(s);
+    }
+
+    // 2) push confirmed (B/S) from backend/endpoints (authoritative)
+    for (const s of conf) {
+      if (s.side === "B" || s.side === "S") pushSig(s);
+    }
+
+    // 3) if confirmed list was empty, keep local confirmed too
+    if (!conf.length) {
+      for (const s of early) {
+        if (s.side === "B" || s.side === "S") pushSig(s);
+      }
+    }
+
+    out.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+    return out;
+  }
+
   // series markers (small). Overlay uses big markers; we keep small empty when overlay enabled.
   function applyMarkers(sigs) {
     safeRun("applyMarkers", () => {
@@ -530,7 +681,9 @@
         return;
       }
 
-      const arr = Array.isArray(sigs) ? sigs : [];
+      // only confirmed B/S for small markers
+      const arr = (Array.isArray(sigs) ? sigs : []).filter(s => s && (s.side === "B" || s.side === "S"));
+
       candleSeries.setMarkers(
         arr.map((s) => ({
           time: s.time,
@@ -652,13 +805,22 @@
     emaSeries.setData(emaPts);
     auxSeries.setData(auxPts);
 
-    // Signals: priority:
-    // 1) payload carries signals
-    // 2) optional signals endpoints
-    // 3) compute fallback (cross+confirm)
-    let sigs = normalizeSignals(payload);
-    if (!sigs.length) sigs = await fetchOptionalSignals(sym, tf);
-    if (!sigs.length) sigs = computeSignalsCrossPlusConfirm(bars, emaPts, auxPts, CONFIRM_WINDOW);
+    // Signals:
+    // Confirmed priority:
+    //  1) payload carries confirmed signals
+    //  2) optional signals endpoints
+    //  3) compute local (early+confirm trendlock)
+    //
+    // Additionally:
+    //  - We ALWAYS compute local early signals (eB/eS) and merge, so eB/eS is always present and earlier.
+    let confirmed = normalizeSignals(payload).filter(s => s.side === "B" || s.side === "S");
+    if (!confirmed.length) confirmed = (await fetchOptionalSignals(sym, tf)).filter(s => s.side === "B" || s.side === "S");
+
+    // local early+confirm (trendlock) – ensures eB/eS appear earlier and are stable
+    const localAll = computeSignalsEarlyConfirmTrendLock(bars, emaPts, auxPts, CONFIRM_WINDOW);
+
+    // If confirmed still empty (no backend), keep local confirmed too
+    const sigs = mergeConfirmedWithEarly(confirmed, localAll);
 
     DIAG.lastSigCount = sigs.length;
 
@@ -669,7 +831,8 @@
       const last = bars[bars.length - 1];
       if ($("symText")) $("symText").textContent = sym;
       if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
-      if ($("hintText")) $("hintText").textContent = `Loaded · ${metaDS.dataMode === "demo" ? "Demo" : "Market"} · TF=${tf} · bars=${bars.length} · sigs=${sigs.length}`;
+      if ($("hintText")) $("hintText").textContent =
+        `Loaded · ${metaDS.dataMode === "demo" ? "Demo" : "Market"} · TF=${tf} · bars=${bars.length} · sigs=${sigs.length}`;
     });
 
     // ---- snapshot for market.pulse.js ----
@@ -680,16 +843,33 @@
       try {
         window.DarriusChart = window.DarriusChart || {};
 
-        // close map for signal price fill
-        const closeByTime = new Map();
-        for (const b of bars) closeByTime.set(b.time, b.close);
+        // bar map for signal anchor (LOW/HIGH) + fallback CLOSE
+        const barByTime = new Map();
+        for (const b of bars) barByTime.set(b.time, b);
 
-        // Build rich signals array with price for overlay
+        // Build rich signals array with anchor price for overlay
         const richSignals = (Array.isArray(sigs) ? sigs : [])
           .map((s, idx) => {
             const t = s.time ?? null;
-            const side = (String(s.side || "").toUpperCase() === "S") ? "S" : "B";
-            const price = closeByTime.get(t);
+            const sideRaw = String(s.side || "").trim();
+            const side =
+              (sideRaw === "eB" || sideRaw === "eS" || sideRaw === "B" || sideRaw === "S")
+                ? sideRaw
+                : ((String(sideRaw).toUpperCase() === "S") ? "S" : "B");
+
+            const b = barByTime.get(t);
+            if (!b) return null;
+
+            // Anchor rule (THIS fixes B above / S below):
+            //  - B/eB => candle LOW  (below wick)
+            //  - S/eS => candle HIGH (above wick)
+            const anchor =
+              (side === "B" || side === "eB") ? Number(b.low) :
+              (side === "S" || side === "eS") ? Number(b.high) :
+              Number(b.close);
+
+            const price = Number.isFinite(anchor) ? anchor : Number(b.close);
+
             return {
               time: t,
               price: Number.isFinite(price) ? price : null,
@@ -699,7 +879,7 @@
               strength: (typeof s.strength === "number" ? s.strength : null),
             };
           })
-          .filter((x) => x.time != null && x.price != null);
+          .filter((x) => x && x.time != null && x.price != null);
 
         // trend quick summary
         const n = Math.min(10, emaVals.length - 1);
@@ -779,7 +959,7 @@
     const start = bars.length - N;
 
     const flatSnapshot = {
-      version: "2026.01.22-DATAMODE-STABLE",
+      version: "2026.01.23-EBES-TRENDLOCK",
       ts: Date.now(),
       apiBase: DEFAULT_API_BASE,
       urlUsed: urlUsed || null,
@@ -794,6 +974,7 @@
       ema: emaVals.slice(start),
       aux: auxVals.slice(start),
       // provide BOTH names for UI:
+      // (NOTE: here "signals/sigs" are still time+side; overlay uses DarriusChart.getSnapshot().signals with anchor price)
       sigs: (Array.isArray(sigs) ? sigs.slice(Math.max(0, sigs.length - 300)) : []),
       signals: (Array.isArray(sigs) ? sigs.slice(Math.max(0, sigs.length - 300)) : []),
       lastClose: bars[bars.length - 1].close,
