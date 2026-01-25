@@ -1,32 +1,21 @@
-/* account.page.js
- * Account & Subscription Management (UI-only)
- * - Calls backend endpoints only
- * - Does NOT modify existing payment/subscription logic
- * - Safe: fail-closed, never throws
+/* account.page.js (v2 - backend-aligned with your app.py)
+ * - Uses existing endpoints in your app.py:
+ *   GET  /api/plans
+ *   GET  /api/subscription/status?user_id=...
+ *   POST /billing/checkout              { user_id, email?, plan }
+ *   POST /api/billing/portal            { user_id, return_url? }
  *
- * Expected backend endpoints (any missing => graceful UI fallback):
- *   GET  /api/me
- *   GET  /api/subscription/status
- *   GET  /api/access/profile
- *   POST /billing/portal          -> { url }
- *   POST /billing/checkout        -> { url }  (or { checkout_url })
- *   GET  /routes                  -> optional, for build info
- *
- * Notes:
- * - This file assumes account.html contains the DOM ids used below.
+ * - No /api/me required (since backend is user_id-driven right now)
+ * - Stores user_id/email in localStorage
+ * - UI-only: does NOT modify payment/subscription logic
  */
 
 (() => {
   'use strict';
 
-  // -------------------------
-  // Helpers (safe by default)
-  // -------------------------
   const $ = (id) => document.getElementById(id);
 
-  function safe(fn) {
-    try { return fn(); } catch (e) { return null; }
-  }
+  function safe(fn) { try { return fn(); } catch { return null; } }
 
   async function fetchJSON(url, opts = {}) {
     const r = await fetch(url, {
@@ -35,348 +24,260 @@
       ...opts,
     });
     const ct = r.headers.get('content-type') || '';
-    let data = null;
-    if (ct.includes('application/json')) data = await r.json().catch(() => null);
-    else data = await r.text().catch(() => null);
-
+    const data = ct.includes('application/json') ? await r.json().catch(() => null) : await r.text().catch(() => null);
     if (!r.ok) {
       const msg = (data && data.error) ? data.error : `HTTP ${r.status}`;
-      const err = new Error(msg);
-      err.status = r.status;
-      err.data = data;
-      throw err;
+      const e = new Error(msg);
+      e.status = r.status;
+      e.data = data;
+      throw e;
     }
     return data;
   }
 
-  function fmtDateFromUnix(sec) {
-    if (!sec || typeof sec !== 'number') return '—';
-    const d = new Date(sec * 1000);
-    if (isNaN(d.getTime())) return '—';
-    return d.toLocaleString();
+  // -------------------------
+  // localStorage identity
+  // -------------------------
+  const LS_UID = 'darrius_user_id';
+  const LS_EMAIL = 'darrius_email';
+
+  function getUID() { return (localStorage.getItem(LS_UID) || '').trim(); }
+  function getEmail() { return (localStorage.getItem(LS_EMAIL) || '').trim(); }
+
+  function setUID(uid) { localStorage.setItem(LS_UID, (uid || '').trim()); }
+  function setEmail(email) { localStorage.setItem(LS_EMAIL, (email || '').trim()); }
+
+  // -------------------------
+  // DOM helpers
+  // -------------------------
+  function setText(id, v) {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = (v === undefined || v === null || v === '') ? '—' : String(v);
   }
 
   function setDot(dotId, mode) {
-    // mode: good | bad | warn
     const el = $(dotId);
     if (!el) return;
     el.classList.remove('good', 'bad');
-    // default is warn (yellow)
     if (mode === 'good') el.classList.add('good');
     else if (mode === 'bad') el.classList.add('bad');
   }
 
-  function setBadge(elId, kind, text) {
-    const el = $(elId);
+  function setBadge(id, kind, text) {
+    const el = $(id);
     if (!el) return;
-    el.classList.remove('good', 'warn', 'bad');
+    el.classList.remove('good','warn','bad');
     if (kind === 'good') el.classList.add('good');
     else if (kind === 'bad') el.classList.add('bad');
     else el.classList.add('warn');
     el.textContent = text || '—';
   }
 
+  function isoToLocal(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString();
+  }
+
   function highlightPlan(planKey) {
-    const keys = ['weekly', 'monthly', 'quarterly', 'yearly'];
-    keys.forEach(k => {
+    ['weekly','monthly','quarterly','yearly'].forEach(k => {
       const card = $(`plan_${k}`);
       if (!card) return;
       card.classList.toggle('active', planKey === k);
     });
   }
 
-  function setText(id, value) {
-    const el = $(id);
-    if (!el) return;
-    el.textContent = (value === undefined || value === null || value === '') ? '—' : String(value);
-  }
-
-  function setPolicyText(profile, sub) {
-    const el = $('policyText');
-    if (!el) return;
-
-    const access = profile?.access || 'demo';
-    const mode = profile?.data_source?.mode || profile?.data_mode || 'demo';
-    const delay = profile?.data_source?.delay_minutes ?? profile?.delay_minutes;
-    const provider = profile?.data_source?.provider || profile?.provider || '—';
-
-    const cancel = !!sub?.cancel_at_period_end;
-    const endAt = sub?.current_period_end ? fmtDateFromUnix(sub.current_period_end) : '—';
-
-    const lines = [];
-    lines.push(`Access: ${access.toUpperCase()}`);
-    lines.push(`Data Mode: ${String(mode).toUpperCase()}${delay ? ` (${delay}-min)` : ''}`);
-    lines.push(`Provider: ${provider}`);
-    if (sub?.status) lines.push(`Subscription: ${sub.status}${cancel ? ` (ends ${endAt})` : ''}`);
-    lines.push('');
-    lines.push('Policy: Dashboard access and data mode are enforced by backend. This page only routes you to checkout/portal and displays your current state.');
-
-    el.textContent = lines.join('\n');
-    el.style.whiteSpace = 'pre-line';
-  }
-
   // -------------------------
-  // API calls (graceful)
+  // Backend calls (aligned)
   // -------------------------
-  async function loadMe() {
-    // Expected: { logged_in: bool, user_id? ... }
-    try { return await fetchJSON('/api/me'); }
-    catch { return { logged_in: false }; }
-  }
-
-  async function loadSubStatus() {
-    // Expected:
-    // { access:"demo"|"paid", status:"active"|"trialing"|...,
-    //   plan:"weekly"|"monthly"|"quarterly"|"yearly",
-    //   cancel_at_period_end:boolean, current_period_end:number }
-    try { return await fetchJSON('/api/subscription/status'); }
+  async function loadPlans() {
+    // { ok:true, plans:[{key,label,price_id,trial_days}] }
+    try { return await fetchJSON('/api/plans'); }
     catch { return null; }
   }
 
-  async function loadAccessProfile() {
-    // Expected:
-    // { access:"demo"|"paid",
-    //   data_source:{mode,label,delay_minutes,provider}, ... }
-    try { return await fetchJSON('/api/access/profile'); }
+  async function loadSubStatus(user_id) {
+    // { ok:true, status, has_access, current_period_end, customer_portal }
+    try { return await fetchJSON(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`); }
     catch { return null; }
   }
 
-  async function loadBuildInfo() {
-    // optional: your backend /routes shows build timestamp (you used it before)
-    try {
-      const r = await fetchJSON('https://darrius-api.onrender.com/routes');
-      return r;
-    } catch {
-      return null;
-    }
+  async function openPortal(user_id) {
+    const payload = { user_id, return_url: `${location.origin}/account.html` };
+    const data = await fetchJSON('/api/billing/portal', { method:'POST', body: JSON.stringify(payload) });
+    const url = data?.url;
+    if (!url) throw new Error('Portal URL missing');
+    location.href = url;
   }
 
-  // -------------------------
-  // Actions: portal / checkout
-  // -------------------------
-  async function openPortal() {
-    // POST /billing/portal -> { url }
-    // You may already host backend at darrius-api.onrender.com
-    // We try relative first, then fallback to full origin.
-    const payload = { return_url: `${location.origin}/account.html` };
-
-    const tryUrls = ['/billing/portal', 'https://darrius-api.onrender.com/billing/portal'];
-    let lastErr = null;
-
-    for (const u of tryUrls) {
-      try {
-        const data = await fetchJSON(u, { method: 'POST', body: JSON.stringify(payload) });
-        const url = data?.url || data?.portal_url;
-        if (url) { location.href = url; return; }
-        throw new Error('Portal URL missing');
-      } catch (e) { lastErr = e; }
-    }
-    alert(`Unable to open billing portal. ${lastErr ? lastErr.message : ''}`);
-  }
-
-  async function startCheckout(planKey) {
-    // POST /billing/checkout -> { url } (or { checkout_url })
-    // Plan selection is passed to backend; backend maps to price_id safely.
-    const payload = { plan: planKey, origin: 'account' };
-
-    const tryUrls = ['/billing/checkout', 'https://darrius-api.onrender.com/billing/checkout'];
-    let lastErr = null;
-
-    for (const u of tryUrls) {
-      try {
-        const data = await fetchJSON(u, { method: 'POST', body: JSON.stringify(payload) });
-        const url = data?.url || data?.checkout_url;
-        if (url) { location.href = url; return; }
-        throw new Error('Checkout URL missing');
-      } catch (e) { lastErr = e; }
-    }
-    alert(`Unable to start checkout. ${lastErr ? lastErr.message : ''}`);
+  async function startCheckout(user_id, email, planKey) {
+    const payload = { user_id, email: email || undefined, plan: planKey };
+    const data = await fetchJSON('/billing/checkout', { method:'POST', body: JSON.stringify(payload) });
+    const url = data?.checkout_url || data?.url; // backend returns checkout_url
+    if (!url) throw new Error('Checkout URL missing');
+    location.href = url;
   }
 
   // -------------------------
   // Render
   // -------------------------
-  function renderLogin(me) {
-    if (!me || !me.logged_in) {
+  function renderIdentity() {
+    const uid = getUID();
+    const email = getEmail();
+
+    // optional input fields if you add them in account.html
+    const uidInput = $('uidInput');
+    const emailInput = $('emailInput');
+    if (uidInput && !uidInput.value) uidInput.value = uid;
+    if (emailInput && !emailInput.value) emailInput.value = email;
+
+    if (!uid) {
       setDot('dotLogin', 'bad');
-      setText('txtLogin', 'Not logged in');
+      setText('txtLogin', 'Not logged in / 未登录');
       setText('vUser', '—');
-      return false;
+      setBadge('badgeStatus', 'warn', 'STATUS: DEMO');
+      return { loggedIn:false, uid:'', email:'' };
     }
+
     setDot('dotLogin', 'good');
-    setText('txtLogin', 'Logged in');
-    setText('vUser', me.user_id || me.email || 'user');
-    return true;
+    setText('txtLogin', 'Logged in / 已登录');
+    setText('vUser', uid);
+    return { loggedIn:true, uid, email };
+  }
+
+  function renderPlans(plansResp) {
+    // If your HTML has price_* ids, fill them from /api/plans
+    if (!plansResp?.ok || !Array.isArray(plansResp.plans)) return;
+
+    const map = {};
+    plansResp.plans.forEach(p => { map[p.key] = p; });
+
+    // If you want to show exactly $4.90 etc, you can still hardcode in HTML.
+    // Here we keep minimal: do nothing unless you added ids.
+    // But we can set labels if you created placeholders.
+    if ($('planLabel_weekly')) setText('planLabel_weekly', map.weekly?.label || 'Weekly');
+    if ($('planLabel_monthly')) setText('planLabel_monthly', map.monthly?.label || 'Monthly');
+    if ($('planLabel_quarterly')) setText('planLabel_quarterly', map.quarterly?.label || 'Quarterly');
+    if ($('planLabel_yearly')) setText('planLabel_yearly', map.yearly?.label || 'Yearly');
   }
 
   function renderSub(sub) {
-    // badgeStatus + overview kv + plan highlight
-    if (!sub) {
-      setBadge('badgeStatus', 'warn', 'STATUS: UNKNOWN');
+    if (!sub?.ok) {
       setText('vPlan', '—');
-      setText('vSubStatus', '—');
+      setText('vSubStatus', 'unknown');
       setText('vPeriodEnd', '—');
+      setText('vDataMode', 'Demo / 演示');
+      setDot('dotAccess', 'warn');
+      setText('txtAccess', 'Access: DEMO / 演示');
       return;
     }
 
+    const hasAccess = !!sub.has_access;
     const status = sub.status || 'unknown';
-    const plan = sub.plan || 'unknown';
-    const cancel = !!sub.cancel_at_period_end;
-    const endAt = sub.current_period_end ? fmtDateFromUnix(sub.current_period_end) : '—';
 
-    setText('vPlan', plan);
     setText('vSubStatus', status);
-    setText('vPeriodEnd', cancel ? `Ends ${endAt}` : (endAt !== '—' ? `Renews ${endAt}` : '—'));
+    setText('vPeriodEnd', sub.current_period_end ? isoToLocal(sub.current_period_end) : '—');
 
-    // Badge logic
-    let kind = 'warn';
-    let label = `STATUS: ${String(status).toUpperCase()}`;
-
-    if (status === 'active' || status === 'trialing') kind = 'good';
-    if (status === 'past_due' || status === 'unpaid' || status === 'incomplete') kind = 'bad';
-    if (cancel && (status === 'active' || status === 'trialing')) {
-      kind = 'warn';
-      label = `ACTIVE (ENDS ${endAt})`;
-    }
-
-    setBadge('badgeStatus', kind, label);
-
-    // highlight plan card
-    highlightPlan(['weekly', 'monthly', 'quarterly', 'yearly'].includes(plan) ? plan : null);
-  }
-
-  function renderAccess(profile, sub) {
-    const access = profile?.access || sub?.access || 'demo';
-
-    // top pillAccess
-    if (access === 'paid') {
+    if (hasAccess) {
       setDot('dotAccess', 'good');
-      setText('txtAccess', 'Access: PAID');
+      setText('txtAccess', 'Access: PAID / 已订阅');
+      setText('vDataMode', 'MFV/Delayed / 延迟行情');
+      setBadge('badgeStatus', 'good', `STATUS: ${String(status).toUpperCase()}`);
     } else {
       setDot('dotAccess', 'warn');
-      setText('txtAccess', 'Access: DEMO');
+      setText('txtAccess', 'Access: DEMO / 演示');
+      setText('vDataMode', 'Demo / 演示');
+      setBadge('badgeStatus', 'warn', `STATUS: ${String(status).toUpperCase()}`);
     }
 
-    // data mode line
-    const mode = profile?.data_source?.mode || profile?.data_mode || (access === 'paid' ? 'mfv_delayed' : 'demo');
-    const label = profile?.data_source?.label || (mode === 'demo' ? 'Demo' : 'MFV Delayed');
-    const delay = profile?.data_source?.delay_minutes ?? profile?.delay_minutes;
-    const provider = profile?.data_source?.provider || profile?.provider || '';
-
-    const modeText = `${label}${delay ? ` (${delay}-min)` : ''}${provider ? ` • ${provider}` : ''}`;
-    setText('vDataMode', modeText);
-
-    setPolicyText(profile, sub);
+    // plan_key isn't returned by your status endpoint currently; we can’t highlight yet.
+    // If you later add plan_key to /api/subscription/status, we can highlight it.
+    highlightPlan(null);
   }
 
-  function renderPricesUI(me) {
-    // You told the 4 plan pricing:
-    // Weekly 4.90, Monthly 19.90, Quarterly 49.90, Yearly 189.00
-    // Here we set placeholder display. Real authoritative price can later come from /billing/prices if you want.
-    setText('price_weekly', '$4.90');
-    setText('price_monthly', '$19.90');
-    setText('price_quarterly', '$49.90');
-    setText('price_yearly', '$189.00');
+  function bindActions(identity) {
+    const btnSave = $('btnSaveIdentity');
+    if (btnSave) {
+      btnSave.onclick = () => safe(() => {
+        const uidInput = $('uidInput');
+        const emailInput = $('emailInput');
+        const uid = (uidInput?.value || '').trim();
+        const email = (emailInput?.value || '').trim();
+        if (!uid) { alert('Please enter User ID / 请输入用户ID'); return; }
+        setUID(uid);
+        if (email) setEmail(email);
+        location.reload();
+      });
+    }
 
-    // If not logged in, keep subscribe buttons but route to dashboard/login (or show alert).
-    // We'll simply show an alert on click if not logged in.
-  }
-
-  function bindActions(state) {
     const btnPortal = $('btnPortal');
-    if (btnPortal) btnPortal.onclick = () => safe(openPortal);
+    if (btnPortal) {
+      btnPortal.onclick = () => safe(async () => {
+        const uid = getUID();
+        if (!uid) { alert('Please enter User ID first / 请先填写用户ID'); return; }
+        await openPortal(uid);
+      });
+    }
 
     const btnRefresh = $('btnRefresh');
     if (btnRefresh) btnRefresh.onclick = () => safe(init);
 
-    const btnGoPlans = $('btnGoPlans');
-    if (btnGoPlans) btnGoPlans.onclick = () => {
-      // Scroll to plans section
-      const wrap = $('plansWrap');
-      if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-
-    // Plan cards buttons
-    const wrap = $('plansWrap');
-    if (wrap) {
-      wrap.addEventListener('click', (ev) => {
+    // Plan subscribe buttons (data-plan="weekly" etc)
+    const plansWrap = $('plansWrap');
+    if (plansWrap) {
+      plansWrap.addEventListener('click', (ev) => {
         const t = ev.target;
         if (!(t instanceof HTMLElement)) return;
-
         const action = t.getAttribute('data-action');
         const plan = t.getAttribute('data-plan');
         if (!action || !plan) return;
 
-        if (action === 'learn') {
-          alert(`Plan: ${plan}\n\nThis is a placeholder. You can add a modal later without touching payment logic.`);
-          return;
-        }
-
         if (action === 'checkout') {
-          // Guard: must be logged in
-          if (!state.me || !state.me.logged_in) {
-            alert('Please sign in first, then choose a plan.');
-            return;
-          }
-          // Start checkout via backend (existing logic)
-          safe(() => startCheckout(plan));
+          safe(async () => {
+            const uid = getUID();
+            const email = getEmail();
+            if (!uid) { alert('Please enter User ID first / 请先填写用户ID'); return; }
+            await startCheckout(uid, email, plan);
+          });
         }
       });
     }
   }
 
   // -------------------------
-  // Init
+  // init
   // -------------------------
-  const state = { me: null, sub: null, profile: null };
-
   async function init() {
-    // Basic placeholders (never blank)
+    // defaults
     setBadge('badgeStatus', 'warn', 'STATUS: LOADING');
+    setDot('dotLogin', 'warn');
+    setDot('dotAccess', 'warn');
+    setText('txtLogin', 'Checking…');
+    setText('txtAccess', 'Access: —');
     setText('vUser', '—');
     setText('vPlan', '—');
     setText('vSubStatus', '—');
     setText('vPeriodEnd', '—');
     setText('vDataMode', '—');
-    setText('vBuild', '—');
-    setText('vBackend', '—');
-    setText('txtLogin', 'Checking login…');
-    setText('txtAccess', 'Access: —');
-    setDot('dotLogin', 'warn');
-    setDot('dotAccess', 'warn');
 
-    // Load
-    state.me = await loadMe();
-    const loggedIn = renderLogin(state.me);
+    const identity = renderIdentity();
 
-    renderPricesUI(state.me);
+    // load plans (optional UI fill)
+    const plans = await loadPlans();
+    renderPlans(plans);
 
-    if (!loggedIn) {
-      // Not logged in: show policy baseline
-      setBadge('badgeStatus', 'warn', 'STATUS: DEMO');
-      setText('vSubStatus', 'not_logged_in');
-      renderAccess({ access: 'demo', data_source: { mode: 'demo', label: 'Demo' } }, null);
-      bindActions(state);
+    if (!identity.loggedIn) {
+      renderSub({ ok:true, status:'not_logged_in', has_access:false });
+      bindActions(identity);
       return;
     }
 
-    // Logged in: fetch sub + profile
-    state.sub = await loadSubStatus();
-    state.profile = await loadAccessProfile();
+    const sub = await loadSubStatus(identity.uid);
+    renderSub(sub);
 
-    renderSub(state.sub);
-    renderAccess(state.profile, state.sub);
-
-    // Optional build info
-    const bi = await loadBuildInfo();
-    if (bi && typeof bi === 'object') {
-      setText('vBuild', bi.build || '—');
-      setText('vBackend', 'darrius-api.onrender.com');
-    } else {
-      setText('vBackend', '—');
-    }
-
-    bindActions(state);
+    bindActions(identity);
   }
 
   document.addEventListener('DOMContentLoaded', () => safe(init));
