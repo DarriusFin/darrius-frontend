@@ -10,21 +10,32 @@
 
   // ===== DOM helpers =====
   const $ = (id) => document.getElementById(id);
-  const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
+  // ===== Safe storage (关键兜底：localStorage 可能抛异常，导致整页点击全失效) =====
+  const MEM = { uid: '', email: '' };
   const LS_UID = 'darrius_user_id';
   const LS_EMAIL = 'darrius_email';
 
+  function lsGet(key) {
+    try { return (localStorage.getItem(key) || ''); } catch { return ''; }
+  }
+  function lsSet(key, val) {
+    try { localStorage.setItem(key, val); } catch { /* ignore */ }
+  }
+
   function getIdentity() {
-    return {
-      user_id: (localStorage.getItem(LS_UID) || '').trim(),
-      email: (localStorage.getItem(LS_EMAIL) || '').trim(),
-    };
+    const uid = (lsGet(LS_UID) || MEM.uid || '').trim();
+    const email = (lsGet(LS_EMAIL) || MEM.email || '').trim();
+    return { user_id: uid, email };
   }
 
   function setIdentity(user_id, email) {
-    localStorage.setItem(LS_UID, (user_id || '').trim());
-    localStorage.setItem(LS_EMAIL, (email || '').trim());
+    const uid = (user_id || '').trim();
+    const em = (email || '').trim();
+    MEM.uid = uid;
+    MEM.email = em;
+    lsSet(LS_UID, uid);
+    lsSet(LS_EMAIL, em);
   }
 
   function alert2(en, zh) {
@@ -71,10 +82,9 @@
   }
 
   async function refreshPlans() {
-    // Optional: only for display; not required for checkout
     try {
       await getJSON('/api/plans');
-      // 你已在页面写死价格，这里就不强行改 UI，避免误改现有结构
+      // 你页面价格写死，这里不改 UI，避免误改
     } catch (e) {
       console.warn('[account] /api/plans failed:', e.message);
     }
@@ -163,7 +173,7 @@
     }
   }
 
-  // ===== Bind =====
+  // ===== Bind (用事件委托兜底：不怕 DOM 时机/不怕局部渲染/不怕按钮替换) =====
   function bind() {
     const btnSave = $('btnSaveIdentity');
     if (btnSave) {
@@ -183,32 +193,40 @@
     const btnPortal = $('btnPortal');
     if (btnPortal) btnPortal.addEventListener('click', openPortal);
 
-    // ✅ Subscribe buttons: data-action="checkout"
-    qsa('[data-action="checkout"]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const plan = (btn.getAttribute('data-plan') || '').trim();
+    // ✅ Event delegation for all plan buttons
+    document.addEventListener('click', (ev) => {
+      const t = ev.target;
+      if (!t) return;
+
+      const btn = t.closest && t.closest('button[data-action]');
+      if (!btn) return;
+
+      const action = (btn.getAttribute('data-action') || '').trim();
+      const plan = (btn.getAttribute('data-plan') || '').trim();
+
+      console.log('[account] click captured:', { action, plan });
+
+      if (action === 'checkout') {
         if (!plan) return;
         startCheckout(plan);
-      });
-    });
-
-    // optional details
-    qsa('[data-action="learn"]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const plan = (btn.getAttribute('data-plan') || '').trim();
+      } else if (action === 'learn') {
         alert2(`Plan details (${plan}) coming soon.`, `套餐详情（${plan}）后续补充。`);
-      });
-    });
+      }
+    }, true); // 捕获阶段，更“强力”，避免某些情况下事件被提前拦截
+
+    console.log('[account] bind() done. buttons=', document.querySelectorAll('button[data-action]').length);
   }
 
-  // ===== Init =====
-  (async function init() {
+  // ===== Init (确保 DOM 就绪后再跑) =====
+  async function init() {
     console.log('[account] account.page.js loaded OK. API_BASE=', API_BASE);
+
     renderIdentity();
     bind();
 
     // show system
     if ($('vBackend')) $('vBackend').textContent = API_BASE;
+
     try {
       const r = await getJSON('/routes');
       if ($('vBuild')) $('vBuild').textContent = r.build || '—';
@@ -216,5 +234,11 @@
 
     await refreshPlans();
     await refreshStatus();
-  })();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => { init(); });
+  } else {
+    init();
+  }
 })();
