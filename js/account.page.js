@@ -1,284 +1,220 @@
-/* account.page.js (v2 - backend-aligned with your app.py)
- * - Uses existing endpoints in your app.py:
- *   GET  /api/plans
- *   GET  /api/subscription/status?user_id=...
- *   POST /billing/checkout              { user_id, email?, plan }
- *   POST /api/billing/portal            { user_id, return_url? }
- *
- * - No /api/me required (since backend is user_id-driven right now)
- * - Stores user_id/email in localStorage
- * - UI-only: does NOT modify payment/subscription logic
- */
-
 (() => {
   'use strict';
 
+  // ===== Config =====
+  const API_BASE =
+    (window.__API_BASE__ && String(window.__API_BASE__).trim()) ||
+    'https://darrius-api.onrender.com';
+
+  const api = (path) => API_BASE.replace(/\/+$/, '') + path;
+
+  // ===== DOM helpers =====
   const $ = (id) => document.getElementById(id);
+  const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-  function safe(fn) { try { return fn(); } catch { return null; } }
-
-  async function fetchJSON(url, opts = {}) {
-    const r = await fetch(url, {
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
-      ...opts,
-    });
-    const ct = r.headers.get('content-type') || '';
-    const data = ct.includes('application/json') ? await r.json().catch(() => null) : await r.text().catch(() => null);
-    if (!r.ok) {
-      const msg = (data && data.error) ? data.error : `HTTP ${r.status}`;
-      const e = new Error(msg);
-      e.status = r.status;
-      e.data = data;
-      throw e;
-    }
-    return data;
-  }
-
-  // -------------------------
-  // localStorage identity
-  // -------------------------
   const LS_UID = 'darrius_user_id';
   const LS_EMAIL = 'darrius_email';
 
-  function getUID() { return (localStorage.getItem(LS_UID) || '').trim(); }
-  function getEmail() { return (localStorage.getItem(LS_EMAIL) || '').trim(); }
+  function getIdentity() {
+    return {
+      user_id: (localStorage.getItem(LS_UID) || '').trim(),
+      email: (localStorage.getItem(LS_EMAIL) || '').trim(),
+    };
+  }
 
-  function setUID(uid) { localStorage.setItem(LS_UID, (uid || '').trim()); }
-  function setEmail(email) { localStorage.setItem(LS_EMAIL, (email || '').trim()); }
+  function setIdentity(user_id, email) {
+    localStorage.setItem(LS_UID, (user_id || '').trim());
+    localStorage.setItem(LS_EMAIL, (email || '').trim());
+  }
 
-  // -------------------------
-  // DOM helpers
-  // -------------------------
+  function alert2(en, zh) {
+    alert(`${en}\n${zh}`);
+  }
+
+  async function getJSON(path) {
+    const r = await fetch(api(path), { headers: { Accept: 'application/json' } });
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { ok: false, raw: text }; }
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    return data;
+  }
+
+  async function postJSON(path, body) {
+    const r = await fetch(api(path), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { ok: false, raw: text }; }
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    return data;
+  }
+
+  // ===== Render =====
+  function renderIdentity() {
+    const { user_id, email } = getIdentity();
+    if ($('uidInput')) $('uidInput').value = user_id || '';
+    if ($('emailInput')) $('emailInput').value = email || '';
+    if ($('vUser')) $('vUser').textContent = user_id || '—';
+  }
+
   function setText(id, v) {
     const el = $(id);
-    if (!el) return;
-    el.textContent = (v === undefined || v === null || v === '') ? '—' : String(v);
+    if (el) el.textContent = v;
   }
 
-  function setDot(dotId, mode) {
-    const el = $(dotId);
-    if (!el) return;
-    el.classList.remove('good', 'bad');
-    if (mode === 'good') el.classList.add('good');
-    else if (mode === 'bad') el.classList.add('bad');
+  function setBadge(text) {
+    setText('badgeStatus', text);
   }
 
-  function setBadge(id, kind, text) {
-    const el = $(id);
-    if (!el) return;
-    el.classList.remove('good','warn','bad');
-    if (kind === 'good') el.classList.add('good');
-    else if (kind === 'bad') el.classList.add('bad');
-    else el.classList.add('warn');
-    el.textContent = text || '—';
-  }
-
-  function isoToLocal(iso) {
-    if (!iso) return '—';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    return d.toLocaleString();
-  }
-
-  function highlightPlan(planKey) {
-    ['weekly','monthly','quarterly','yearly'].forEach(k => {
-      const card = $(`plan_${k}`);
-      if (!card) return;
-      card.classList.toggle('active', planKey === k);
-    });
-  }
-
-  // -------------------------
-  // Backend calls (aligned)
-  // -------------------------
-  async function loadPlans() {
-    // { ok:true, plans:[{key,label,price_id,trial_days}] }
-    try { return await fetchJSON('/api/plans'); }
-    catch { return null; }
-  }
-
-  async function loadSubStatus(user_id) {
-    // { ok:true, status, has_access, current_period_end, customer_portal }
-    try { return await fetchJSON(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`); }
-    catch { return null; }
-  }
-
-  async function openPortal(user_id) {
-    const payload = { user_id, return_url: `${location.origin}/account.html` };
-    const data = await fetchJSON('/api/billing/portal', { method:'POST', body: JSON.stringify(payload) });
-    const url = data?.url;
-    if (!url) throw new Error('Portal URL missing');
-    location.href = url;
-  }
-
-  async function startCheckout(user_id, email, planKey) {
-    const payload = { user_id, email: email || undefined, plan: planKey };
-    const data = await fetchJSON('/billing/checkout', { method:'POST', body: JSON.stringify(payload) });
-    const url = data?.checkout_url || data?.url; // backend returns checkout_url
-    if (!url) throw new Error('Checkout URL missing');
-    location.href = url;
-  }
-
-  // -------------------------
-  // Render
-  // -------------------------
-  function renderIdentity() {
-    const uid = getUID();
-    const email = getEmail();
-
-    // optional input fields if you add them in account.html
-    const uidInput = $('uidInput');
-    const emailInput = $('emailInput');
-    if (uidInput && !uidInput.value) uidInput.value = uid;
-    if (emailInput && !emailInput.value) emailInput.value = email;
-
-    if (!uid) {
-      setDot('dotLogin', 'bad');
-      setText('txtLogin', 'Not logged in / 未登录');
-      setText('vUser', '—');
-      setBadge('badgeStatus', 'warn', 'STATUS: DEMO');
-      return { loggedIn:false, uid:'', email:'' };
+  async function refreshPlans() {
+    // Optional: only for display; not required for checkout
+    try {
+      await getJSON('/api/plans');
+      // 你已在页面写死价格，这里就不强行改 UI，避免误改现有结构
+    } catch (e) {
+      console.warn('[account] /api/plans failed:', e.message);
     }
-
-    setDot('dotLogin', 'good');
-    setText('txtLogin', 'Logged in / 已登录');
-    setText('vUser', uid);
-    return { loggedIn:true, uid, email };
   }
 
-  function renderPlans(plansResp) {
-    // If your HTML has price_* ids, fill them from /api/plans
-    if (!plansResp?.ok || !Array.isArray(plansResp.plans)) return;
+  async function refreshStatus() {
+    const { user_id } = getIdentity();
 
-    const map = {};
-    plansResp.plans.forEach(p => { map[p.key] = p; });
-
-    // If you want to show exactly $4.90 etc, you can still hardcode in HTML.
-    // Here we keep minimal: do nothing unless you added ids.
-    // But we can set labels if you created placeholders.
-    if ($('planLabel_weekly')) setText('planLabel_weekly', map.weekly?.label || 'Weekly');
-    if ($('planLabel_monthly')) setText('planLabel_monthly', map.monthly?.label || 'Monthly');
-    if ($('planLabel_quarterly')) setText('planLabel_quarterly', map.quarterly?.label || 'Quarterly');
-    if ($('planLabel_yearly')) setText('planLabel_yearly', map.yearly?.label || 'Yearly');
-  }
-
-  function renderSub(sub) {
-    if (!sub?.ok) {
-      setText('vPlan', '—');
-      setText('vSubStatus', 'unknown');
-      setText('vPeriodEnd', '—');
-      setText('vDataMode', 'Demo / 演示');
-      setDot('dotAccess', 'warn');
+    if (!user_id) {
+      setText('txtLogin', 'Not logged in / 未登录');
       setText('txtAccess', 'Access: DEMO / 演示');
+      setBadge('STATUS: DEMO');
+      setText('vSubStatus', 'not_logged_in');
+      setText('vDataMode', 'Demo / 演示');
+      setText('vPeriodEnd', '—');
       return;
     }
 
-    const hasAccess = !!sub.has_access;
-    const status = sub.status || 'unknown';
+    setText('txtLogin', 'Logged in / 已登录');
+    setBadge('STATUS: LOADING');
 
-    setText('vSubStatus', status);
-    setText('vPeriodEnd', sub.current_period_end ? isoToLocal(sub.current_period_end) : '—');
+    try {
+      const s = await getJSON('/api/subscription/status?user_id=' + encodeURIComponent(user_id));
 
-    if (hasAccess) {
-      setDot('dotAccess', 'good');
-      setText('txtAccess', 'Access: PAID / 已订阅');
-      setText('vDataMode', 'MFV/Delayed / 延迟行情');
-      setBadge('badgeStatus', 'good', `STATUS: ${String(status).toUpperCase()}`);
-    } else {
-      setDot('dotAccess', 'warn');
+      setText('vSubStatus', s.status || 'unknown');
+      setText('vPeriodEnd', s.current_period_end ? new Date(s.current_period_end).toLocaleString() : '—');
+
+      if (s.has_access) {
+        setText('txtAccess', 'Access: MFV/Delayed / 延迟行情');
+        setText('vDataMode', 'MFV/Delayed / 延迟行情');
+        setBadge('STATUS: ACTIVE');
+      } else {
+        setText('txtAccess', 'Access: DEMO / 演示');
+        setText('vDataMode', 'Demo / 演示');
+        setBadge('STATUS: DEMO');
+      }
+
+      const btnPortal = $('btnPortal');
+      if (btnPortal) {
+        if (s.customer_portal) {
+          btnPortal.disabled = false;
+          btnPortal.style.opacity = '1';
+        } else {
+          btnPortal.disabled = true;
+          btnPortal.style.opacity = '0.55';
+          btnPortal.title = 'Complete subscription first / 先完成订阅';
+        }
+      }
+    } catch (e) {
+      console.warn('[account] status failed:', e.message);
+      setText('vSubStatus', 'unknown');
       setText('txtAccess', 'Access: DEMO / 演示');
       setText('vDataMode', 'Demo / 演示');
-      setBadge('badgeStatus', 'warn', `STATUS: ${String(status).toUpperCase()}`);
+      setBadge('STATUS: DEMO');
     }
-
-    // plan_key isn't returned by your status endpoint currently; we can’t highlight yet.
-    // If you later add plan_key to /api/subscription/status, we can highlight it.
-    highlightPlan(null);
   }
 
-  function bindActions(identity) {
+  // ===== Actions =====
+  async function startCheckout(planKey) {
+    const { user_id, email } = getIdentity();
+    if (!user_id) return alert2('User ID required. Click Save first.', '请先填写用户ID并点击保存。');
+
+    try {
+      const res = await postJSON('/billing/checkout', {
+        user_id,
+        email: email || undefined,
+        plan: planKey,
+      });
+      if (!res.checkout_url) return alert2('Missing checkout_url.', '后端未返回 checkout_url。');
+      window.location.href = res.checkout_url;
+    } catch (e) {
+      alert2('Unable to start checkout: ' + e.message, '无法发起订阅：' + e.message);
+    }
+  }
+
+  async function openPortal() {
+    const { user_id } = getIdentity();
+    if (!user_id) return alert2('User ID required. Click Save first.', '请先填写用户ID并点击保存。');
+
+    try {
+      const res = await postJSON('/api/billing/portal', { user_id });
+      if (!res.url) return alert2('Missing portal url.', '后端未返回账单管理链接。');
+      window.location.href = res.url;
+    } catch (e) {
+      alert2('Unable to open billing portal: ' + e.message, '无法打开账单管理：' + e.message);
+    }
+  }
+
+  // ===== Bind =====
+  function bind() {
     const btnSave = $('btnSaveIdentity');
     if (btnSave) {
-      btnSave.onclick = () => safe(() => {
-        const uidInput = $('uidInput');
-        const emailInput = $('emailInput');
-        const uid = (uidInput?.value || '').trim();
-        const email = (emailInput?.value || '').trim();
-        if (!uid) { alert('Please enter User ID / 请输入用户ID'); return; }
-        setUID(uid);
-        if (email) setEmail(email);
-        location.reload();
-      });
-    }
-
-    const btnPortal = $('btnPortal');
-    if (btnPortal) {
-      btnPortal.onclick = () => safe(async () => {
-        const uid = getUID();
-        if (!uid) { alert('Please enter User ID first / 请先填写用户ID'); return; }
-        await openPortal(uid);
+      btnSave.addEventListener('click', async () => {
+        const uid = ($('uidInput')?.value || '').trim();
+        const email = ($('emailInput')?.value || '').trim();
+        if (!uid) return alert2('User ID required.', '必须填写用户ID。');
+        setIdentity(uid, email);
+        renderIdentity();
+        await refreshStatus();
       });
     }
 
     const btnRefresh = $('btnRefresh');
-    if (btnRefresh) btnRefresh.onclick = () => safe(init);
+    if (btnRefresh) btnRefresh.addEventListener('click', refreshStatus);
 
-    // Plan subscribe buttons (data-plan="weekly" etc)
-    const plansWrap = $('plansWrap');
-    if (plansWrap) {
-      plansWrap.addEventListener('click', (ev) => {
-        const t = ev.target;
-        if (!(t instanceof HTMLElement)) return;
-        const action = t.getAttribute('data-action');
-        const plan = t.getAttribute('data-plan');
-        if (!action || !plan) return;
+    const btnPortal = $('btnPortal');
+    if (btnPortal) btnPortal.addEventListener('click', openPortal);
 
-        if (action === 'checkout') {
-          safe(async () => {
-            const uid = getUID();
-            const email = getEmail();
-            if (!uid) { alert('Please enter User ID first / 请先填写用户ID'); return; }
-            await startCheckout(uid, email, plan);
-          });
-        }
+    // ✅ Subscribe buttons: data-action="checkout"
+    qsa('[data-action="checkout"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const plan = (btn.getAttribute('data-plan') || '').trim();
+        if (!plan) return;
+        startCheckout(plan);
       });
-    }
+    });
+
+    // optional details
+    qsa('[data-action="learn"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const plan = (btn.getAttribute('data-plan') || '').trim();
+        alert2(`Plan details (${plan}) coming soon.`, `套餐详情（${plan}）后续补充。`);
+      });
+    });
   }
 
-  // -------------------------
-  // init
-  // -------------------------
-  async function init() {
-    // defaults
-    setBadge('badgeStatus', 'warn', 'STATUS: LOADING');
-    setDot('dotLogin', 'warn');
-    setDot('dotAccess', 'warn');
-    setText('txtLogin', 'Checking…');
-    setText('txtAccess', 'Access: —');
-    setText('vUser', '—');
-    setText('vPlan', '—');
-    setText('vSubStatus', '—');
-    setText('vPeriodEnd', '—');
-    setText('vDataMode', '—');
+  // ===== Init =====
+  (async function init() {
+    console.log('[account] account.page.js loaded OK. API_BASE=', API_BASE);
+    renderIdentity();
+    bind();
 
-    const identity = renderIdentity();
+    // show system
+    if ($('vBackend')) $('vBackend').textContent = API_BASE;
+    try {
+      const r = await getJSON('/routes');
+      if ($('vBuild')) $('vBuild').textContent = r.build || '—';
+    } catch {}
 
-    // load plans (optional UI fill)
-    const plans = await loadPlans();
-    renderPlans(plans);
-
-    if (!identity.loggedIn) {
-      renderSub({ ok:true, status:'not_logged_in', has_access:false });
-      bindActions(identity);
-      return;
-    }
-
-    const sub = await loadSubStatus(identity.uid);
-    renderSub(sub);
-
-    bindActions(identity);
-  }
-
-  document.addEventListener('DOMContentLoaded', () => safe(init));
+    await refreshPlans();
+    await refreshStatus();
+  })();
 })();
