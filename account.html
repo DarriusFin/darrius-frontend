@@ -3,378 +3,485 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Account | DarriusAI • Inflection Hunter</title>
-
-  <!-- Optional: if you already have a global CSS for the dashboard, you can link it here.
-       Do NOT move or modify existing subscription/payment scripts from index.html. -->
-  <!-- <link rel="stylesheet" href="/css/app.css"> -->
+  <title>DarriusAI · Account & Subscription Management</title>
 
   <style>
     :root{
-      --bg0:#070b12;
-      --bg1:#0a0f18;
-      --card:rgba(255,255,255,.04);
-      --card2:rgba(255,255,255,.06);
-      --stroke:rgba(255,255,255,.10);
-      --stroke2:rgba(255,255,255,.14);
+      --bg:#0b1016;
+      --card:rgba(255,255,255,.06);
+      --card2:rgba(255,255,255,.08);
+      --line:rgba(255,255,255,.10);
       --text:rgba(255,255,255,.92);
-      --muted:rgba(255,255,255,.62);
-      --muted2:rgba(255,255,255,.48);
-      --good:#2BE2A6;
-      --warn:#ffd250;
-      --bad:#ff6b6b;
-      --brand1:#2BE2A6;
-      --brand2:#4CC2FF;
-      --shadow: 0 20px 60px rgba(0,0,0,.45);
+      --muted:rgba(255,255,255,.65);
+      --muted2:rgba(255,255,255,.55);
+      --good:#23d1a3;
+      --warn:#f4c24f;
+      --bad:#ff5f6d;
+      --accent:#4cc2ff;
+      --accent2:#2be2a6;
+      --shadow: 0 18px 60px rgba(0,0,0,.55);
       --radius:18px;
-      --radius2:14px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
     }
+
     *{box-sizing:border-box}
     body{
       margin:0;
-      font-family:var(--sans);
-      color:var(--text);
-      background: radial-gradient(1200px 800px at 20% 0%, rgba(76,194,255,.10), transparent 55%),
-                  radial-gradient(900px 600px at 90% 10%, rgba(43,226,166,.10), transparent 50%),
-                  linear-gradient(180deg, var(--bg0), var(--bg1));
-      min-height:100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:
+        radial-gradient(1100px 600px at 15% -10%, rgba(76,194,255,.20), transparent 60%),
+        radial-gradient(900px 520px at 90% 0%, rgba(43,226,166,.18), transparent 55%),
+        radial-gradient(850px 520px at 40% 110%, rgba(255,255,255,.05), transparent 60%),
+        var(--bg);
+      color: var(--text);
     }
 
-    a{color:inherit}
-    .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 34px}
+    a{ color:inherit; text-decoration:none; }
+    a:hover{ text-decoration:underline; }
+
+    .wrap{ max-width: 1280px; margin: 0 auto; padding: 22px 18px 40px; }
     .topbar{
-      display:flex;align-items:center;justify-content:space-between;
-      gap:14px;padding:14px 14px;
-      border:1px solid var(--stroke);
-      background:rgba(0,0,0,.22);
-      border-radius:22px;
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; padding: 14px 16px;
+      background: rgba(255,255,255,.05);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
       box-shadow: var(--shadow);
-      position:sticky;top:14px;z-index:20;
       backdrop-filter: blur(10px);
     }
-    .brand{display:flex;align-items:center;gap:12px;min-width:220px}
+    .brand{ display:flex; align-items:center; gap:12px; min-width: 260px; }
     .logo{
-      width:34px;height:34px;border-radius:10px;
-      background: linear-gradient(135deg, var(--brand1), var(--brand2));
-      box-shadow: 0 10px 30px rgba(76,194,255,.18);
+      width:38px; height:38px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      box-shadow: 0 12px 30px rgba(76,194,255,.18);
     }
-    .brand h1{font-size:16px;line-height:1;margin:0;font-weight:800;letter-spacing:.2px}
-    .brand .sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .brand h1{ font-size:18px; margin:0; line-height:1.1; }
+    .brand .sub{ color:var(--muted); font-size:12px; margin-top:2px; }
 
-    .nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .pills{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
     .pill{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:8px 12px;border-radius:999px;
-      border:1px solid var(--stroke);
-      background:rgba(255,255,255,.03);
-      color:var(--muted);
-      font-size:12px;
+      display:flex; align-items:center; gap:8px;
+      padding:8px 10px;
+      border:1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-size: 12px;
       white-space:nowrap;
     }
-    .dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
-    .dot.good{background:var(--good)}
-    .dot.bad{background:var(--bad)}
+    .dot{ width:9px; height:9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 4px rgba(244,194,79,.12); }
+    .dot.good{ background: var(--good); box-shadow: 0 0 0 4px rgba(35,209,163,.12); }
+    .dot.bad{ background: var(--bad); box-shadow: 0 0 0 4px rgba(255,95,109,.12); }
 
     .btn{
-      display:inline-flex;align-items:center;justify-content:center;
-      gap:10px;
+      display:inline-flex; align-items:center; justify-content:center;
+      gap:8px;
       padding:10px 14px;
-      border-radius:14px;
-      border:1px solid var(--stroke2);
-      background:rgba(255,255,255,.04);
-      color:var(--text);
-      font-weight:700;
+      border-radius: 12px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      font-weight: 650;
       cursor:pointer;
-      text-decoration:none;
+      transition: transform .08s ease, background .15s ease, border-color .15s ease;
       user-select:none;
     }
-    .btn:hover{background:rgba(255,255,255,.06)}
-    .btn:active{transform: translateY(1px)}
+    .btn:hover{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.18); }
+    .btn:active{ transform: translateY(1px); }
     .btn.primary{
-      border:none;
-      background: linear-gradient(90deg, var(--brand1), var(--brand2));
-      color:#061018;
-      box-shadow: 0 10px 30px rgba(76,194,255,.15);
+      background: linear-gradient(135deg, rgba(43,226,166,.95), rgba(76,194,255,.95));
+      border-color: rgba(255,255,255,.18);
+      color:#081018;
+      box-shadow: 0 16px 40px rgba(43,226,166,.14);
     }
-    .btn.ghost{background:transparent}
-    .btn.small{padding:8px 10px;border-radius:12px;font-size:12px}
+    .btn.ghost{ background: transparent; }
 
     .grid{
       display:grid;
-      grid-template-columns: 1.2fr .8fr;
-      gap:14px;
-      margin-top:14px;
+      grid-template-columns: 1.65fr 1fr;
+      gap:16px;
+      margin-top: 16px;
     }
     @media (max-width: 980px){
-      .grid{grid-template-columns:1fr}
-      .brand{min-width:auto}
-      .topbar{position:relative;top:auto}
+      .grid{ grid-template-columns: 1fr; }
+      .pills{ justify-content:flex-start; }
+      .brand{ min-width: auto; }
     }
 
     .card{
-      border:1px solid var(--stroke);
-      background: var(--card);
+      background: rgba(255,255,255,.05);
+      border:1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding:16px;
+      backdrop-filter: blur(10px);
+      padding: 16px;
     }
-    .card h2{margin:0 0 10px;font-size:14px;letter-spacing:.2px}
-    .muted{color:var(--muted)}
-    .muted2{color:var(--muted2)}
-    .hr{height:1px;background:var(--stroke);margin:14px 0}
+    .card h2{ margin:0; font-size:16px; letter-spacing:.2px; }
+    .muted{ color: var(--muted); }
+    .muted2{ color: var(--muted2); }
+
+    .split{
+      display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    }
 
     .badge{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:6px 10px;border-radius:999px;
-      border:1px solid var(--stroke2);
-      background:rgba(255,255,255,.03);
-      font-size:12px;
-      font-weight:800;
-      letter-spacing:.3px;
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border:1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(255,255,255,.04);
+      font-weight: 750;
+      letter-spacing:.2px;
     }
-    .badge.good{border-color:rgba(43,226,166,.35);color:var(--good);background:rgba(43,226,166,.08)}
-    .badge.warn{border-color:rgba(255,210,80,.35);color:var(--warn);background:rgba(255,210,80,.08)}
-    .badge.bad{border-color:rgba(255,107,107,.35);color:var(--bad);background:rgba(255,107,107,.08)}
+    .badge.good{ color: rgba(10,20,18,.92); background: rgba(35,209,163,.95); border-color: rgba(35,209,163,.65); }
+    .badge.warn{ color: rgba(18,14,7,.92); background: rgba(244,194,79,.95); border-color: rgba(244,194,79,.65); }
+    .badge.bad{ color: rgba(20,8,9,.95); background: rgba(255,95,109,.95); border-color: rgba(255,95,109,.65); }
 
-    .row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-    .kv{display:grid;grid-template-columns:140px 1fr;gap:8px 10px;font-size:13px}
-    .kv .k{color:var(--muted)}
-    .kv .v{color:var(--text);font-family:var(--mono);font-size:12.5px}
-    .hint{font-size:12px;color:var(--muted);line-height:1.45}
+    .hr{ border-top:1px solid rgba(255,255,255,.10); margin: 14px 0; }
 
-    .plans{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-    @media (max-width: 560px){.plans{grid-template-columns:1fr}}
+    .kv{
+      display:grid; grid-template-columns: 190px 1fr;
+      gap:10px; row-gap:8px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .kv .k{ color: var(--muted); }
+    .kv .v{ color: var(--text); font-weight: 650; }
+
+    input{
+      width:100%;
+      padding:10px 12px;
+      border-radius: 12px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.25);
+      color: var(--text);
+      outline:none;
+    }
+    input:focus{ border-color: rgba(76,194,255,.45); box-shadow: 0 0 0 4px rgba(76,194,255,.12); }
+
+    .plans{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      margin-top: 12px;
+    }
+    @media (max-width: 720px){
+      .plans{ grid-template-columns: 1fr; }
+      .kv{ grid-template-columns: 160px 1fr; }
+    }
+
     .plan{
-      border:1px solid var(--stroke);
-      background:rgba(255,255,255,.03);
-      border-radius: var(--radius2);
-      padding:14px;
+      padding: 14px;
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      transition: border-color .15s ease, background .15s ease, transform .08s ease;
+      position: relative;
+      overflow:hidden;
     }
-    .plan .t{display:flex;align-items:center;justify-content:space-between;gap:10px}
-    .plan .name{font-weight:900}
-    .plan .price{font-family:var(--mono);color:rgba(255,255,255,.85)}
-    .plan .desc{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.45}
-    .plan .actions{margin-top:12px;display:flex;gap:10px;flex-wrap:wrap}
+    .plan:hover{ border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.055); }
     .plan.active{
-      border-color:rgba(76,194,255,.35);
-      box-shadow: 0 0 0 1px rgba(76,194,255,.12) inset;
-      background:rgba(76,194,255,.06);
+      border-color: rgba(43,226,166,.38);
+      box-shadow: 0 0 0 4px rgba(43,226,166,.10) inset;
+    }
+    .plan .row{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+    .plan .name{ font-size: 15px; font-weight: 820; }
+    .plan .price{ font-size: 15px; font-weight: 820; }
+    .plan .desc{ margin-top:8px; color: var(--muted); font-size:12px; line-height:1.4; }
+    .plan .actions{ margin-top: 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+    footer{
+      margin-top: 16px;
+      display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
+      color: var(--muted2);
+      font-size: 12px;
+      padding: 0 4px;
     }
 
-    .footer{
-      margin-top:14px;
-      color:var(--muted2);
-      font-size:12px;
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      flex-wrap:wrap;
-    }
-    .link{color:rgba(255,255,255,.75);text-decoration:none;border-bottom:1px dashed rgba(255,255,255,.25)}
-    .link:hover{color:#fff;border-bottom-color:rgba(255,255,255,.45)}
+    /* Small bilingual helper */
+    .zh{ font-size:12px; color: var(--muted2); margin-top: 4px; }
   </style>
 </head>
 
 <body>
   <div class="wrap">
-
-    <!-- Top bar: keep style consistent with your dashboard -->
+    <!-- Top bar -->
     <div class="topbar">
       <div class="brand">
         <div class="logo" aria-hidden="true"></div>
         <div>
-          <h1>DarriusAI • Inflection Hunter</h1>
-          <div class="sub">Account & Subscription Management</div>
+          <h1>DarriusAI · Inflection Hunter</h1>
+          <div class="sub">Account & Subscription Management <span class="muted2">（账户与订阅管理）</span></div>
         </div>
       </div>
 
-      <div class="nav">
-        <!-- Runtime status (filled by JS) -->
-        <div class="pill" id="pillLogin">
-          <span class="dot" id="dotLogin"></span>
-          <span id="txtLogin">Checking login…</span>
+      <div class="pills">
+        <div class="pill">
+          <span id="dotLogin" class="dot"></span>
+          <span id="txtLogin">Checking…</span>
         </div>
-        <div class="pill" id="pillAccess" title="Access & data source are controlled by backend policy.">
-          <span class="dot" id="dotAccess"></span>
+        <div class="pill">
+          <span id="dotAccess" class="dot"></span>
           <span id="txtAccess">Access: —</span>
         </div>
 
-        <a class="btn ghost" href="/index.html" id="btnBack">
-          ← Back to Dashboard
+        <a class="btn ghost" href="/index.html" title="Back to Dashboard">
+          ← Back to Dashboard <span class="muted2">（返回主界面）</span>
         </a>
       </div>
     </div>
 
     <div class="grid">
-      <!-- LEFT: Subscription Overview + Plans -->
-      <div class="card" id="cardOverview">
-        <div class="row">
-          <h2 style="margin:0">Subscription Overview</h2>
-          <span class="badge warn" id="badgeStatus">STATUS: LOADING</span>
+      <!-- Left: Subscription Overview -->
+      <div class="card">
+        <div class="split">
+          <div>
+            <h2>Subscription Overview</h2>
+            <div class="zh">订阅概览</div>
+          </div>
+          <div id="badgeStatus" class="badge warn">STATUS: LOADING</div>
         </div>
 
-        <div class="hint" style="margin-top:10px">
+        <div class="muted" style="margin-top:10px; font-size:13px; line-height:1.45">
           This page manages your subscription. Your dashboard access and data mode (Demo vs MFV/Delayed) are enforced by backend policy.
+          <div class="zh">本页用于订阅管理；仪表盘访问权限与数据模式（Demo/延迟行情）由后端策略控制。</div>
         </div>
 
+        <!-- ✅ Identity block (English + Chinese) -->
         <div class="hr"></div>
+        <div class="card" style="padding:14px; background:rgba(255,255,255,.035); box-shadow:none">
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div style="flex:1;min-width:240px">
+              <div style="font-weight:800">User ID <span class="muted2">（用户ID）</span></div>
+              <input id="uidInput" placeholder="e.g. user_123 / 例如：user_123" />
+              <div class="muted2" style="margin-top:6px;font-size:12px">
+                Used to fetch subscription status and open Stripe portal. <span class="muted2">（用于获取订阅状态并打开Stripe账单管理）</span>
+              </div>
+            </div>
 
+            <div style="flex:1;min-width:240px">
+              <div style="font-weight:800">Email <span class="muted2">（邮箱，可选）</span></div>
+              <input id="emailInput" placeholder="name@example.com / 邮箱（可选）" />
+              <div class="muted2" style="margin-top:6px;font-size:12px">
+                Optional; helps match customer_email in checkout. <span class="muted2">（可选；有助于Checkout匹配邮箱）</span>
+              </div>
+            </div>
+
+            <button id="btnSaveIdentity" class="btn primary" type="button">
+              Save <span class="muted2">（保存）</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Overview Key-Values -->
         <div class="kv">
-          <div class="k">User</div>
+          <div class="k">User <span class="muted2">（用户）</span></div>
           <div class="v" id="vUser">—</div>
 
-          <div class="k">Current Plan</div>
+          <div class="k">Current Plan <span class="muted2">（当前套餐）</span></div>
           <div class="v" id="vPlan">—</div>
 
-          <div class="k">Subscription Status</div>
+          <div class="k">Subscription Status <span class="muted2">（订阅状态）</span></div>
           <div class="v" id="vSubStatus">—</div>
 
-          <div class="k">Renews / Ends</div>
+          <div class="k">Renews / Ends <span class="muted2">（续订/到期）</span></div>
           <div class="v" id="vPeriodEnd">—</div>
 
-          <div class="k">Data Source Mode</div>
+          <div class="k">Data Source Mode <span class="muted2">（数据模式）</span></div>
           <div class="v" id="vDataMode">—</div>
         </div>
 
+        <div class="muted2" style="margin-top:12px; font-size:12px; line-height:1.5">
+          Note: If you cancel, access normally remains active until the end of the current billing period (unless your policy says otherwise).
+          <div class="zh">说明：取消订阅后，通常会在当前计费周期结束前继续可用（以你的后端策略为准）。</div>
+        </div>
+
         <div class="hr"></div>
 
-        <div class="row">
-          <div class="hint" style="max-width:720px">
-            <b>Note:</b> If you cancel, access normally remains active until the end of the current billing period (unless your policy says otherwise).
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+          <button id="btnPortal" class="btn" type="button">
+            Open Billing Portal <span class="muted2">（账单管理）</span>
+          </button>
+
+          <button id="btnGoPlans" class="btn primary" type="button"
+            onclick="document.getElementById('plansWrap').scrollIntoView({behavior:'smooth',block:'start'})">
+            Choose / Change Plan <span class="muted2">（选择/更换套餐）</span>
+          </button>
+        </div>
+
+        <div class="hr"></div>
+
+        <!-- Plans -->
+        <div>
+          <div style="font-weight:900; font-size:14px">
+            Plans <span class="muted2">（套餐）</span>
           </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button class="btn" id="btnPortal" type="button">Open Billing Portal</button>
-            <button class="btn primary" id="btnGoPlans" type="button">Choose / Change Plan</button>
+          <div class="muted2" style="margin-top:6px; font-size:12px; line-height:1.5">
+            Buttons route through your existing checkout flow. This page does not change your data-provider entitlements.
+            <div class="zh">按钮将跳转到你现有的订阅支付流程；本页不改变第三方数据源授权。</div>
+          </div>
+
+          <div id="plansWrap" class="plans">
+            <div class="plan" id="plan_weekly">
+              <div class="row">
+                <div>
+                  <div class="name">Weekly</div>
+                  <div class="zh">周付</div>
+                </div>
+                <div class="price" id="price_weekly">$4.90</div>
+              </div>
+              <div class="desc">
+                Short-term access. Ideal for trials and quick evaluations.
+                <div class="zh">短周期体验，适合试用与快速评估。</div>
+              </div>
+              <div class="actions">
+                <button class="btn primary" data-action="checkout" data-plan="weekly" type="button">
+                  Subscribe <span class="muted2">（订阅）</span>
+                </button>
+                <button class="btn" data-action="learn" data-plan="weekly" type="button">
+                  Details <span class="muted2">（详情）</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="plan" id="plan_monthly">
+              <div class="row">
+                <div>
+                  <div class="name">Monthly</div>
+                  <div class="zh">月付</div>
+                </div>
+                <div class="price" id="price_monthly">$19.90</div>
+              </div>
+              <div class="desc">
+                Most popular. Balanced commitment and flexibility.
+                <div class="zh">最受欢迎：兼顾灵活与成本。</div>
+              </div>
+              <div class="actions">
+                <button class="btn primary" data-action="checkout" data-plan="monthly" type="button">
+                  Subscribe <span class="muted2">（订阅）</span>
+                </button>
+                <button class="btn" data-action="learn" data-plan="monthly" type="button">
+                  Details <span class="muted2">（详情）</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="plan" id="plan_quarterly">
+              <div class="row">
+                <div>
+                  <div class="name">Quarterly</div>
+                  <div class="zh">季付</div>
+                </div>
+                <div class="price" id="price_quarterly">$49.90</div>
+              </div>
+              <div class="desc">
+                Better value. Recommended for active users.
+                <div class="zh">性价比更高，适合活跃用户。</div>
+              </div>
+              <div class="actions">
+                <button class="btn primary" data-action="checkout" data-plan="quarterly" type="button">
+                  Subscribe <span class="muted2">（订阅）</span>
+                </button>
+                <button class="btn" data-action="learn" data-plan="quarterly" type="button">
+                  Details <span class="muted2">（详情）</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="plan" id="plan_yearly">
+              <div class="row">
+                <div>
+                  <div class="name">Yearly</div>
+                  <div class="zh">年付</div>
+                </div>
+                <div class="price" id="price_yearly">$189.00</div>
+              </div>
+              <div class="desc">
+                Best value. For professionals and long-term users.
+                <div class="zh">最省钱：适合专业用户与长期使用。</div>
+              </div>
+              <div class="actions">
+                <button class="btn primary" data-action="checkout" data-plan="yearly" type="button">
+                  Subscribe <span class="muted2">（订阅）</span>
+                </button>
+                <button class="btn" data-action="learn" data-plan="yearly" type="button">
+                  Details <span class="muted2">（详情）</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
 
         <div class="hr"></div>
 
-        <!-- Plans area -->
-        <h2 style="margin:0 0 10px">Plans</h2>
-        <div class="hint" style="margin-bottom:12px">
-          Pricing shown below is read from your backend/Stripe configuration. Buttons will route through your existing checkout flow.
-        </div>
-
-        <div class="plans" id="plansWrap">
-          <!-- Plan cards are placeholders. JS will inject real prices/ids or update labels. -->
-          <div class="plan" data-plan="weekly" id="plan_weekly">
-            <div class="t">
-              <div class="name">Weekly</div>
-              <div class="price" id="price_weekly">$—</div>
-            </div>
-            <div class="desc">Short-term access. Ideal for trials and quick evaluations.</div>
-            <div class="actions">
-              <button class="btn primary small" data-action="checkout" data-plan="weekly" type="button">Subscribe</button>
-              <button class="btn small" data-action="learn" data-plan="weekly" type="button">Details</button>
-            </div>
-          </div>
-
-          <div class="plan" data-plan="monthly" id="plan_monthly">
-            <div class="t">
-              <div class="name">Monthly</div>
-              <div class="price" id="price_monthly">$—</div>
-            </div>
-            <div class="desc">Most popular. Balanced commitment and flexibility.</div>
-            <div class="actions">
-              <button class="btn primary small" data-action="checkout" data-plan="monthly" type="button">Subscribe</button>
-              <button class="btn small" data-action="learn" data-plan="monthly" type="button">Details</button>
-            </div>
-          </div>
-
-          <div class="plan" data-plan="quarterly" id="plan_quarterly">
-            <div class="t">
-              <div class="name">Quarterly</div>
-              <div class="price" id="price_quarterly">$—</div>
-            </div>
-            <div class="desc">Better value. Recommended for active users.</div>
-            <div class="actions">
-              <button class="btn primary small" data-action="checkout" data-plan="quarterly" type="button">Subscribe</button>
-              <button class="btn small" data-action="learn" data-plan="quarterly" type="button">Details</button>
-            </div>
-          </div>
-
-          <div class="plan" data-plan="yearly" id="plan_yearly">
-            <div class="t">
-              <div class="name">Yearly</div>
-              <div class="price" id="price_yearly">$—</div>
-            </div>
-            <div class="desc">Best value. For professionals and long-term users.</div>
-            <div class="actions">
-              <button class="btn primary small" data-action="checkout" data-plan="yearly" type="button">Subscribe</button>
-              <button class="btn small" data-action="learn" data-plan="yearly" type="button">Details</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="hr"></div>
-
-        <div class="hint">
-          <b>Compliance note (display-only):</b>
-          If your access mode is <span class="muted">MFV/Delayed</span>, the dashboard will show delayed market data (e.g., 15-min) as required by your data provider terms.
-          This page does not change data-provider entitlements; it only manages your subscription with DarriusAI.
+        <div class="muted2" style="font-size:12px; line-height:1.5">
+          Compliance note (display-only): If your access mode is MFV/Delayed, the dashboard will show delayed market data (e.g., 15-min) as required by your data provider terms.
+          <div class="zh">合规提示（仅展示）：若为延迟行情模式，将按数据源要求展示延迟数据（如15分钟延迟）。</div>
         </div>
       </div>
 
-      <!-- RIGHT: Policy / Help / Actions (Control Center style) -->
-      <div class="card" id="cardControl">
-        <div class="row">
-          <h2 style="margin:0">Control Center</h2>
-          <span class="badge" id="badgePolicy">POLICY</span>
+      <!-- Right: Control Center -->
+      <div class="card">
+        <div class="split">
+          <div>
+            <h2>Control Center</h2>
+            <div class="zh">控制台</div>
+          </div>
+          <div class="badge" style="opacity:.85">POLICY <span class="muted2">（策略）</span></div>
         </div>
 
         <div class="hr"></div>
 
-        <h2 style="margin:0 0 10px">Access Policy</h2>
-        <div class="hint" id="policyText">
-          Loading access policy…
+        <div style="font-weight:900; font-size:14px">
+          Quick Actions <span class="muted2">（快捷操作）</span>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap">
+          <button id="btnRefresh" class="btn" type="button">
+            Refresh Status <span class="muted2">（刷新状态）</span>
+          </button>
+          <a class="btn" href="/index.html">
+            Open Dashboard <span class="muted2">（打开主界面）</span>
+          </a>
         </div>
 
         <div class="hr"></div>
 
-        <h2 style="margin:0 0 10px">Quick Actions</h2>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn" id="btnRefresh" type="button">Refresh Status</button>
-          <a class="btn" href="/index.html">Open Dashboard</a>
+        <div style="font-weight:900; font-size:14px">
+          Support <span class="muted2">（支持）</span>
+        </div>
+        <div class="muted2" style="margin-top:8px; font-size:12px; line-height:1.55">
+          For billing questions, please use the Billing Portal first (invoices, payment methods, cancellations).
+          <div class="zh">账单相关请优先使用“账单管理”（发票、付款方式、取消订阅等）。</div>
+          For technical support: <a href="/index.html#support">Support</a> <span class="muted2">（技术支持）</span>
         </div>
 
         <div class="hr"></div>
 
-        <h2 style="margin:0 0 10px">Support</h2>
-        <div class="hint">
-          If you have billing questions, please use the Billing Portal first (invoices, payment methods, cancellations).<br/>
-          For technical support: <a class="link" href="/support.html">Support</a> (or your existing support link).
+        <div style="font-weight:900; font-size:14px">
+          System <span class="muted2">（系统）</span>
         </div>
-
-        <div class="hr"></div>
-
-        <h2 style="margin:0 0 10px">System</h2>
-        <div class="kv">
-          <div class="k">Build</div>
+        <div class="kv" style="margin-top:10px">
+          <div class="k">Build <span class="muted2">（版本）</span></div>
           <div class="v" id="vBuild">—</div>
 
-          <div class="k">Backend</div>
+          <div class="k">Backend <span class="muted2">（后端）</span></div>
           <div class="v" id="vBackend">—</div>
         </div>
       </div>
     </div>
 
-    <div class="footer">
+    <footer>
       <div>© 2026 Darrius FinTech Inc. All Rights Reserved.</div>
-      <div class="muted2">
-        <a class="link" href="/terms.html">Terms</a> ·
-        <a class="link" href="/privacy.html">Privacy</a>
+      <div>
+        <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a>
       </div>
-    </div>
-
+    </footer>
   </div>
 
-  <!-- IMPORTANT:
-       account.html is display + routing only.
-       It must NOT import or modify any existing index.html subscription/payment code.
-       It simply calls your backend endpoints and redirects the user accordingly. -->
+  <!-- IMPORTANT: keep this last -->
   <script src="/js/account.page.js"></script>
 </body>
 </html>
