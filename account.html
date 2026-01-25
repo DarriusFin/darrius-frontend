@@ -481,7 +481,13 @@
     </footer>
   </div>
 
-  <!-- IMPORTANT: keep this last -->
-  <script src="/js/account.page.js"></script>
+  <!-- ✅ Step 1: define backend base + create global namespace (fix "account is not defined") -->
+  <script>
+    window.__API_BASE__ = "https://darrius-api.onrender.com";
+    window.account = window.account || {};
+  </script>
+
+  <!-- ✅ Step 2: load your page controller (use RELATIVE path to avoid 404) -->
+  <script src="js/account.page.js"></script>
 </body>
 </html>
