@@ -93,9 +93,6 @@
       color:#081018;
       box-shadow: 0 16px 40px rgba(43,226,166,.14);
     }
-    .btn.primary:hover{
-      filter: brightness(1.03);
-    }
     .btn.ghost{ background: transparent; }
 
     .grid{
@@ -194,6 +191,32 @@
     .plan .desc{ margin-top:8px; color: var(--muted); font-size:12px; line-height:1.4; }
     .plan .actions{ margin-top: 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
+    /* tiny trial pill */
+    .trial{
+      display:inline-flex; align-items:center;
+      margin-top:8px;
+      padding:5px 9px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.04);
+      font-size: 12px;
+      color: rgba(255,255,255,.80);
+      gap:8px;
+    }
+
+    /* plans flash highlight: visible confirmation */
+    #plansWrap.flash{
+      outline: 2px solid rgba(76,194,255,.55);
+      box-shadow: 0 0 0 6px rgba(76,194,255,.12);
+      border-radius: 18px;
+      animation: flashPulse 1.2s ease-out 1;
+    }
+    @keyframes flashPulse{
+      0%{ box-shadow: 0 0 0 0 rgba(76,194,255,.0); }
+      30%{ box-shadow: 0 0 0 10px rgba(76,194,255,.18); }
+      100%{ box-shadow: 0 0 0 0 rgba(76,194,255,.0); }
+    }
+
     footer{
       margin-top: 16px;
       display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
@@ -202,19 +225,7 @@
       padding: 0 4px;
     }
 
-    /* Small bilingual helper */
     .zh{ font-size:12px; color: var(--muted2); margin-top: 4px; }
-
-    /* Scroll target flash (JS will toggle) */
-    .flash-target{
-      animation: flashPulse 1.2s ease-in-out 1;
-    }
-    @keyframes flashPulse{
-      0%{ box-shadow: 0 0 0 0 rgba(76,194,255,.00); }
-      30%{ box-shadow: 0 0 0 6px rgba(76,194,255,.14); }
-      70%{ box-shadow: 0 0 0 10px rgba(43,226,166,.10); }
-      100%{ box-shadow: 0 0 0 0 rgba(76,194,255,.00); }
-    }
   </style>
 </head>
 
@@ -262,7 +273,7 @@
           <div class="zh">本页用于订阅管理；仪表盘访问权限与数据模式（Demo/延迟行情）由后端策略控制。</div>
         </div>
 
-        <!-- ✅ Identity block (English + Chinese) -->
+        <!-- Identity block (English + Chinese) -->
         <div class="hr"></div>
         <div class="card" style="padding:14px; background:rgba(255,255,255,.035); box-shadow:none">
           <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
@@ -314,12 +325,12 @@
         <div class="hr"></div>
 
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
-          <!-- ✅ 你要求：Open Billing Portal 与右边一样的渐变背景色 -->
+          <!-- ✅ make same primary background -->
           <button id="btnPortal" class="btn primary" type="button">
             Open Billing Portal <span class="muted2">（账单管理）</span>
           </button>
 
-          <!-- ✅ 去掉 inline onclick，改由 account.page.js 绑定 -->
+          <!-- ✅ no inline onclick; JS binds -->
           <button id="btnGoPlans" class="btn primary" type="button">
             Choose / Change Plan <span class="muted2">（选择/更换套餐）</span>
           </button>
@@ -371,10 +382,8 @@
               <div class="desc">
                 Most popular. Balanced commitment and flexibility.
                 <div class="zh">最受欢迎：兼顾灵活与成本。</div>
-                <div class="muted2" style="margin-top:6px;font-size:12px">
-                  Free trial: <b>1 day</b>
-                  <span class="zh">免费试用：<b>1天</b></span>
-                </div>
+
+                <div class="trial">✅ 1-day free trial <span class="muted2">（1天免费试用）</span></div>
               </div>
               <div class="actions">
                 <button class="btn primary" data-action="checkout" data-plan="monthly" type="button">
@@ -397,10 +406,8 @@
               <div class="desc">
                 Better value. Recommended for active users.
                 <div class="zh">性价比更高，适合活跃用户。</div>
-                <div class="muted2" style="margin-top:6px;font-size:12px">
-                  Free trial: <b>3 days</b>
-                  <span class="zh">免费试用：<b>3天</b></span>
-                </div>
+
+                <div class="trial">✅ 3-day free trial <span class="muted2">（3天免费试用）</span></div>
               </div>
               <div class="actions">
                 <button class="btn primary" data-action="checkout" data-plan="quarterly" type="button">
@@ -423,10 +430,8 @@
               <div class="desc">
                 Best value. For professionals and long-term users.
                 <div class="zh">最省钱：适合专业用户与长期使用。</div>
-                <div class="muted2" style="margin-top:6px;font-size:12px">
-                  Free trial: <b>5 days</b>
-                  <span class="zh">免费试用：<b>5天</b></span>
-                </div>
+
+                <div class="trial">✅ 5-day free trial <span class="muted2">（5天免费试用）</span></div>
               </div>
               <div class="actions">
                 <button class="btn primary" data-action="checkout" data-plan="yearly" type="button">
@@ -490,14 +495,13 @@
         <div style="font-weight:900; font-size:14px">
           System <span class="muted2">（系统）</span>
         </div>
-
         <div class="kv" style="margin-top:10px">
           <div class="k">Build <span class="muted2">（版本）</span></div>
           <div class="v" id="vBuild">—</div>
 
-          <!-- 默认隐藏：除非 ?debug=1 -->
-          <div class="k" id="kBackend" style="display:none">Backend <span class="muted2">（后端）</span></div>
-          <div class="v" id="vBackend" style="display:none">—</div>
+          <div class="k">Backend <span class="muted2">（后端）</span></div>
+          <!-- ✅ don't display full url in UI -->
+          <div class="v" id="vBackend">Connected</div>
         </div>
       </div>
     </div>
@@ -510,7 +514,7 @@
     </footer>
   </div>
 
-  <!-- ✅ 建议显式指定后端（不碰支付系统，仅告诉前端去哪请求） -->
+  <!-- Explicit API base (optional but safer) -->
   <script>
     window.__API_BASE__ = "https://darrius-api.onrender.com";
   </script>
