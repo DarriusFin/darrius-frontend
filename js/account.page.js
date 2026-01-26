@@ -11,7 +11,7 @@
   // ===== DOM helpers =====
   const $ = (id) => document.getElementById(id);
 
-  // ===== Safe storage (关键兜底：localStorage 可能抛异常，导致整页点击全失效) =====
+  // ===== Safe storage (兜底：localStorage 可能抛异常，不能让整页交互失效) =====
   const MEM = { uid: '', email: '' };
   const LS_UID = 'darrius_user_id';
   const LS_EMAIL = 'darrius_email';
@@ -82,9 +82,9 @@
   }
 
   async function refreshPlans() {
+    // 仅用于探测是否存在该接口；UI 价格你已写死，这里不改（避免误动）
     try {
       await getJSON('/api/plans');
-      // 你页面价格写死，这里不改 UI，避免误改
     } catch (e) {
       console.warn('[account] /api/plans failed:', e.message);
     }
@@ -122,14 +122,14 @@
         setBadge('STATUS: DEMO');
       }
 
+      // Portal button enable/disable (UI only)
       const btnPortal = $('btnPortal');
       if (btnPortal) {
         if (s.customer_portal) {
           btnPortal.disabled = false;
-          btnPortal.style.opacity = '1';
+          btnPortal.title = '';
         } else {
           btnPortal.disabled = true;
-          btnPortal.style.opacity = '0.55';
           btnPortal.title = 'Complete subscription first / 先完成订阅';
         }
       }
@@ -139,10 +139,17 @@
       setText('txtAccess', 'Access: DEMO / 演示');
       setText('vDataMode', 'Demo / 演示');
       setBadge('STATUS: DEMO');
+
+      // 失败时也别“锁死”按钮，让你还能点订阅继续走 checkout
+      const btnPortal = $('btnPortal');
+      if (btnPortal) {
+        btnPortal.disabled = true;
+        btnPortal.title = 'Subscription status not available / 订阅状态暂不可用';
+      }
     }
   }
 
-  // ===== Actions =====
+  // ===== Actions (不改订阅/支付：仍然调用原后端接口) =====
   async function startCheckout(planKey) {
     const { user_id, email } = getIdentity();
     if (!user_id) return alert2('User ID required. Click Save first.', '请先填写用户ID并点击保存。');
@@ -173,7 +180,16 @@
     }
   }
 
-  // ✅ 滚动到 plansWrap + 视觉反馈（关键：避免“按了没反应”的错觉）
+  // ✅ Choose/Change Plan：稳定滚动 + 明显高亮（就算已经在附近也能看出来）
+  function flashPlansWrap(el) {
+    if (!el) return;
+    el.classList.remove('plans-flash');
+    // 强制 reflow，确保重复点击也会触发动画
+    void el.offsetWidth;
+    el.classList.add('plans-flash');
+    setTimeout(() => el.classList.remove('plans-flash'), 1300);
+  }
+
   function scrollToPlans() {
     const wrap = $('plansWrap');
     if (!wrap) {
@@ -181,14 +197,21 @@
       return;
     }
 
-    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // 让用户“看见”确实执行了
+    flashPlansWrap(wrap);
 
-    // 视觉闪烁 900ms
-    wrap.classList.add('plansFlash');
-    window.setTimeout(() => wrap.classList.remove('plansFlash'), 900);
+    // 比 scrollIntoView 更稳定：可设置偏移量（避免顶部吸附/遮挡）
+    const y = wrap.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+    const top = Math.max(0, y - 110);
+
+    try {
+      window.scrollTo({ top, behavior: 'smooth' });
+    } catch {
+      window.scrollTo(0, top);
+    }
   }
 
-  // ===== Bind (用事件委托兜底：不怕 DOM 时机/不怕局部渲染/不怕按钮替换) =====
+  // ===== Bind (事件委托兜底 + 单点按钮绑定) =====
   function bind() {
     const btnSave = $('btnSaveIdentity');
     if (btnSave) {
@@ -208,7 +231,7 @@
     const btnPortal = $('btnPortal');
     if (btnPortal) btnPortal.addEventListener('click', openPortal);
 
-    // ✅ 关键：btnGoPlans 点击滚动（彻底绕开 inline onclick / CSP）
+    // ✅ 关键：不要 inline onclick（避免 CSP），在这里绑定
     const btnGoPlans = $('btnGoPlans');
     if (btnGoPlans) {
       btnGoPlans.addEventListener('click', () => {
@@ -217,7 +240,7 @@
       }, true);
     }
 
-    // ✅ Event delegation for all plan buttons
+    // ✅ Event delegation for plan buttons
     document.addEventListener('click', (ev) => {
       const t = ev.target;
       if (!t) return;
@@ -241,14 +264,13 @@
     console.log('[account] bind() done. buttons=', document.querySelectorAll('button[data-action]').length);
   }
 
-  // ===== Init (确保 DOM 就绪后再跑) =====
+  // ===== Init =====
   async function init() {
     console.log('[account] account.page.js loaded OK. API_BASE=', API_BASE);
 
     renderIdentity();
     bind();
 
-    // show system
     if ($('vBackend')) $('vBackend').textContent = API_BASE;
 
     try {
