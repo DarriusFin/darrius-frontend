@@ -11,7 +11,7 @@
   // ===== DOM helpers =====
   const $ = (id) => document.getElementById(id);
 
-  // ===== Safe storage (兜底：localStorage 可能抛异常，不能让整页交互失效) =====
+  // ===== Safe storage (关键兜底：localStorage 可能抛异常，导致整页点击失效) =====
   const MEM = { uid: '', email: '' };
   const LS_UID = 'darrius_user_id';
   const LS_EMAIL = 'darrius_email';
@@ -81,10 +81,20 @@
     setText('badgeStatus', text);
   }
 
+  function setDot(id, state) {
+    const el = $(id);
+    if (!el) return;
+    el.classList.remove('good', 'bad');
+    if (state === 'good') el.classList.add('good');
+    if (state === 'bad') el.classList.add('bad');
+  }
+
+  // ===== Plans/status =====
   async function refreshPlans() {
-    // 仅用于探测是否存在该接口；UI 价格你已写死，这里不改（避免误动）
+    // Optional: only for display; not required for checkout
     try {
       await getJSON('/api/plans');
+      // 页面价格写死，这里不改 UI，避免误改
     } catch (e) {
       console.warn('[account] /api/plans failed:', e.message);
     }
@@ -95,7 +105,11 @@
 
     if (!user_id) {
       setText('txtLogin', 'Not logged in / 未登录');
+      setDot('dotLogin', 'bad');
+
       setText('txtAccess', 'Access: DEMO / 演示');
+      setDot('dotAccess', 'bad');
+
       setBadge('STATUS: DEMO');
       setText('vSubStatus', 'not_logged_in');
       setText('vDataMode', 'Demo / 演示');
@@ -104,52 +118,53 @@
     }
 
     setText('txtLogin', 'Logged in / 已登录');
+    setDot('dotLogin', 'good');
     setBadge('STATUS: LOADING');
 
     try {
       const s = await getJSON('/api/subscription/status?user_id=' + encodeURIComponent(user_id));
 
       setText('vSubStatus', s.status || 'unknown');
+      setText('vPlan', s.plan || s.price || s.product || '—');
       setText('vPeriodEnd', s.current_period_end ? new Date(s.current_period_end).toLocaleString() : '—');
 
       if (s.has_access) {
         setText('txtAccess', 'Access: MFV/Delayed / 延迟行情');
         setText('vDataMode', 'MFV/Delayed / 延迟行情');
         setBadge('STATUS: ACTIVE');
+        setDot('dotAccess', 'good');
       } else {
         setText('txtAccess', 'Access: DEMO / 演示');
         setText('vDataMode', 'Demo / 演示');
         setBadge('STATUS: DEMO');
+        setDot('dotAccess', 'bad');
       }
 
-      // Portal button enable/disable (UI only)
       const btnPortal = $('btnPortal');
       if (btnPortal) {
         if (s.customer_portal) {
           btnPortal.disabled = false;
+          btnPortal.style.opacity = '1';
           btnPortal.title = '';
         } else {
-          btnPortal.disabled = true;
-          btnPortal.title = 'Complete subscription first / 先完成订阅';
+          // 仍允许点击也可（你当前是能打开的），这里不强制禁用，避免“看起来按不动”
+          btnPortal.disabled = false;
+          btnPortal.style.opacity = '1';
+          btnPortal.title = 'If unavailable, complete subscription first / 若不可用，请先完成订阅';
         }
       }
     } catch (e) {
       console.warn('[account] status failed:', e.message);
+
       setText('vSubStatus', 'unknown');
       setText('txtAccess', 'Access: DEMO / 演示');
       setText('vDataMode', 'Demo / 演示');
       setBadge('STATUS: DEMO');
-
-      // 失败时也别“锁死”按钮，让你还能点订阅继续走 checkout
-      const btnPortal = $('btnPortal');
-      if (btnPortal) {
-        btnPortal.disabled = true;
-        btnPortal.title = 'Subscription status not available / 订阅状态暂不可用';
-      }
+      setDot('dotAccess', 'bad');
     }
   }
 
-  // ===== Actions (不改订阅/支付：仍然调用原后端接口) =====
+  // ===== Actions (不动订阅/支付系统) =====
   async function startCheckout(planKey) {
     const { user_id, email } = getIdentity();
     if (!user_id) return alert2('User ID required. Click Save first.', '请先填写用户ID并点击保存。');
@@ -180,16 +195,7 @@
     }
   }
 
-  // ✅ Choose/Change Plan：稳定滚动 + 明显高亮（就算已经在附近也能看出来）
-  function flashPlansWrap(el) {
-    if (!el) return;
-    el.classList.remove('plans-flash');
-    // 强制 reflow，确保重复点击也会触发动画
-    void el.offsetWidth;
-    el.classList.add('plans-flash');
-    setTimeout(() => el.classList.remove('plans-flash'), 1300);
-  }
-
+  // ===== Choose/Change Plan 强力滚动（替代 inline onclick，避免 CSP/拦截） =====
   function scrollToPlans() {
     const wrap = $('plansWrap');
     if (!wrap) {
@@ -197,21 +203,26 @@
       return;
     }
 
-    // 让用户“看见”确实执行了
-    flashPlansWrap(wrap);
-
-    // 比 scrollIntoView 更稳定：可设置偏移量（避免顶部吸附/遮挡）
-    const y = wrap.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
-    const top = Math.max(0, y - 110);
-
+    // 1) 计算更稳：scrollIntoView + 兜底 window.scrollTo
     try {
-      window.scrollTo({ top, behavior: 'smooth' });
-    } catch {
-      window.scrollTo(0, top);
-    }
+      wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch {}
+
+    // 兜底：用坐标滚动（某些情况下 scrollIntoView 不生效或太“轻”）
+    const rect = wrap.getBoundingClientRect();
+    const y = window.scrollY + rect.top - 90; // 顶部留点空间
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+
+    // 2) 视觉反馈：闪一下，用户就知道“确实跳过去了”
+    wrap.classList.remove('flash-target');
+    // 触发重绘
+    void wrap.offsetWidth;
+    wrap.classList.add('flash-target');
+
+    console.log('[account] btnGoPlans clicked -> scrollToPlans()');
   }
 
-  // ===== Bind (事件委托兜底 + 单点按钮绑定) =====
+  // ===== Bind (事件委托兜底：不怕 DOM 时机/不怕按钮替换) =====
   function bind() {
     const btnSave = $('btnSaveIdentity');
     if (btnSave) {
@@ -231,11 +242,11 @@
     const btnPortal = $('btnPortal');
     if (btnPortal) btnPortal.addEventListener('click', openPortal);
 
-    // ✅ 关键：不要 inline onclick（避免 CSP），在这里绑定
+    // ✅ 关键：绑定 Choose/Change Plan
     const btnGoPlans = $('btnGoPlans');
     if (btnGoPlans) {
-      btnGoPlans.addEventListener('click', () => {
-        console.log('[account] btnGoPlans clicked -> scrollToPlans()');
+      btnGoPlans.addEventListener('click', (e) => {
+        e.preventDefault();
         scrollToPlans();
       }, true);
     }
@@ -251,7 +262,7 @@
       const action = (btn.getAttribute('data-action') || '').trim();
       const plan = (btn.getAttribute('data-plan') || '').trim();
 
-      console.log('[account] click captured:', { action, plan });
+      // console.log('[account] click captured:', { action, plan });
 
       if (action === 'checkout') {
         if (!plan) return;
@@ -264,18 +275,29 @@
     console.log('[account] bind() done. buttons=', document.querySelectorAll('button[data-action]').length);
   }
 
-  // ===== Init =====
+  // ===== Init (确保 DOM 就绪后再跑) =====
   async function init() {
     console.log('[account] account.page.js loaded OK. API_BASE=', API_BASE);
 
     renderIdentity();
     bind();
 
-    if ($('vBackend')) $('vBackend').textContent = API_BASE;
+    // show system (默认隐藏 backend，除非 ?debug=1)
+    const debugOn = /(?:\?|&)debug=1(?:&|$)/.test(location.search);
+
+    const vBackend = $('vBackend');
+    const kBackend = $('kBackend');
+    if (vBackend) vBackend.textContent = API_BASE;
+
+    if (vBackend && kBackend) {
+      vBackend.style.display = debugOn ? '' : 'none';
+      kBackend.style.display = debugOn ? '' : 'none';
+    }
 
     try {
       const r = await getJSON('/routes');
       if ($('vBuild')) $('vBuild').textContent = r.build || '—';
+      console.log('[account] routes loaded:', r);
     } catch {}
 
     await refreshPlans();
