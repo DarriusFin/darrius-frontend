@@ -4,6 +4,11 @@
  * - Wires UI events
  * - Starts ChartCore + Subscription modules
  * - Keeps subscription stable; does NOT touch backend secrets
+ *
+ * ✅ FIX v2026.01.26:
+ * - Removed duplicated bootstrapSubscription() re-attach loop
+ *   (it caused Subscription.attach() to run multiple times and
+ *    could revert Manage/Start button disabled state)
  * ========================================================= */
 
 (function () {
@@ -33,6 +38,7 @@
   }
 
   function log(msg) {
+    // Reuse your existing logger if present
     if (typeof window.log === "function") {
       window.log(msg);
       return;
@@ -72,7 +78,9 @@
   async function copyShareLink() {
     const sym = ($("symbol")?.value || "BTCUSDT").trim().toUpperCase();
     const tf = $("tf")?.value || "1d";
-    const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+    const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(
+      sym
+    )}&tf=${encodeURIComponent(tf)}`;
     try {
       await navigator.clipboard.writeText(url);
       alert("已复制分享链接：\n" + url);
@@ -84,6 +92,7 @@
   // ---------- optional: export png ----------
   function exportPNG() {
     try {
+      // ChartCore may provide screenshot helper, else fallback to chart instance if exposed
       if (window.ChartCore && typeof window.ChartCore.exportPNG === "function") {
         window.ChartCore.exportPNG();
         return;
@@ -117,49 +126,15 @@
     log("Admin mode enabled (?admin=1)");
   }
 
-  // ---------- Subscription attach (single, stable, retry) ----------
-  function attachSubscriptionStable() {
-    let attached = false;
-
-    function domReadyForSubscription() {
-      return !!document.getElementById("subscribeBtn") && !!document.getElementById("planSelect");
-    }
-
-    function tryAttachOnce() {
-      try {
-        if (attached) return true;
-        if (!window.Subscription || typeof window.Subscription.attach !== "function") return false;
-        if (!domReadyForSubscription()) return false;
-
-        window.Subscription.attach(); // ✅ 只 attach 一次
-        attached = true;
-
-        if (isAdmin()) console.log("[BOOT] Subscription.attach() ✅ (stable)");
-        return true;
-      } catch (e) {
-        console.error("[BOOT] Subscription.attach() failed ❌", e);
-        return false;
-      }
-    }
-
-    // immediate try
-    if (tryAttachOnce()) return;
-
-    // retry (DOM / script timing)
-    let n = 0;
-    const t = setInterval(function () {
-      n++;
-      if (tryAttachOnce() || n >= 20) clearInterval(t);
-    }, 200);
-  }
-
   // ---------- main boot ----------
   function boot() {
     // year
     safeText($("yearNow"), String(new Date().getFullYear()));
 
     // global API base (shared by modules)
+    // NOTE: you can set this in index.html before scripts; if not, we keep existing value
     if (!window.API_BASE) {
+      // Prefer your known Render backend; can be overridden in index.html
       window.API_BASE = "https://darrius-api.onrender.com";
     }
 
@@ -175,10 +150,13 @@
       setStatus("ChartCore missing (js not loaded)", false);
       log("❌ ChartCore not found on window. Did you include /js/chart.core.js ?");
     } else {
+      // Bind TF quick -> reload
       bindTfQuick(() => {
+        // do a full reload of market data
         if (typeof window.ChartCore.load === "function") window.ChartCore.load();
       });
 
+      // toggles
       $("tgEMA")?.addEventListener("change", () => {
         if (typeof window.ChartCore.applyToggles === "function") window.ChartCore.applyToggles();
       });
@@ -186,13 +164,16 @@
         if (typeof window.ChartCore.applyToggles === "function") window.ChartCore.applyToggles();
       });
 
+      // Load button
       $("loadBtn")?.addEventListener("click", () => {
         if (typeof window.ChartCore.load === "function") window.ChartCore.load();
       });
 
+      // Init chart (ChartCore should create chart and do initial load)
       try {
         if (typeof window.ChartCore.init === "function") {
           window.ChartCore.init({
+            // pass DOM ids if ChartCore supports it; safe to ignore if not used
             chartElId: "chart",
             overlayElId: "sigOverlay",
           });
@@ -206,8 +187,25 @@
       }
     }
 
-    // ---- Subscription wiring (stable) ----
-    attachSubscriptionStable();
+    // ---- Subscription wiring ----
+    // ✅ IMPORTANT: Attach ONCE ONLY (no retry loop) to avoid button state being reverted.
+    if (!window.Subscription) {
+      log("⚠️ Subscription module not found. Did you include /js/subscription.js ?");
+    } else {
+      try {
+        if (typeof window.Subscription.attach === "function") {
+          window.Subscription.attach(); // ✅ bind buttons + load plans + refresh status
+          log("✅ Subscription.attach()");
+        } else if (typeof window.Subscription.initPlans === "function") {
+          window.Subscription.initPlans(); // fallback: at least load plans
+          log("✅ Subscription.initPlans()");
+        } else {
+          log("⚠️ Subscription has no attach/initPlans");
+        }
+      } catch (e) {
+        log("❌ Subscription wiring error: " + e.message);
+      }
+    }
 
     // Other UI utilities
     $("copyLinkBtn")?.addEventListener("click", copyShareLink);
@@ -225,5 +223,6 @@
     boot();
   }
 
+  // expose (optional)
   window.Boot = { boot };
 })();
