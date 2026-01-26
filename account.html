@@ -39,7 +39,6 @@
     a:hover{ text-decoration:underline; }
 
     .wrap{ max-width: 1280px; margin: 0 auto; padding: 22px 18px 40px; }
-
     .topbar{
       display:flex; align-items:center; justify-content:space-between;
       gap:12px; padding: 14px 16px;
@@ -83,7 +82,7 @@
       color: var(--text);
       font-weight: 650;
       cursor:pointer;
-      transition: transform .08s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
+      transition: transform .08s ease, background .15s ease, border-color .15s ease;
       user-select:none;
     }
     .btn:hover{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.18); }
@@ -94,14 +93,10 @@
       color:#081018;
       box-shadow: 0 16px 40px rgba(43,226,166,.14);
     }
-    .btn.primary:hover{ filter: brightness(1.02); }
-    .btn.ghost{ background: transparent; }
-
-    .btn[disabled]{
-      opacity: .55 !important;
-      cursor: not-allowed !important;
-      transform: none !important;
+    .btn.primary:hover{
+      filter: brightness(1.03);
     }
+    .btn.ghost{ background: transparent; }
 
     .grid{
       display:grid;
@@ -207,21 +202,18 @@
       padding: 0 4px;
     }
 
+    /* Small bilingual helper */
     .zh{ font-size:12px; color: var(--muted2); margin-top: 4px; }
 
-    /* ✅ Visible “I DID something” flash for plansWrap */
-    .plans-flash{
-      position: relative;
-      border-radius: 16px;
-      outline: 2px solid rgba(76,194,255,.0);
-      box-shadow: 0 0 0 0 rgba(76,194,255,0);
-      animation: plansFlash 1.1s ease-out 1;
+    /* Scroll target flash (JS will toggle) */
+    .flash-target{
+      animation: flashPulse 1.2s ease-in-out 1;
     }
-    @keyframes plansFlash{
-      0%   { outline-color: rgba(76,194,255,.0); box-shadow: 0 0 0 0 rgba(76,194,255,0); }
-      15%  { outline-color: rgba(76,194,255,.55); box-shadow: 0 0 0 6px rgba(76,194,255,.12); }
-      60%  { outline-color: rgba(43,226,166,.35); box-shadow: 0 0 0 10px rgba(43,226,166,.10); }
-      100% { outline-color: rgba(76,194,255,.0); box-shadow: 0 0 0 0 rgba(76,194,255,0); }
+    @keyframes flashPulse{
+      0%{ box-shadow: 0 0 0 0 rgba(76,194,255,.00); }
+      30%{ box-shadow: 0 0 0 6px rgba(76,194,255,.14); }
+      70%{ box-shadow: 0 0 0 10px rgba(43,226,166,.10); }
+      100%{ box-shadow: 0 0 0 0 rgba(76,194,255,.00); }
     }
   </style>
 </head>
@@ -322,12 +314,12 @@
         <div class="hr"></div>
 
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
-          <!-- ✅ 你要求：Open Billing Portal 也改成渐变背景 -->
+          <!-- ✅ 你要求：Open Billing Portal 与右边一样的渐变背景色 -->
           <button id="btnPortal" class="btn primary" type="button">
             Open Billing Portal <span class="muted2">（账单管理）</span>
           </button>
 
-          <!-- ✅ 不用 inline onclick（避免 CSP）；JS 里绑定滚动 + 高亮 -->
+          <!-- ✅ 去掉 inline onclick，改由 account.page.js 绑定 -->
           <button id="btnGoPlans" class="btn primary" type="button">
             Choose / Change Plan <span class="muted2">（选择/更换套餐）</span>
           </button>
@@ -379,6 +371,10 @@
               <div class="desc">
                 Most popular. Balanced commitment and flexibility.
                 <div class="zh">最受欢迎：兼顾灵活与成本。</div>
+                <div class="muted2" style="margin-top:6px;font-size:12px">
+                  Free trial: <b>1 day</b>
+                  <span class="zh">免费试用：<b>1天</b></span>
+                </div>
               </div>
               <div class="actions">
                 <button class="btn primary" data-action="checkout" data-plan="monthly" type="button">
@@ -401,6 +397,10 @@
               <div class="desc">
                 Better value. Recommended for active users.
                 <div class="zh">性价比更高，适合活跃用户。</div>
+                <div class="muted2" style="margin-top:6px;font-size:12px">
+                  Free trial: <b>3 days</b>
+                  <span class="zh">免费试用：<b>3天</b></span>
+                </div>
               </div>
               <div class="actions">
                 <button class="btn primary" data-action="checkout" data-plan="quarterly" type="button">
@@ -423,6 +423,10 @@
               <div class="desc">
                 Best value. For professionals and long-term users.
                 <div class="zh">最省钱：适合专业用户与长期使用。</div>
+                <div class="muted2" style="margin-top:6px;font-size:12px">
+                  Free trial: <b>5 days</b>
+                  <span class="zh">免费试用：<b>5天</b></span>
+                </div>
               </div>
               <div class="actions">
                 <button class="btn primary" data-action="checkout" data-plan="yearly" type="button">
@@ -433,6 +437,7 @@
                 </button>
               </div>
             </div>
+
           </div>
         </div>
 
@@ -485,12 +490,14 @@
         <div style="font-weight:900; font-size:14px">
           System <span class="muted2">（系统）</span>
         </div>
+
         <div class="kv" style="margin-top:10px">
           <div class="k">Build <span class="muted2">（版本）</span></div>
           <div class="v" id="vBuild">—</div>
 
-          <div class="k">Backend <span class="muted2">（后端）</span></div>
-          <div class="v" id="vBackend">—</div>
+          <!-- 默认隐藏：除非 ?debug=1 -->
+          <div class="k" id="kBackend" style="display:none">Backend <span class="muted2">（后端）</span></div>
+          <div class="v" id="vBackend" style="display:none">—</div>
         </div>
       </div>
     </div>
@@ -502,6 +509,11 @@
       </div>
     </footer>
   </div>
+
+  <!-- ✅ 建议显式指定后端（不碰支付系统，仅告诉前端去哪请求） -->
+  <script>
+    window.__API_BASE__ = "https://darrius-api.onrender.com";
+  </script>
 
   <!-- IMPORTANT: keep this last -->
   <script src="/js/account.page.js"></script>
