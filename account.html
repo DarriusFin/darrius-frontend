@@ -304,8 +304,8 @@
             Open Billing Portal <span class="muted2">（账单管理）</span>
           </button>
 
-          <button id="btnGoPlans" class="btn primary" type="button"
-            onclick="document.getElementById('plansWrap').scrollIntoView({behavior:'smooth',block:'start'})">
+          <!-- ✅ 改动：移除 inline onclick（避免 CSP 禁止 inline handlers） -->
+          <button id="btnGoPlans" class="btn primary" type="button">
             Choose / Change Plan <span class="muted2">（选择/更换套餐）</span>
           </button>
         </div>
@@ -322,6 +322,7 @@
             <div class="zh">按钮将跳转到你现有的订阅支付流程；本页不改变第三方数据源授权。</div>
           </div>
 
+          <!-- ✅ 这里是滚动锚点 -->
           <div id="plansWrap" class="plans">
             <div class="plan" id="plan_weekly">
               <div class="row">
@@ -481,13 +482,7 @@
     </footer>
   </div>
 
-  <!-- ✅ Step 1: define backend base + create global namespace (fix "account is not defined") -->
-  <script>
-    window.__API_BASE__ = "https://darrius-api.onrender.com";
-    window.account = window.account || {};
-  </script>
-
-  <!-- ✅ Step 2: load your page controller (use RELATIVE path to avoid 404) -->
-  <script src="js/account.page.js"></script>
+  <!-- IMPORTANT: keep this last -->
+  <script src="/js/account.page.js"></script>
 </body>
 </html>
