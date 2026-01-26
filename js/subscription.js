@@ -42,6 +42,7 @@
   }
 
   function log(msg) {
+    // If page has log() already, use it; otherwise console
     try {
       if (typeof window.log === "function") {
         window.log(msg);
@@ -52,6 +53,7 @@
   }
 
   function setStatusBadge(text, ok) {
+    // If page has setStatus() already, use it; otherwise ignore
     try {
       if (typeof window.setStatus === "function") {
         window.setStatus(text, ok !== false);
@@ -104,6 +106,7 @@
 
   // -------- Fallback plans (your latest price strategy) --------
   function getLocalFallbackPlans() {
+    // NOTE: Replace these price_ids if backend differs; local fallback is only for UI continuity
     return [
       { key: "weekly", label: "Weekly · $4.90", price_id: "price_weekly_PLACEHOLDER", trial_days: 0 },
       { key: "monthly", label: "Monthly · $19.90", price_id: "price_monthly_PLACEHOLDER", trial_days: 1 },
@@ -129,25 +132,6 @@
     if (mngBtn) mngBtn.disabled = !!disabled;
   }
 
-  // ===== UI label helper: add trial days (EN+ZH) without touching backend =====
-  function trialSuffix(trialDays) {
-    const d = Number(trialDays || 0);
-    if (!d || d <= 0) return "";
-    const dayWord = d === 1 ? "day" : "days";
-    return ` · ${d}-${dayWord} free trial / ${d}天免费试用`;
-  }
-
-  function normalizeLabel(p) {
-    // keep backend label if provided, just append trial hint if not already present
-    const base = (p.label || p.key || "").trim() || p.key;
-    const suf = trialSuffix(p.trial_days);
-
-    // avoid double-append
-    if (!suf) return base;
-    if (base.toLowerCase().includes("free trial") || base.includes("免费试用")) return base;
-    return base + suf;
-  }
-
   function populatePlans(plans) {
     PLANS = (plans || []).slice();
     const sel = $(IDS.planSelect);
@@ -157,7 +141,7 @@
     for (const p of PLANS) {
       const opt = document.createElement("option");
       opt.value = p.key;
-      opt.textContent = normalizeLabel(p);
+      opt.textContent = p.label || p.key;
       sel.appendChild(opt);
     }
 
@@ -265,6 +249,7 @@
       setStatusBadge("Creating checkout…", true);
       if (isAdmin()) log(`➡️ [${nowISOTime()}] POST /billing/checkout ${JSON.stringify(payload)}`);
 
+      // Use fetch directly because your backend returns {checkout_url}
       const resp = await fetch(`${API_BASE}/billing/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -287,34 +272,146 @@
     }
   }
 
+  // =========================================================
+  // ✅ Access UX helpers (UI-only): TRIAL / ACTIVE / EXPIRED
+  // - Does NOT change billing/subscription logic
+  // - Adds a badge next to Subscription Status
+  // - Emits window event: "darrius:access" for boot.js gating
+  // =========================================================
+  function ensureAccessBadge() {
+    // Put a small badge right under "Subscription Status" line
+    const host = document.getElementById("subStatusText")?.parentElement;
+    if (!host) return null;
+
+    let badge = document.getElementById("accessBadge");
+    if (badge) return badge;
+
+    badge = document.createElement("span");
+    badge.id = "accessBadge";
+    badge.style.marginLeft = "10px";
+    badge.style.padding = "3px 10px";
+    badge.style.borderRadius = "999px";
+    badge.style.fontSize = "11px";
+    badge.style.fontWeight = "900";
+    badge.style.border = "1px solid rgba(255,255,255,.10)";
+    badge.style.background = "rgba(255,255,255,.06)";
+    badge.style.color = "rgba(234,240,247,.92)";
+    host.appendChild(badge);
+    return badge;
+  }
+
+  function fmtTs(ts) {
+    try {
+      if (!ts) return "";
+      const n = Number(ts);
+      if (!Number.isFinite(n)) return "";
+      // Accept ms or seconds
+      const ms = n > 20000000000 ? n : n * 1000;
+      const d = new Date(ms);
+      if (isNaN(d.getTime())) return "";
+      return d.toISOString().slice(0, 10);
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function mapAccess(data) {
+    const status = (data?.status || "unknown").toLowerCase();
+    const has = !!data?.has_access;
+
+    // optional timestamps (if your backend provides them)
+    const trialEnd = data?.trial_end ?? data?.trial_end_ts ?? null; // unix seconds or ms
+    const currentEnd = data?.current_period_end ?? data?.period_end ?? null;
+
+    let tier = "UNKNOWN"; // TRIAL / ACTIVE / EXPIRED / UNKNOWN
+
+    if (has || status === "active") tier = "ACTIVE";
+    else if (status === "trialing") tier = "TRIAL";
+    else if (["canceled", "unpaid", "incomplete_expired", "past_due"].includes(status)) tier = "EXPIRED";
+    else if (has === false && status !== "unknown") tier = "EXPIRED";
+
+    let hint = "";
+    if (tier === "TRIAL" && trialEnd) hint = `Trial ends: ${fmtTs(trialEnd)}`;
+    if (tier === "ACTIVE" && currentEnd) hint = `Renews/ends: ${fmtTs(currentEnd)}`;
+
+    return { tier, status, has, hint };
+  }
+
+  function paintAccessBadge(tier, hint) {
+    const badge = ensureAccessBadge();
+    if (!badge) return;
+
+    badge.textContent = tier + (hint ? ` · ${hint}` : "");
+
+    if (tier === "ACTIVE") {
+      badge.style.borderColor = "rgba(43,226,166,.35)";
+      badge.style.background = "rgba(43,226,166,.12)";
+      badge.style.color = "rgba(234,240,247,.95)";
+    } else if (tier === "TRIAL") {
+      badge.style.borderColor = "rgba(255,184,108,.35)";
+      badge.style.background = "rgba(255,184,108,.12)";
+      badge.style.color = "rgba(234,240,247,.95)";
+    } else if (tier === "EXPIRED") {
+      badge.style.borderColor = "rgba(255,90,90,.35)";
+      badge.style.background = "rgba(255,90,90,.12)";
+      badge.style.color = "rgba(234,240,247,.95)";
+    } else {
+      badge.style.borderColor = "rgba(255,255,255,.12)";
+      badge.style.background = "rgba(255,255,255,.06)";
+      badge.style.color = "rgba(234,240,247,.88)";
+    }
+  }
+
+  function emitAccess(tier, raw) {
+    try {
+      window.__DARRIUS_ACCESS__ = { tier, raw: raw || null, ts: Date.now() };
+      window.dispatchEvent(new CustomEvent("darrius:access", { detail: window.__DARRIUS_ACCESS__ }));
+    } catch (_) {}
+  }
+
   // -------- Optional: subscription status --------
   async function refreshSubscriptionStatus() {
     const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
     const manageBtn = $(IDS.manageBtn);
 
+    // 1) 没 user_id：保持 Unknown + 禁用 Manage
     if (!user_id) {
       setSubStatusText("Unknown");
+      paintAccessBadge("UNKNOWN", "");
+      emitAccess("UNKNOWN", null);
       if (manageBtn) manageBtn.disabled = true;
       return;
     }
 
-    // 乐观启用 Manage（即使 status 拉不到，portal 仍可能可用）
+    // 2) 有 user_id：先“乐观启用” Manage（portal 端点你已验证可用）
     if (manageBtn) {
       manageBtn.disabled = false;
       manageBtn.textContent = "Manage · 管理";
     }
     setSubStatusText("Checking...");
 
+    // 3) 再尝试拉 status（失败也不影响 Manage）
     try {
       const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
+
       const status = data?.status || "unknown";
       const has = !!data?.has_access;
       setSubStatusText(`${status}${has ? " · Access ON" : " · Access OFF"}`);
 
+      // ✅ Access badge + global event
+      const a = mapAccess(data);
+      paintAccessBadge(a.tier, a.hint);
+      emitAccess(a.tier, data);
+
+      // 不再用 status 返回来锁按钮（只显示文案）
       if (manageBtn) manageBtn.textContent = "Manage · 管理";
+
       if (isAdmin()) log(`✅ sub status: ${JSON.stringify(data).slice(0, 260)}`);
     } catch (e) {
+      // status 端点失败也没关系，Manage 仍可用
       setSubStatusText("Unknown");
+      paintAccessBadge("UNKNOWN", "");
+      emitAccess("UNKNOWN", null);
       if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
     }
   }
@@ -350,17 +447,27 @@
   // -------- Public attach --------
   function attach(opts) {
     opts = opts || {};
-    if (opts.ids) Object.assign(IDS, opts.ids);
+
+    // allow overriding ids
+    if (opts.ids) {
+      Object.assign(IDS, opts.ids);
+    }
 
     // init plans now
     initPlans();
 
     // bind buttons (HARD BIND)
     const subBtn = $(IDS.subscribeBtn);
-    if (subBtn) subBtn.onclick = subscribe;
+    if (subBtn) {
+      subBtn.onclick = subscribe;
+    }
 
     const m = $(IDS.manageBtn);
-    if (m) m.onclick = openCustomerPortal;
+    if (m) {
+      // 只要 attach 跑起来，就把 Manage 的点击“钉死”
+      // 是否禁用由 refreshSubscriptionStatus() 决定（无 user_id 时禁用）
+      m.onclick = openCustomerPortal;
+    }
 
     // userId typing triggers status refresh (non-blocking)
     $(IDS.userId)?.addEventListener("input", scheduleRefreshStatus);
@@ -369,6 +476,7 @@
     refreshSubscriptionStatus();
   }
 
+  // Expose module
   window.Subscription = {
     attach,
     initPlans,
