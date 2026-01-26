@@ -11,7 +11,7 @@
   // ===== DOM helpers =====
   const $ = (id) => document.getElementById(id);
 
-  // ===== Safe storage (关键兜底：localStorage 可能抛异常，导致整页点击失效) =====
+  // ===== Safe storage (关键兜底：localStorage 可能抛异常，导致整页点击全失效) =====
   const MEM = { uid: '', email: '' };
   const LS_UID = 'darrius_user_id';
   const LS_EMAIL = 'darrius_email';
@@ -81,7 +81,7 @@
     setText('badgeStatus', text);
   }
 
-  function setDot(id, state) {
+  function setDot(id, state /* good|warn|bad */) {
     const el = $(id);
     if (!el) return;
     el.classList.remove('good', 'bad');
@@ -89,12 +89,10 @@
     if (state === 'bad') el.classList.add('bad');
   }
 
-  // ===== Plans/status =====
   async function refreshPlans() {
-    // Optional: only for display; not required for checkout
+    // Optional display check only (do not mutate pricing/UI)
     try {
       await getJSON('/api/plans');
-      // 页面价格写死，这里不改 UI，避免误改
     } catch (e) {
       console.warn('[account] /api/plans failed:', e.message);
     }
@@ -105,10 +103,10 @@
 
     if (!user_id) {
       setText('txtLogin', 'Not logged in / 未登录');
-      setDot('dotLogin', 'bad');
+      setDot('dotLogin', 'warn');
 
       setText('txtAccess', 'Access: DEMO / 演示');
-      setDot('dotAccess', 'bad');
+      setDot('dotAccess', 'warn');
 
       setBadge('STATUS: DEMO');
       setText('vSubStatus', 'not_logged_in');
@@ -125,19 +123,18 @@
       const s = await getJSON('/api/subscription/status?user_id=' + encodeURIComponent(user_id));
 
       setText('vSubStatus', s.status || 'unknown');
-      setText('vPlan', s.plan || s.price || s.product || '—');
       setText('vPeriodEnd', s.current_period_end ? new Date(s.current_period_end).toLocaleString() : '—');
 
       if (s.has_access) {
         setText('txtAccess', 'Access: MFV/Delayed / 延迟行情');
+        setDot('dotAccess', 'good');
         setText('vDataMode', 'MFV/Delayed / 延迟行情');
         setBadge('STATUS: ACTIVE');
-        setDot('dotAccess', 'good');
       } else {
         setText('txtAccess', 'Access: DEMO / 演示');
+        setDot('dotAccess', 'warn');
         setText('vDataMode', 'Demo / 演示');
         setBadge('STATUS: DEMO');
-        setDot('dotAccess', 'bad');
       }
 
       const btnPortal = $('btnPortal');
@@ -147,24 +144,23 @@
           btnPortal.style.opacity = '1';
           btnPortal.title = '';
         } else {
-          // 仍允许点击也可（你当前是能打开的），这里不强制禁用，避免“看起来按不动”
-          btnPortal.disabled = false;
-          btnPortal.style.opacity = '1';
-          btnPortal.title = 'If unavailable, complete subscription first / 若不可用，请先完成订阅';
+          // 你也可以选择不禁用它；但当前逻辑保留你的原意：没订阅就不开放 Portal
+          btnPortal.disabled = true;
+          btnPortal.style.opacity = '0.55';
+          btnPortal.title = 'Complete subscription first / 先完成订阅';
         }
       }
     } catch (e) {
       console.warn('[account] status failed:', e.message);
-
       setText('vSubStatus', 'unknown');
       setText('txtAccess', 'Access: DEMO / 演示');
+      setDot('dotAccess', 'warn');
       setText('vDataMode', 'Demo / 演示');
       setBadge('STATUS: DEMO');
-      setDot('dotAccess', 'bad');
     }
   }
 
-  // ===== Actions (不动订阅/支付系统) =====
+  // ===== Actions =====
   async function startCheckout(planKey) {
     const { user_id, email } = getIdentity();
     if (!user_id) return alert2('User ID required. Click Save first.', '请先填写用户ID并点击保存。');
@@ -195,34 +191,25 @@
     }
   }
 
-  // ===== Choose/Change Plan 强力滚动（替代 inline onclick，避免 CSP/拦截） =====
   function scrollToPlans() {
     const wrap = $('plansWrap');
-    if (!wrap) {
-      console.warn('[account] plansWrap not found');
-      return;
-    }
+    if (!wrap) return;
 
-    // 1) 计算更稳：scrollIntoView + 兜底 window.scrollTo
-    try {
-      wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch {}
-
-    // 兜底：用坐标滚动（某些情况下 scrollIntoView 不生效或太“轻”）
-    const rect = wrap.getBoundingClientRect();
-    const y = window.scrollY + rect.top - 90; // 顶部留点空间
+    // 先滚动到 plansWrap（尽量让它顶到可视区域上方）
+    const y = wrap.getBoundingClientRect().top + window.pageYOffset - 18;
     window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
 
-    // 2) 视觉反馈：闪一下，用户就知道“确实跳过去了”
-    wrap.classList.remove('flash-target');
-    // 触发重绘
+    // 再做一个明显的闪烁提示（用户肉眼确认“生效”）
+    wrap.classList.remove('flash');
+    // 强制 reflow 以确保重复点击也会重新触发动画
     void wrap.offsetWidth;
-    wrap.classList.add('flash-target');
+    wrap.classList.add('flash');
+    setTimeout(() => wrap.classList.remove('flash'), 1300);
 
     console.log('[account] btnGoPlans clicked -> scrollToPlans()');
   }
 
-  // ===== Bind (事件委托兜底：不怕 DOM 时机/不怕按钮替换) =====
+  // ===== Bind (事件委托兜底：不怕 DOM 时机/不怕局部渲染/不怕按钮替换) =====
   function bind() {
     const btnSave = $('btnSaveIdentity');
     if (btnSave) {
@@ -242,16 +229,10 @@
     const btnPortal = $('btnPortal');
     if (btnPortal) btnPortal.addEventListener('click', openPortal);
 
-    // ✅ 关键：绑定 Choose/Change Plan
     const btnGoPlans = $('btnGoPlans');
-    if (btnGoPlans) {
-      btnGoPlans.addEventListener('click', (e) => {
-        e.preventDefault();
-        scrollToPlans();
-      }, true);
-    }
+    if (btnGoPlans) btnGoPlans.addEventListener('click', scrollToPlans);
 
-    // ✅ Event delegation for plan buttons
+    // ✅ Event delegation for all plan buttons
     document.addEventListener('click', (ev) => {
       const t = ev.target;
       if (!t) return;
@@ -261,8 +242,6 @@
 
       const action = (btn.getAttribute('data-action') || '').trim();
       const plan = (btn.getAttribute('data-plan') || '').trim();
-
-      // console.log('[account] click captured:', { action, plan });
 
       if (action === 'checkout') {
         if (!plan) return;
@@ -282,22 +261,16 @@
     renderIdentity();
     bind();
 
-    // show system (默认隐藏 backend，除非 ?debug=1)
-    const debugOn = /(?:\?|&)debug=1(?:&|$)/.test(location.search);
-
-    const vBackend = $('vBackend');
-    const kBackend = $('kBackend');
-    if (vBackend) vBackend.textContent = API_BASE;
-
-    if (vBackend && kBackend) {
-      vBackend.style.display = debugOn ? '' : 'none';
-      kBackend.style.display = debugOn ? '' : 'none';
+    // System panel: keep UI clean, but preserve actual backend in title for debug
+    if ($('vBackend')) {
+      $('vBackend').textContent = 'Connected';
+      $('vBackend').title = API_BASE;
     }
 
     try {
       const r = await getJSON('/routes');
       if ($('vBuild')) $('vBuild').textContent = r.build || '—';
-      console.log('[account] routes loaded:', r);
+      console.log('[account] routes loaded:', r && typeof r === 'object' ? 'Object' : r);
     } catch {}
 
     await refreshPlans();
