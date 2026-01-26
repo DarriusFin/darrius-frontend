@@ -13,7 +13,6 @@
  *  - NO secrets on frontend
  *  - Safe defaults & graceful fallbacks
  *  - Does NOT change payment/subscription business logic
- *  - Adds: Access badge renderer + global event darrius:access (UX only)
  * ========================================================= */
 (function () {
   "use strict";
@@ -72,15 +71,11 @@
     subscribeBtn: "subscribeBtn",
     manageBtn: "manageBtn",
     subStatusText: "subStatusText",
+    accessBadge: "accessBadge", // ✅ NEW
     userId: "userId",
     email: "email",
     priceOverride: "priceOverride",
     priceOverrideRow: "priceOverrideRow",
-
-    // ✅ NEW (UX-only): optional badge placeholder in index.html
-    // Add in index.html near subStatusText:
-    // <span id="accessBadge" class="accessBadge hidden">UNKNOWN</span>
-    accessBadge: "accessBadge",
   };
 
   // -------- State --------
@@ -356,54 +351,29 @@
     return "UNKNOWN";
   }
 
+  // ✅ NEW: update small badge in UI (index.html)
+  function setAccessBadge(bucket) {
+    const el = $(IDS.accessBadge);
+    if (!el) return; // page may not have it
+    const b = String(bucket || "UNKNOWN").toUpperCase();
+
+    // reset classes but keep base class
+    // Note: your CSS uses .accessBadge.ACTIVE etc.
+    el.classList.remove("hidden", "ACTIVE", "TRIAL", "EXPIRED", "PENDING", "UNKNOWN");
+    el.classList.add(b);
+    el.textContent = b;
+  }
+
   function dispatchSubEvent(payload) {
     try {
       window.dispatchEvent(new CustomEvent("darrius:subscription-status", { detail: payload }));
     } catch (_) {}
   }
 
-  // =========================================================
-  // ✅ NEW: Access Badge + Global Event (darrius:access) (UX-only)
-  //   - Requires optional DOM: #accessBadge
-  //   - States: ACTIVE / TRIAL / EXPIRED / UNKNOWN
-  // =========================================================
-  function bucketToAccessBadge(bucket) {
-    // User requested only these 4 on homepage
-    if (bucket === "ACTIVE") return { state: "ACTIVE", tone: "ok" };
-    if (bucket === "TRIAL") return { state: "TRIAL", tone: "warn" };
-    if (bucket === "EXPIRED") return { state: "EXPIRED", tone: "bad" };
-    // PENDING/UNKNOWN/etc -> UNKNOWN (keep it simple)
-    return { state: "UNKNOWN", tone: "" };
-  }
-
-  function renderAccessBadge(stateObj) {
-    const el = $(IDS.accessBadge);
-    if (!el) return; // If index.html didn't add it, silently ignore.
-
-    const state = (stateObj && stateObj.state) || "UNKNOWN";
-    const tone = (stateObj && stateObj.tone) || "";
-
-    el.textContent = state;
-
-    // support both patterns:
-    // - using .hidden class (your current CSS)
-    // - or inline display
+  // ✅ NEW: the event you asked for
+  function dispatchAccessEvent(payload) {
     try {
-      el.classList.remove("hidden", "ok", "warn", "bad");
-      if (tone) el.classList.add(tone);
-    } catch (_) {}
-
-    // never leave it invisible if present
-    // (if you prefer to hide UNKNOWN, remove this block)
-    try {
-      // if element had inline display none previously
-      if (el.style && el.style.display === "none") el.style.display = "";
-    } catch (_) {}
-  }
-
-  function emitAccessEvent(detail) {
-    try {
-      window.dispatchEvent(new CustomEvent("darrius:access", { detail: detail || {} }));
+      window.dispatchEvent(new CustomEvent("darrius:access", { detail: payload }));
     } catch (_) {}
   }
 
@@ -412,12 +382,15 @@
     const hasAccess = data?.has_access;
     const bucket = mapAccessBucket(status, hasAccess);
 
+    // ✅ Update badge (if present)
+    setAccessBadge(bucket);
+
     // Optional fields that backend MAY provide
     const planKey = data?.plan || data?.plan_key || data?.current_plan || "";
     const trialEnd = toDateObj(data?.trial_end || data?.trial_ends_at);
     const periodEnd = toDateObj(data?.current_period_end || data?.ends_at || data?.access_end);
 
-    // Compose UX text (no HTML changes required)
+    // Compose UX text
     let extra = "";
     if (bucket === "TRIAL") {
       const end = trialEnd || periodEnd;
@@ -438,12 +411,7 @@
     const planPart = planKey ? ` · ${planKey}` : "";
     const hasPart = typeof hasAccess === "boolean" ? (hasAccess ? " · Access ON" : " · Access OFF") : "";
     const line = `${bucket}${planPart} · ${status}${hasPart}${extra}`;
-
     setSubStatusText(line);
-
-    // ✅ NEW: badge render (ACTIVE/TRIAL/EXPIRED/UNKNOWN)
-    const badge = bucketToAccessBadge(bucket);
-    renderAccessBadge(badge);
 
     // Keep Manage behavior: if user_id exists, allow Manage (account.html / portal entry)
     const manageBtn = $(IDS.manageBtn);
@@ -457,11 +425,9 @@
       document.body.dataset.subBucket = bucket;
       document.body.dataset.subStatus = status;
       document.body.dataset.subAccess = String(!!hasAccess);
-      document.body.dataset.access = badge.state; // ACTIVE/TRIAL/EXPIRED/UNKNOWN
     } catch (_) {}
 
-    // Existing event (do not break)
-    dispatchSubEvent({
+    const payload = {
       user_id,
       bucket,
       status,
@@ -470,20 +436,18 @@
       trial_end: trialEnd ? trialEnd.toISOString() : null,
       period_end: periodEnd ? periodEnd.toISOString() : null,
       raw: data || null,
-    });
+    };
 
-    // ✅ NEW: global event (for ChartCore / data source / UX sync)
-    emitAccessEvent({
+    // ✅ Events
+    dispatchSubEvent(payload);
+    dispatchAccessEvent({
       user_id,
-      status,
       bucket,
+      status,
       has_access: hasAccess,
-      access: badge.state, // ACTIVE/TRIAL/EXPIRED/UNKNOWN
-      plan: planKey || null,
-      trial_end: trialEnd ? trialEnd.toISOString() : null,
-      period_end: periodEnd ? periodEnd.toISOString() : null,
-      raw: data || null,
-      ts: Date.now(),
+      plan: planKey,
+      trial_end: payload.trial_end,
+      period_end: payload.period_end,
     });
 
     if (isAdmin()) log(`✅ sub UX: ${line}`);
@@ -497,42 +461,21 @@
     // 1) 没 user_id：Unknown + 禁用 Manage
     if (!user_id) {
       setSubStatusText("UNKNOWN · please input User ID");
-
-      // ✅ NEW: badge + event (so UI never shows stale state)
-      renderAccessBadge({ state: "UNKNOWN", tone: "" });
-      emitAccessEvent({
-        user_id: "",
-        status: "unknown",
-        bucket: "UNKNOWN",
-        has_access: false,
-        access: "UNKNOWN",
-        raw: null,
-        ts: Date.now(),
-      });
-
+      setAccessBadge("UNKNOWN"); // ✅
       if (manageBtn) manageBtn.disabled = true;
+
+      // ✅ also emit access event as unknown (optional but helps other modules)
+      dispatchAccessEvent({ user_id: "", bucket: "UNKNOWN", status: "unknown", has_access: undefined, plan: "" });
       return;
     }
 
-    // 2) 有 user_id：先“乐观启用” Manage（你主页会跳 account.html；这里不阻断）
+    // 2) 有 user_id：先“乐观启用” Manage（主页会跳 account.html；这里不阻断）
     if (manageBtn) {
       manageBtn.disabled = false;
       manageBtn.textContent = "Manage · 管理";
     }
     setSubStatusText("CHECKING...");
-
-    // ✅ NEW: optimistic badge (optional)
-    // (keeps UX consistent during fetch)
-    renderAccessBadge({ state: "UNKNOWN", tone: "" });
-    emitAccessEvent({
-      user_id,
-      status: "checking",
-      bucket: "UNKNOWN",
-      has_access: null,
-      access: "UNKNOWN",
-      raw: null,
-      ts: Date.now(),
-    });
+    setAccessBadge("PENDING"); // ✅ typing/refreshing moment
 
     // 3) 再拉 status（失败也不影响 Manage）
     try {
@@ -540,21 +483,9 @@
       applySubUX(data, user_id);
     } catch (e) {
       setSubStatusText("UNKNOWN · status endpoint unavailable");
-
-      // ✅ NEW: on error still notify
-      renderAccessBadge({ state: "UNKNOWN", tone: "" });
-      emitAccessEvent({
-        user_id,
-        status: "unknown",
-        bucket: "UNKNOWN",
-        has_access: null,
-        access: "UNKNOWN",
-        error: String(e && e.message ? e.message : e),
-        raw: null,
-        ts: Date.now(),
-      });
-
+      setAccessBadge("UNKNOWN"); // ✅
       if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
+      dispatchAccessEvent({ user_id, bucket: "UNKNOWN", status: "unknown", has_access: undefined, plan: "" });
     }
   }
 
@@ -606,13 +537,15 @@
 
     const m = $(IDS.manageBtn);
     if (m) {
-      // 默认：绑定 portal（主页通常会被 boot.js 改写成跳 account.html）：
-      // 不在这里改业务逻辑，保持原样。
+      // 默认：绑定 portal（主页通常会被 boot.js 改写成跳 account.html）
       m.onclick = openCustomerPortal;
     }
 
     // userId typing triggers status refresh (non-blocking)
     $(IDS.userId)?.addEventListener("input", scheduleRefreshStatus);
+
+    // (optional) email change can also refresh if you want
+    // $(IDS.email)?.addEventListener("change", scheduleRefreshStatus);
 
     // initial status (will enable/disable Manage based on user_id)
     refreshSubscriptionStatus();
