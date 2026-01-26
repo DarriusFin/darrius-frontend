@@ -201,6 +201,12 @@
 
     /* Small bilingual helper */
     .zh{ font-size:12px; color: var(--muted2); margin-top: 4px; }
+
+    /* ✅ Scroll feedback highlight (JS will toggle) */
+    .plansFlash{
+      box-shadow: 0 0 0 6px rgba(76,194,255,.18) inset;
+      border-color: rgba(76,194,255,.30) !important;
+    }
   </style>
 </head>
 
@@ -300,11 +306,12 @@
         <div class="hr"></div>
 
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
-          <button id="btnPortal" class="btn" type="button">
+          <!-- ✅ 你要求：与右边一样的背景色 => 直接变成 primary -->
+          <button id="btnPortal" class="btn primary" type="button">
             Open Billing Portal <span class="muted2">（账单管理）</span>
           </button>
 
-          <!-- ✅ 改动：移除 inline onclick（避免 CSP 禁止 inline handlers） -->
+          <!-- ✅ 取消 inline onclick：只保留按钮本身，滚动由 JS 绑定实现 -->
           <button id="btnGoPlans" class="btn primary" type="button">
             Choose / Change Plan <span class="muted2">（选择/更换套餐）</span>
           </button>
@@ -322,7 +329,6 @@
             <div class="zh">按钮将跳转到你现有的订阅支付流程；本页不改变第三方数据源授权。</div>
           </div>
 
-          <!-- ✅ 这里是滚动锚点 -->
           <div id="plansWrap" class="plans">
             <div class="plan" id="plan_weekly">
               <div class="row">
@@ -481,6 +487,11 @@
       </div>
     </footer>
   </div>
+
+  <!-- ✅ 可选：明确后端（你也可以删掉，JS 会默认 darrius-api.onrender.com） -->
+  <script>
+    window.__API_BASE__ = "https://darrius-api.onrender.com";
+  </script>
 
   <!-- IMPORTANT: keep this last -->
   <script src="/js/account.page.js"></script>
