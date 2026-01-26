@@ -1,17 +1,18 @@
 /* =========================================================
- * DarriusAI · Subscription Module (Final)  ✅ FINAL CHECKED
+ * DarriusAI · Subscription Module (Final)  ✅ FINAL CHECKED+
  * File: js/subscription.js
  * Purpose:
  *  - Load plans from backend: /api/plans (preferred)
  *  - Fallback: /billing/prices (legacy)
  *  - Fallback: local default plans
  *  - Create checkout: POST /billing/checkout
- *  - (Optional) Subscription status: GET /api/subscription/status?user_id=
+ *  - Subscription status UX: GET /api/subscription/status?user_id=
  *  - (Optional) Customer portal: POST /api/billing/portal
  *
  * Notes:
  *  - NO secrets on frontend
  *  - Safe defaults & graceful fallbacks
+ *  - Does NOT change payment/subscription business logic
  * ========================================================= */
 (function () {
   "use strict";
@@ -42,7 +43,6 @@
   }
 
   function log(msg) {
-    // If page has log() already, use it; otherwise console
     try {
       if (typeof window.log === "function") {
         window.log(msg);
@@ -249,7 +249,6 @@
       setStatusBadge("Creating checkout…", true);
       if (isAdmin()) log(`➡️ [${nowISOTime()}] POST /billing/checkout ${JSON.stringify(payload)}`);
 
-      // Use fetch directly because your backend returns {checkout_url}
       const resp = await fetch(`${API_BASE}/billing/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -273,100 +272,150 @@
   }
 
   // =========================================================
-  // ✅ Access UX helpers (UI-only): TRIAL / ACTIVE / EXPIRED
-  // - Does NOT change billing/subscription logic
-  // - Adds a badge next to Subscription Status
-  // - Emits window event: "darrius:access" for boot.js gating
+  // Permission UX (Trial / Active / Expired)
   // =========================================================
-  function ensureAccessBadge() {
-    // Put a small badge right under "Subscription Status" line
-    const host = document.getElementById("subStatusText")?.parentElement;
-    if (!host) return null;
-
-    let badge = document.getElementById("accessBadge");
-    if (badge) return badge;
-
-    badge = document.createElement("span");
-    badge.id = "accessBadge";
-    badge.style.marginLeft = "10px";
-    badge.style.padding = "3px 10px";
-    badge.style.borderRadius = "999px";
-    badge.style.fontSize = "11px";
-    badge.style.fontWeight = "900";
-    badge.style.border = "1px solid rgba(255,255,255,.10)";
-    badge.style.background = "rgba(255,255,255,.06)";
-    badge.style.color = "rgba(234,240,247,.92)";
-    host.appendChild(badge);
-    return badge;
-  }
-
-  function fmtTs(ts) {
-    try {
-      if (!ts) return "";
-      const n = Number(ts);
-      if (!Number.isFinite(n)) return "";
-      // Accept ms or seconds
-      const ms = n > 20000000000 ? n : n * 1000;
+  function toDateObj(v) {
+    if (!v) return null;
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+    if (typeof v === "number") {
+      // accept sec or ms
+      const ms = v < 1e12 ? v * 1000 : v;
       const d = new Date(ms);
-      if (isNaN(d.getTime())) return "";
-      return d.toISOString().slice(0, 10);
-    } catch (_) {
-      return "";
+      return isNaN(d.getTime()) ? null : d;
     }
-  }
-
-  function mapAccess(data) {
-    const status = (data?.status || "unknown").toLowerCase();
-    const has = !!data?.has_access;
-
-    // optional timestamps (if your backend provides them)
-    const trialEnd = data?.trial_end ?? data?.trial_end_ts ?? null; // unix seconds or ms
-    const currentEnd = data?.current_period_end ?? data?.period_end ?? null;
-
-    let tier = "UNKNOWN"; // TRIAL / ACTIVE / EXPIRED / UNKNOWN
-
-    if (has || status === "active") tier = "ACTIVE";
-    else if (status === "trialing") tier = "TRIAL";
-    else if (["canceled", "unpaid", "incomplete_expired", "past_due"].includes(status)) tier = "EXPIRED";
-    else if (has === false && status !== "unknown") tier = "EXPIRED";
-
-    let hint = "";
-    if (tier === "TRIAL" && trialEnd) hint = `Trial ends: ${fmtTs(trialEnd)}`;
-    if (tier === "ACTIVE" && currentEnd) hint = `Renews/ends: ${fmtTs(currentEnd)}`;
-
-    return { tier, status, has, hint };
-  }
-
-  function paintAccessBadge(tier, hint) {
-    const badge = ensureAccessBadge();
-    if (!badge) return;
-
-    badge.textContent = tier + (hint ? ` · ${hint}` : "");
-
-    if (tier === "ACTIVE") {
-      badge.style.borderColor = "rgba(43,226,166,.35)";
-      badge.style.background = "rgba(43,226,166,.12)";
-      badge.style.color = "rgba(234,240,247,.95)";
-    } else if (tier === "TRIAL") {
-      badge.style.borderColor = "rgba(255,184,108,.35)";
-      badge.style.background = "rgba(255,184,108,.12)";
-      badge.style.color = "rgba(234,240,247,.95)";
-    } else if (tier === "EXPIRED") {
-      badge.style.borderColor = "rgba(255,90,90,.35)";
-      badge.style.background = "rgba(255,90,90,.12)";
-      badge.style.color = "rgba(234,240,247,.95)";
-    } else {
-      badge.style.borderColor = "rgba(255,255,255,.12)";
-      badge.style.background = "rgba(255,255,255,.06)";
-      badge.style.color = "rgba(234,240,247,.88)";
+    if (typeof v === "string") {
+      // ISO string or numeric string
+      const n = Number(v);
+      if (!Number.isNaN(n) && String(n).trim() !== "") return toDateObj(n);
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? null : d;
     }
+    return null;
   }
 
-  function emitAccess(tier, raw) {
+  function fmtYMD(d) {
+    if (!d) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  }
+
+  function fmtRemain(d) {
+    if (!d) return "";
+    const ms = d.getTime() - Date.now();
+    if (!isFinite(ms)) return "";
+    const s = Math.floor(ms / 1000);
+    const sign = s >= 0 ? "" : "-";
+    const a = Math.abs(s);
+    const days = Math.floor(a / 86400);
+    const hrs = Math.floor((a % 86400) / 3600);
+    return `${sign}${days}d ${hrs}h`;
+  }
+
+  function normalizeStripeStatus(raw) {
+    const s = String(raw || "").trim().toLowerCase();
+    return s || "unknown";
+  }
+
+  function mapAccessBucket(status, hasAccess) {
+    // priority: has_access from backend
+    if (hasAccess === true) {
+      if (status === "trialing") return "TRIAL";
+      return "ACTIVE";
+    }
+    if (hasAccess === false) {
+      if (status === "trialing") return "EXPIRED"; // trial ended but access revoked
+      if (status === "active") return "PENDING";   // edge: active but no access
+      if (
+        status === "canceled" ||
+        status === "unpaid" ||
+        status === "past_due" ||
+        status === "incomplete_expired" ||
+        status === "expired"
+      ) return "EXPIRED";
+      return "EXPIRED";
+    }
+    // unknown has_access
+    if (status === "trialing") return "TRIAL";
+    if (status === "active") return "ACTIVE";
+    if (
+      status === "canceled" ||
+      status === "unpaid" ||
+      status === "past_due" ||
+      status === "incomplete_expired" ||
+      status === "expired"
+    ) return "EXPIRED";
+    if (status === "incomplete" || status === "checkout_created") return "PENDING";
+    return "UNKNOWN";
+  }
+
+  function dispatchSubEvent(payload) {
     try {
-      window.__DARRIUS_ACCESS__ = { tier, raw: raw || null, ts: Date.now() };
-      window.dispatchEvent(new CustomEvent("darrius:access", { detail: window.__DARRIUS_ACCESS__ }));
+      window.dispatchEvent(new CustomEvent("darrius:subscription-status", { detail: payload }));
     } catch (_) {}
+  }
+
+  function applySubUX(data, user_id) {
+    const status = normalizeStripeStatus(data?.status);
+    const hasAccess = data?.has_access;
+    const bucket = mapAccessBucket(status, hasAccess);
+
+    // Optional fields that backend MAY provide
+    const planKey = data?.plan || data?.plan_key || data?.current_plan || "";
+    const trialEnd = toDateObj(data?.trial_end || data?.trial_ends_at);
+    const periodEnd = toDateObj(data?.current_period_end || data?.ends_at || data?.access_end);
+
+    // Compose UX text (no HTML changes required)
+    let extra = "";
+    if (bucket === "TRIAL") {
+      const end = trialEnd || periodEnd;
+      if (end) extra = ` · ends ${fmtYMD(end)} (${fmtRemain(end)})`;
+      else extra = " · trial";
+    } else if (bucket === "ACTIVE") {
+      if (periodEnd) extra = ` · renews ${fmtYMD(periodEnd)} (${fmtRemain(periodEnd)})`;
+      else extra = " · access on";
+    } else if (bucket === "EXPIRED") {
+      if (periodEnd) extra = ` · ended ${fmtYMD(periodEnd)}`;
+      else extra = " · access off";
+    } else if (bucket === "PENDING") {
+      extra = " · pending confirmation";
+    } else {
+      extra = "";
+    }
+
+    const planPart = planKey ? ` · ${planKey}` : "";
+    const hasPart = typeof hasAccess === "boolean" ? (hasAccess ? " · Access ON" : " · Access OFF") : "";
+    const line = `${bucket}${planPart} · ${status}${hasPart}${extra}`;
+
+    setSubStatusText(line);
+
+    // Keep Manage behavior: if user_id exists, allow Manage (account.html / portal entry)
+    const manageBtn = $(IDS.manageBtn);
+    if (manageBtn) {
+      manageBtn.disabled = !user_id;
+      manageBtn.textContent = "Manage · 管理";
+    }
+
+    // Optional: expose to other modules
+    try {
+      document.body.dataset.subBucket = bucket;
+      document.body.dataset.subStatus = status;
+      document.body.dataset.subAccess = String(!!hasAccess);
+    } catch (_) {}
+
+    dispatchSubEvent({
+      user_id,
+      bucket,
+      status,
+      has_access: hasAccess,
+      plan: planKey,
+      trial_end: trialEnd ? trialEnd.toISOString() : null,
+      period_end: periodEnd ? periodEnd.toISOString() : null,
+      raw: data || null,
+    });
+
+    if (isAdmin()) log(`✅ sub UX: ${line}`);
   }
 
   // -------- Optional: subscription status --------
@@ -374,44 +423,26 @@
     const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
     const manageBtn = $(IDS.manageBtn);
 
-    // 1) 没 user_id：保持 Unknown + 禁用 Manage
+    // 1) 没 user_id：Unknown + 禁用 Manage
     if (!user_id) {
-      setSubStatusText("Unknown");
-      paintAccessBadge("UNKNOWN", "");
-      emitAccess("UNKNOWN", null);
+      setSubStatusText("UNKNOWN · please input User ID");
       if (manageBtn) manageBtn.disabled = true;
       return;
     }
 
-    // 2) 有 user_id：先“乐观启用” Manage（portal 端点你已验证可用）
+    // 2) 有 user_id：先“乐观启用” Manage（你主页会跳 account.html；这里不阻断）
     if (manageBtn) {
       manageBtn.disabled = false;
       manageBtn.textContent = "Manage · 管理";
     }
-    setSubStatusText("Checking...");
+    setSubStatusText("CHECKING...");
 
-    // 3) 再尝试拉 status（失败也不影响 Manage）
+    // 3) 再拉 status（失败也不影响 Manage）
     try {
       const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
-
-      const status = data?.status || "unknown";
-      const has = !!data?.has_access;
-      setSubStatusText(`${status}${has ? " · Access ON" : " · Access OFF"}`);
-
-      // ✅ Access badge + global event
-      const a = mapAccess(data);
-      paintAccessBadge(a.tier, a.hint);
-      emitAccess(a.tier, data);
-
-      // 不再用 status 返回来锁按钮（只显示文案）
-      if (manageBtn) manageBtn.textContent = "Manage · 管理";
-
-      if (isAdmin()) log(`✅ sub status: ${JSON.stringify(data).slice(0, 260)}`);
+      applySubUX(data, user_id);
     } catch (e) {
-      // status 端点失败也没关系，Manage 仍可用
-      setSubStatusText("Unknown");
-      paintAccessBadge("UNKNOWN", "");
-      emitAccess("UNKNOWN", null);
+      setSubStatusText("UNKNOWN · status endpoint unavailable");
       if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
     }
   }
@@ -464,8 +495,7 @@
 
     const m = $(IDS.manageBtn);
     if (m) {
-      // 只要 attach 跑起来，就把 Manage 的点击“钉死”
-      // 是否禁用由 refreshSubscriptionStatus() 决定（无 user_id 时禁用）
+      // 默认：绑定 portal（主页通常会被 boot.js 改写成跳 account.html）
       m.onclick = openCustomerPortal;
     }
 
