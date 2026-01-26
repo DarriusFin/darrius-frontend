@@ -42,7 +42,6 @@
   }
 
   function log(msg) {
-    // If page has log() already, use it; otherwise console
     try {
       if (typeof window.log === "function") {
         window.log(msg);
@@ -53,7 +52,6 @@
   }
 
   function setStatusBadge(text, ok) {
-    // If page has setStatus() already, use it; otherwise ignore
     try {
       if (typeof window.setStatus === "function") {
         window.setStatus(text, ok !== false);
@@ -106,7 +104,6 @@
 
   // -------- Fallback plans (your latest price strategy) --------
   function getLocalFallbackPlans() {
-    // NOTE: Replace these price_ids if backend differs; local fallback is only for UI continuity
     return [
       { key: "weekly", label: "Weekly · $4.90", price_id: "price_weekly_PLACEHOLDER", trial_days: 0 },
       { key: "monthly", label: "Monthly · $19.90", price_id: "price_monthly_PLACEHOLDER", trial_days: 1 },
@@ -132,6 +129,25 @@
     if (mngBtn) mngBtn.disabled = !!disabled;
   }
 
+  // ===== UI label helper: add trial days (EN+ZH) without touching backend =====
+  function trialSuffix(trialDays) {
+    const d = Number(trialDays || 0);
+    if (!d || d <= 0) return "";
+    const dayWord = d === 1 ? "day" : "days";
+    return ` · ${d}-${dayWord} free trial / ${d}天免费试用`;
+  }
+
+  function normalizeLabel(p) {
+    // keep backend label if provided, just append trial hint if not already present
+    const base = (p.label || p.key || "").trim() || p.key;
+    const suf = trialSuffix(p.trial_days);
+
+    // avoid double-append
+    if (!suf) return base;
+    if (base.toLowerCase().includes("free trial") || base.includes("免费试用")) return base;
+    return base + suf;
+  }
+
   function populatePlans(plans) {
     PLANS = (plans || []).slice();
     const sel = $(IDS.planSelect);
@@ -141,7 +157,7 @@
     for (const p of PLANS) {
       const opt = document.createElement("option");
       opt.value = p.key;
-      opt.textContent = p.label || p.key;
+      opt.textContent = normalizeLabel(p);
       sel.appendChild(opt);
     }
 
@@ -249,7 +265,6 @@
       setStatusBadge("Creating checkout…", true);
       if (isAdmin()) log(`➡️ [${nowISOTime()}] POST /billing/checkout ${JSON.stringify(payload)}`);
 
-      // Use fetch directly because your backend returns {checkout_url}
       const resp = await fetch(`${API_BASE}/billing/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -277,34 +292,28 @@
     const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
     const manageBtn = $(IDS.manageBtn);
 
-    // 1) 没 user_id：保持 Unknown + 禁用 Manage
     if (!user_id) {
       setSubStatusText("Unknown");
       if (manageBtn) manageBtn.disabled = true;
       return;
     }
 
-    // 2) 有 user_id：先“乐观启用” Manage（portal 端点你已验证可用）
+    // 乐观启用 Manage（即使 status 拉不到，portal 仍可能可用）
     if (manageBtn) {
       manageBtn.disabled = false;
       manageBtn.textContent = "Manage · 管理";
     }
     setSubStatusText("Checking...");
 
-    // 3) 再尝试拉 status（失败也不影响 Manage）
     try {
       const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
-
       const status = data?.status || "unknown";
       const has = !!data?.has_access;
       setSubStatusText(`${status}${has ? " · Access ON" : " · Access OFF"}`);
 
-      // 不再用 status 返回来锁按钮（只显示文案）
       if (manageBtn) manageBtn.textContent = "Manage · 管理";
-
       if (isAdmin()) log(`✅ sub status: ${JSON.stringify(data).slice(0, 260)}`);
     } catch (e) {
-      // status 端点失败也没关系，Manage 仍可用
       setSubStatusText("Unknown");
       if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
     }
@@ -341,27 +350,17 @@
   // -------- Public attach --------
   function attach(opts) {
     opts = opts || {};
-
-    // allow overriding ids
-    if (opts.ids) {
-      Object.assign(IDS, opts.ids);
-    }
+    if (opts.ids) Object.assign(IDS, opts.ids);
 
     // init plans now
     initPlans();
 
     // bind buttons (HARD BIND)
     const subBtn = $(IDS.subscribeBtn);
-    if (subBtn) {
-      subBtn.onclick = subscribe;
-    }
+    if (subBtn) subBtn.onclick = subscribe;
 
     const m = $(IDS.manageBtn);
-    if (m) {
-      // 只要 attach 跑起来，就把 Manage 的点击“钉死”
-      // 是否禁用由 refreshSubscriptionStatus() 决定（无 user_id 时禁用）
-      m.onclick = openCustomerPortal;
-    }
+    if (m) m.onclick = openCustomerPortal;
 
     // userId typing triggers status refresh (non-blocking)
     $(IDS.userId)?.addEventListener("input", scheduleRefreshStatus);
@@ -370,7 +369,6 @@
     refreshSubscriptionStatus();
   }
 
-  // Expose module
   window.Subscription = {
     attach,
     initPlans,
