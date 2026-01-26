@@ -142,7 +142,7 @@
     }
   }
 
-  // ===== Actions (订阅/支付逻辑完全不动) =====
+  // ===== Actions =====
   async function startCheckout(planKey) {
     const { user_id, email } = getIdentity();
     if (!user_id) return alert2('User ID required. Click Save first.', '请先填写用户ID并点击保存。');
@@ -173,18 +173,22 @@
     }
   }
 
-  // ✅ 新增：Choose/Change Plan 的滚动（纯前端交互）
+  // ✅ 滚动到 plansWrap + 视觉反馈（关键：避免“按了没反应”的错觉）
   function scrollToPlans() {
-    const wrap = document.getElementById('plansWrap');
-    if (wrap && typeof wrap.scrollIntoView === 'function') {
-      wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const wrap = $('plansWrap');
+    if (!wrap) {
+      console.warn('[account] plansWrap not found');
       return;
     }
-    // 兜底：hash 跳转
-    try { window.location.hash = '#plansWrap'; } catch {}
+
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // 视觉闪烁 900ms
+    wrap.classList.add('plansFlash');
+    window.setTimeout(() => wrap.classList.remove('plansFlash'), 900);
   }
 
-  // ===== Bind (事件委托兜底：不怕 DOM 时机/不怕局部渲染/不怕按钮替换) =====
+  // ===== Bind (用事件委托兜底：不怕 DOM 时机/不怕局部渲染/不怕按钮替换) =====
   function bind() {
     const btnSave = $('btnSaveIdentity');
     if (btnSave) {
@@ -204,15 +208,13 @@
     const btnPortal = $('btnPortal');
     if (btnPortal) btnPortal.addEventListener('click', openPortal);
 
-    // ✅ 新增绑定：#btnGoPlans（不再依赖 inline onclick）
+    // ✅ 关键：btnGoPlans 点击滚动（彻底绕开 inline onclick / CSP）
     const btnGoPlans = $('btnGoPlans');
     if (btnGoPlans) {
       btnGoPlans.addEventListener('click', () => {
         console.log('[account] btnGoPlans clicked -> scrollToPlans()');
         scrollToPlans();
-      });
-    } else {
-      console.warn('[account] btnGoPlans not found (check account.html id="btnGoPlans")');
+      }, true);
     }
 
     // ✅ Event delegation for all plan buttons
