@@ -13,6 +13,7 @@
  *  - NO secrets on frontend
  *  - Safe defaults & graceful fallbacks
  *  - Does NOT change payment/subscription business logic
+ *  - Adds: Access badge renderer + global event darrius:access (UX only)
  * ========================================================= */
 (function () {
   "use strict";
@@ -75,6 +76,11 @@
     email: "email",
     priceOverride: "priceOverride",
     priceOverrideRow: "priceOverrideRow",
+
+    // ✅ NEW (UX-only): optional badge placeholder in index.html
+    // Add in index.html near subStatusText:
+    // <span id="accessBadge" class="accessBadge hidden">UNKNOWN</span>
+    accessBadge: "accessBadge",
   };
 
   // -------- State --------
@@ -356,6 +362,51 @@
     } catch (_) {}
   }
 
+  // =========================================================
+  // ✅ NEW: Access Badge + Global Event (darrius:access) (UX-only)
+  //   - Requires optional DOM: #accessBadge
+  //   - States: ACTIVE / TRIAL / EXPIRED / UNKNOWN
+  // =========================================================
+  function bucketToAccessBadge(bucket) {
+    // User requested only these 4 on homepage
+    if (bucket === "ACTIVE") return { state: "ACTIVE", tone: "ok" };
+    if (bucket === "TRIAL") return { state: "TRIAL", tone: "warn" };
+    if (bucket === "EXPIRED") return { state: "EXPIRED", tone: "bad" };
+    // PENDING/UNKNOWN/etc -> UNKNOWN (keep it simple)
+    return { state: "UNKNOWN", tone: "" };
+  }
+
+  function renderAccessBadge(stateObj) {
+    const el = $(IDS.accessBadge);
+    if (!el) return; // If index.html didn't add it, silently ignore.
+
+    const state = (stateObj && stateObj.state) || "UNKNOWN";
+    const tone = (stateObj && stateObj.tone) || "";
+
+    el.textContent = state;
+
+    // support both patterns:
+    // - using .hidden class (your current CSS)
+    // - or inline display
+    try {
+      el.classList.remove("hidden", "ok", "warn", "bad");
+      if (tone) el.classList.add(tone);
+    } catch (_) {}
+
+    // never leave it invisible if present
+    // (if you prefer to hide UNKNOWN, remove this block)
+    try {
+      // if element had inline display none previously
+      if (el.style && el.style.display === "none") el.style.display = "";
+    } catch (_) {}
+  }
+
+  function emitAccessEvent(detail) {
+    try {
+      window.dispatchEvent(new CustomEvent("darrius:access", { detail: detail || {} }));
+    } catch (_) {}
+  }
+
   function applySubUX(data, user_id) {
     const status = normalizeStripeStatus(data?.status);
     const hasAccess = data?.has_access;
@@ -390,6 +441,10 @@
 
     setSubStatusText(line);
 
+    // ✅ NEW: badge render (ACTIVE/TRIAL/EXPIRED/UNKNOWN)
+    const badge = bucketToAccessBadge(bucket);
+    renderAccessBadge(badge);
+
     // Keep Manage behavior: if user_id exists, allow Manage (account.html / portal entry)
     const manageBtn = $(IDS.manageBtn);
     if (manageBtn) {
@@ -402,8 +457,10 @@
       document.body.dataset.subBucket = bucket;
       document.body.dataset.subStatus = status;
       document.body.dataset.subAccess = String(!!hasAccess);
+      document.body.dataset.access = badge.state; // ACTIVE/TRIAL/EXPIRED/UNKNOWN
     } catch (_) {}
 
+    // Existing event (do not break)
     dispatchSubEvent({
       user_id,
       bucket,
@@ -413,6 +470,20 @@
       trial_end: trialEnd ? trialEnd.toISOString() : null,
       period_end: periodEnd ? periodEnd.toISOString() : null,
       raw: data || null,
+    });
+
+    // ✅ NEW: global event (for ChartCore / data source / UX sync)
+    emitAccessEvent({
+      user_id,
+      status,
+      bucket,
+      has_access: hasAccess,
+      access: badge.state, // ACTIVE/TRIAL/EXPIRED/UNKNOWN
+      plan: planKey || null,
+      trial_end: trialEnd ? trialEnd.toISOString() : null,
+      period_end: periodEnd ? periodEnd.toISOString() : null,
+      raw: data || null,
+      ts: Date.now(),
     });
 
     if (isAdmin()) log(`✅ sub UX: ${line}`);
@@ -426,6 +497,19 @@
     // 1) 没 user_id：Unknown + 禁用 Manage
     if (!user_id) {
       setSubStatusText("UNKNOWN · please input User ID");
+
+      // ✅ NEW: badge + event (so UI never shows stale state)
+      renderAccessBadge({ state: "UNKNOWN", tone: "" });
+      emitAccessEvent({
+        user_id: "",
+        status: "unknown",
+        bucket: "UNKNOWN",
+        has_access: false,
+        access: "UNKNOWN",
+        raw: null,
+        ts: Date.now(),
+      });
+
       if (manageBtn) manageBtn.disabled = true;
       return;
     }
@@ -437,12 +521,39 @@
     }
     setSubStatusText("CHECKING...");
 
+    // ✅ NEW: optimistic badge (optional)
+    // (keeps UX consistent during fetch)
+    renderAccessBadge({ state: "UNKNOWN", tone: "" });
+    emitAccessEvent({
+      user_id,
+      status: "checking",
+      bucket: "UNKNOWN",
+      has_access: null,
+      access: "UNKNOWN",
+      raw: null,
+      ts: Date.now(),
+    });
+
     // 3) 再拉 status（失败也不影响 Manage）
     try {
       const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
       applySubUX(data, user_id);
     } catch (e) {
       setSubStatusText("UNKNOWN · status endpoint unavailable");
+
+      // ✅ NEW: on error still notify
+      renderAccessBadge({ state: "UNKNOWN", tone: "" });
+      emitAccessEvent({
+        user_id,
+        status: "unknown",
+        bucket: "UNKNOWN",
+        has_access: null,
+        access: "UNKNOWN",
+        error: String(e && e.message ? e.message : e),
+        raw: null,
+        ts: Date.now(),
+      });
+
       if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
     }
   }
@@ -495,7 +606,8 @@
 
     const m = $(IDS.manageBtn);
     if (m) {
-      // 默认：绑定 portal（主页通常会被 boot.js 改写成跳 account.html）
+      // 默认：绑定 portal（主页通常会被 boot.js 改写成跳 account.html）：
+      // 不在这里改业务逻辑，保持原样。
       m.onclick = openCustomerPortal;
     }
 
