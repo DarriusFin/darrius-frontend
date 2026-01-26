@@ -71,7 +71,7 @@
     subscribeBtn: "subscribeBtn",
     manageBtn: "manageBtn",
     subStatusText: "subStatusText",
-    accessBadge: "accessBadge", // ✅ NEW
+    accessBadge: "accessBadge", // ✅ new
     userId: "userId",
     email: "email",
     priceOverride: "priceOverride",
@@ -273,19 +273,17 @@
   }
 
   // =========================================================
-  // Permission UX (Trial / Active / Expired)
+  // Permission UX (Trial / Active / Expired) + Badge + Events
   // =========================================================
   function toDateObj(v) {
     if (!v) return null;
     if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
     if (typeof v === "number") {
-      // accept sec or ms
       const ms = v < 1e12 ? v * 1000 : v;
       const d = new Date(ms);
       return isNaN(d.getTime()) ? null : d;
     }
     if (typeof v === "string") {
-      // ISO string or numeric string
       const n = Number(v);
       if (!Number.isNaN(n) && String(n).trim() !== "") return toDateObj(n);
       const d = new Date(v);
@@ -326,8 +324,8 @@
       return "ACTIVE";
     }
     if (hasAccess === false) {
-      if (status === "trialing") return "EXPIRED"; // trial ended but access revoked
-      if (status === "active") return "PENDING";   // edge: active but no access
+      if (status === "trialing") return "EXPIRED";
+      if (status === "active") return "PENDING";
       if (
         status === "canceled" ||
         status === "unpaid" ||
@@ -351,27 +349,31 @@
     return "UNKNOWN";
   }
 
-  // ✅ NEW: update small badge in UI (index.html)
+  // ✅ Badge renderer (reads #accessBadge)
   function setAccessBadge(bucket) {
     const el = $(IDS.accessBadge);
-    if (!el) return; // page may not have it
+    if (!el) return; // if page doesn't have it, silently ignore
+
     const b = String(bucket || "UNKNOWN").toUpperCase();
 
-    // reset classes but keep base class
-    // Note: your CSS uses .accessBadge.ACTIVE etc.
-    el.classList.remove("hidden", "ACTIVE", "TRIAL", "EXPIRED", "PENDING", "UNKNOWN");
+    // ensure visible
+    el.classList.remove("hidden");
+
+    // reset state classes
+    el.classList.remove("ACTIVE", "TRIAL", "EXPIRED", "PENDING", "UNKNOWN");
     el.classList.add(b);
+
+    // set text
     el.textContent = b;
   }
 
-  function dispatchSubEvent(payload) {
+  // ✅ dispatch both events
+  function dispatchAccessEvents(payload) {
     try {
       window.dispatchEvent(new CustomEvent("darrius:subscription-status", { detail: payload }));
     } catch (_) {}
-  }
 
-  // ✅ NEW: the event you asked for
-  function dispatchAccessEvent(payload) {
+    // you asked for this name:
     try {
       window.dispatchEvent(new CustomEvent("darrius:access", { detail: payload }));
     } catch (_) {}
@@ -382,7 +384,7 @@
     const hasAccess = data?.has_access;
     const bucket = mapAccessBucket(status, hasAccess);
 
-    // ✅ Update badge (if present)
+    // ✅ update badge
     setAccessBadge(bucket);
 
     // Optional fields that backend MAY provide
@@ -411,6 +413,7 @@
     const planPart = planKey ? ` · ${planKey}` : "";
     const hasPart = typeof hasAccess === "boolean" ? (hasAccess ? " · Access ON" : " · Access OFF") : "";
     const line = `${bucket}${planPart} · ${status}${hasPart}${extra}`;
+
     setSubStatusText(line);
 
     // Keep Manage behavior: if user_id exists, allow Manage (account.html / portal entry)
@@ -438,17 +441,8 @@
       raw: data || null,
     };
 
-    // ✅ Events
-    dispatchSubEvent(payload);
-    dispatchAccessEvent({
-      user_id,
-      bucket,
-      status,
-      has_access: hasAccess,
-      plan: planKey,
-      trial_end: payload.trial_end,
-      period_end: payload.period_end,
-    });
+    // ✅ events
+    dispatchAccessEvents(payload);
 
     if (isAdmin()) log(`✅ sub UX: ${line}`);
   }
@@ -458,24 +452,33 @@
     const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
     const manageBtn = $(IDS.manageBtn);
 
-    // 1) 没 user_id：Unknown + 禁用 Manage
+    // 1) 没 user_id：Unknown + 禁用 Manage + ✅ show badge UNKNOWN
     if (!user_id) {
       setSubStatusText("UNKNOWN · please input User ID");
-      setAccessBadge("UNKNOWN"); // ✅
+      setAccessBadge("UNKNOWN");
       if (manageBtn) manageBtn.disabled = true;
 
-      // ✅ also emit access event as unknown (optional but helps other modules)
-      dispatchAccessEvent({ user_id: "", bucket: "UNKNOWN", status: "unknown", has_access: undefined, plan: "" });
+      // still dispatch so other modules can react
+      dispatchAccessEvents({
+        user_id: "",
+        bucket: "UNKNOWN",
+        status: "unknown",
+        has_access: undefined,
+        plan: "",
+        trial_end: null,
+        period_end: null,
+        raw: null,
+      });
       return;
     }
 
-    // 2) 有 user_id：先“乐观启用” Manage（主页会跳 account.html；这里不阻断）
+    // 2) 有 user_id：先“乐观启用” Manage（你主页会跳 account.html；这里不阻断）
     if (manageBtn) {
       manageBtn.disabled = false;
       manageBtn.textContent = "Manage · 管理";
     }
     setSubStatusText("CHECKING...");
-    setAccessBadge("PENDING"); // ✅ typing/refreshing moment
+    setAccessBadge("PENDING");
 
     // 3) 再拉 status（失败也不影响 Manage）
     try {
@@ -483,9 +486,19 @@
       applySubUX(data, user_id);
     } catch (e) {
       setSubStatusText("UNKNOWN · status endpoint unavailable");
-      setAccessBadge("UNKNOWN"); // ✅
+      setAccessBadge("UNKNOWN");
       if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
-      dispatchAccessEvent({ user_id, bucket: "UNKNOWN", status: "unknown", has_access: undefined, plan: "" });
+
+      dispatchAccessEvents({
+        user_id,
+        bucket: "UNKNOWN",
+        status: "unknown",
+        has_access: undefined,
+        plan: "",
+        trial_end: null,
+        period_end: null,
+        raw: { error: e.message },
+      });
     }
   }
 
@@ -543,9 +556,7 @@
 
     // userId typing triggers status refresh (non-blocking)
     $(IDS.userId)?.addEventListener("input", scheduleRefreshStatus);
-
-    // (optional) email change can also refresh if you want
-    // $(IDS.email)?.addEventListener("change", scheduleRefreshStatus);
+    $(IDS.userId)?.addEventListener("change", scheduleRefreshStatus);
 
     // initial status (will enable/disable Manage based on user_id)
     refreshSubscriptionStatus();
