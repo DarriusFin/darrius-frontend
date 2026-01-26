@@ -1,14 +1,10 @@
 /* =========================================================
  * FILE: darrius-frontend/js/boot.js
- * DarriusAI · Boot / Wiring Module (Final)
+ * DarriusAI · Boot / Wiring Module (Final, deduped)
  * - Wires UI events
  * - Starts ChartCore + Subscription modules
  * - Keeps subscription stable; does NOT touch backend secrets
- *
- * ✅ FIX v2026.01.26:
- * - Removed duplicated bootstrapSubscription() re-attach loop
- *   (it caused Subscription.attach() to run multiple times and
- *    could revert Manage/Start button disabled state)
+ * - Path A: Order Start stays checkout; Order Manage routes to /account.html
  * ========================================================= */
 
 (function () {
@@ -78,9 +74,7 @@
   async function copyShareLink() {
     const sym = ($("symbol")?.value || "BTCUSDT").trim().toUpperCase();
     const tf = $("tf")?.value || "1d";
-    const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(
-      sym
-    )}&tf=${encodeURIComponent(tf)}`;
+    const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
     try {
       await navigator.clipboard.writeText(url);
       alert("已复制分享链接：\n" + url);
@@ -124,6 +118,34 @@
     $("priceOverrideRow")?.classList.remove("hidden");
 
     log("Admin mode enabled (?admin=1)");
+  }
+
+  // ---------- Path A: Route Manage -> account.html ----------
+  function wireManageToAccount() {
+    const manageBtn = $("manageBtn");
+    if (!manageBtn) return;
+
+    manageBtn.onclick = function () {
+      const userId = $("userId")?.value?.trim() || "";
+      const email = $("email")?.value?.trim() || "";
+
+      if (!userId) {
+        alert("请先填写 User ID，再进入账户管理。");
+        $("userId")?.focus?.();
+        return;
+      }
+
+      const qs = new URLSearchParams({ from: "home", user_id: userId });
+      if (email) qs.set("email", email);
+
+      // Go to Account Center
+      window.location.href = "/account.html?" + qs.toString();
+    };
+
+    // 即使 status Unknown，也允许进入 account center
+    manageBtn.disabled = false;
+
+    if (isAdmin()) console.log("[BOOT] Order Manage routed to /account.html");
   }
 
   // ---------- main boot ----------
@@ -188,13 +210,12 @@
     }
 
     // ---- Subscription wiring ----
-    // ✅ IMPORTANT: Attach ONCE ONLY (no retry loop) to avoid button state being reverted.
     if (!window.Subscription) {
       log("⚠️ Subscription module not found. Did you include /js/subscription.js ?");
     } else {
       try {
         if (typeof window.Subscription.attach === "function") {
-          window.Subscription.attach(); // ✅ bind buttons + load plans + refresh status
+          window.Subscription.attach(); // ✅ bind buttons + load plans (original logic stays)
           log("✅ Subscription.attach()");
         } else if (typeof window.Subscription.initPlans === "function") {
           window.Subscription.initPlans(); // fallback: at least load plans
@@ -206,6 +227,9 @@
         log("❌ Subscription wiring error: " + e.message);
       }
     }
+
+    // ✅ Path A: MUST be after Subscription.attach(), so our onclick wins.
+    wireManageToAccount();
 
     // Other UI utilities
     $("copyLinkBtn")?.addEventListener("click", copyShareLink);
