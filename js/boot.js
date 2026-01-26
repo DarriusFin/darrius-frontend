@@ -33,7 +33,6 @@
   }
 
   function log(msg) {
-    // Reuse your existing logger if present
     if (typeof window.log === "function") {
       window.log(msg);
       return;
@@ -85,7 +84,6 @@
   // ---------- optional: export png ----------
   function exportPNG() {
     try {
-      // ChartCore may provide screenshot helper, else fallback to chart instance if exposed
       if (window.ChartCore && typeof window.ChartCore.exportPNG === "function") {
         window.ChartCore.exportPNG();
         return;
@@ -119,15 +117,49 @@
     log("Admin mode enabled (?admin=1)");
   }
 
+  // ---------- Subscription attach (single, stable, retry) ----------
+  function attachSubscriptionStable() {
+    let attached = false;
+
+    function domReadyForSubscription() {
+      return !!document.getElementById("subscribeBtn") && !!document.getElementById("planSelect");
+    }
+
+    function tryAttachOnce() {
+      try {
+        if (attached) return true;
+        if (!window.Subscription || typeof window.Subscription.attach !== "function") return false;
+        if (!domReadyForSubscription()) return false;
+
+        window.Subscription.attach(); // ✅ 只 attach 一次
+        attached = true;
+
+        if (isAdmin()) console.log("[BOOT] Subscription.attach() ✅ (stable)");
+        return true;
+      } catch (e) {
+        console.error("[BOOT] Subscription.attach() failed ❌", e);
+        return false;
+      }
+    }
+
+    // immediate try
+    if (tryAttachOnce()) return;
+
+    // retry (DOM / script timing)
+    let n = 0;
+    const t = setInterval(function () {
+      n++;
+      if (tryAttachOnce() || n >= 20) clearInterval(t);
+    }, 200);
+  }
+
   // ---------- main boot ----------
   function boot() {
     // year
     safeText($("yearNow"), String(new Date().getFullYear()));
 
     // global API base (shared by modules)
-    // NOTE: you can set this in index.html before scripts; if not, we keep existing value
     if (!window.API_BASE) {
-      // Prefer your known Render backend; can be overridden in index.html
       window.API_BASE = "https://darrius-api.onrender.com";
     }
 
@@ -143,13 +175,10 @@
       setStatus("ChartCore missing (js not loaded)", false);
       log("❌ ChartCore not found on window. Did you include /js/chart.core.js ?");
     } else {
-      // Bind TF quick -> reload
       bindTfQuick(() => {
-        // do a full reload of market data
         if (typeof window.ChartCore.load === "function") window.ChartCore.load();
       });
 
-      // toggles
       $("tgEMA")?.addEventListener("change", () => {
         if (typeof window.ChartCore.applyToggles === "function") window.ChartCore.applyToggles();
       });
@@ -157,16 +186,13 @@
         if (typeof window.ChartCore.applyToggles === "function") window.ChartCore.applyToggles();
       });
 
-      // Load button
       $("loadBtn")?.addEventListener("click", () => {
         if (typeof window.ChartCore.load === "function") window.ChartCore.load();
       });
 
-      // Init chart (ChartCore should create chart and do initial load)
       try {
         if (typeof window.ChartCore.init === "function") {
           window.ChartCore.init({
-            // pass DOM ids if ChartCore supports it; safe to ignore if not used
             chartElId: "chart",
             overlayElId: "sigOverlay",
           });
@@ -180,55 +206,8 @@
       }
     }
 
-    // ---- Subscription wiring ----
-if (!window.Subscription) {
-  log("⚠️ Subscription module not found. Did you include /js/subscription.js ?");
-} else {
-  try {
-    if (typeof window.Subscription.attach === "function") {
-      window.Subscription.attach(); // ✅ 必须：绑定按钮 + 拉 plans
-      log("✅ Subscription.attach()");
-    } else if (typeof window.Subscription.initPlans === "function") {
-      window.Subscription.initPlans(); // 兜底：至少拉 plans
-      log("✅ Subscription.initPlans()");
-    } else {
-      log("⚠️ Subscription has no attach/initPlans");
-    }
-  } catch (e) {
-    log("❌ Subscription wiring error: " + e.message);
-  }
-}
-
-    // --- Subscription bootstrap (must run after UI rendered) ---
-(function bootstrapSubscription(){
-  function tryAttach(){
-    try{
-      if (!window.Subscription || !window.Subscription.attach) return false;
-
-      // DOM 元素必须存在，否则 attach 可能找不到按钮/下拉
-      var hasBtn = document.getElementById("subscribeBtn");
-      var hasPlan = document.getElementById("planSelect") || document.querySelector("select"); // 你可换成真实id
-      if (!hasBtn) return false;
-
-      window.Subscription.attach();
-      console.log("[BOOT] Subscription.attach() ✅");
-      return true;
-    }catch(e){
-      console.error("[BOOT] Subscription.attach() failed ❌", e);
-      return false;
-    }
-  }
-
-  // 立即尝试一次
-  if (tryAttach()) return;
-
-  // 失败就重试几次（处理“按钮晚出现/异步渲染”）
-  var n = 0;
-  var t = setInterval(function(){
-    n++;
-    if (tryAttach() || n >= 20) clearInterval(t); // 最多重试 20 次（约 4 秒）
-  }, 200);
-})();
+    // ---- Subscription wiring (stable) ----
+    attachSubscriptionStable();
 
     // Other UI utilities
     $("copyLinkBtn")?.addEventListener("click", copyShareLink);
@@ -246,6 +225,5 @@ if (!window.Subscription) {
     boot();
   }
 
-  // expose (optional)
   window.Boot = { boot };
 })();
