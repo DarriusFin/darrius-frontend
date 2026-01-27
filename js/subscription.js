@@ -272,25 +272,305 @@
     }
   }
 
-  // =========================================================
-  // Permission UX (Trial / Active / Expired) + Badge + Events
+   // =========================================================
+  // Permission UX (Robust)  ✅ NO MORE FALSE "EXPIRED"
+  // - Handles: active / trialing / checkout_created / canceled-with-access / past_due grace
+  // - Renders badge #accessBadge if present
+  // - Dispatches:
+  //    1) darrius:subscription-status (detail: full payload)
+  //    2) darrius:access (detail: access decision)
   // =========================================================
   function toDateObj(v) {
     if (!v) return null;
     if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+
     if (typeof v === "number") {
       const ms = v < 1e12 ? v * 1000 : v;
       const d = new Date(ms);
       return isNaN(d.getTime()) ? null : d;
     }
+
     if (typeof v === "string") {
-      const n = Number(v);
-      if (!Number.isNaN(n) && String(n).trim() !== "") return toDateObj(n);
-      const d = new Date(v);
+      const s = v.trim();
+      if (!s) return null;
+      const n = Number(s);
+      if (!Number.isNaN(n) && s !== "") return toDateObj(n);
+      const d = new Date(s);
       return isNaN(d.getTime()) ? null : d;
     }
     return null;
   }
+
+  function fmtYMD(d) {
+    if (!d) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  }
+
+  function fmtRemain(d) {
+    if (!d) return "";
+    const ms = d.getTime() - Date.now();
+    if (!isFinite(ms)) return "";
+    const s = Math.floor(ms / 1000);
+    const sign = s >= 0 ? "" : "-";
+    const a = Math.abs(s);
+    const days = Math.floor(a / 86400);
+    const hrs = Math.floor((a % 86400) / 3600);
+    return `${sign}${days}d ${hrs}h`;
+  }
+
+  function normalizeStripeStatus(raw) {
+    const s = String(raw || "").trim().toLowerCase();
+    return s || "unknown";
+  }
+
+  function isFuture(d) {
+    return !!(d && d instanceof Date && isFinite(d.getTime()) && d.getTime() > Date.now());
+  }
+
+  function pickPeriodEnd(data) {
+    // best-effort from backend
+    return (
+      toDateObj(data?.current_period_end) ||
+      toDateObj(data?.period_end) ||
+      toDateObj(data?.ends_at) ||
+      toDateObj(data?.access_end) ||
+      null
+    );
+  }
+
+  function pickTrialEnd(data) {
+    return toDateObj(data?.trial_end || data?.trial_ends_at) || null;
+  }
+
+  /**
+   * Robust access decision:
+   * - has_access=true => ACTIVE/TRIAL
+   * - canceled but period_end in future => ACTIVE (still valid)
+   * - past_due/unpaid but period_end in future => GRACE (treat as active UX, but warn)
+   * - checkout_created/incomplete => PENDING (NOT expired)
+   * - else => EXPIRED/UNKNOWN
+   */
+  function decideAccess(data) {
+    const status = normalizeStripeStatus(data?.status);
+    const hasAccess = (typeof data?.has_access === "boolean") ? data.has_access : null;
+
+    const periodEnd = pickPeriodEnd(data);
+    const trialEnd = pickTrialEnd(data);
+
+    // Treat "still within paid period" as access-on even if has_access is false (webhook delay / mapping delay).
+    // This prevents false EXPIRED.
+    const stillInPeriod = isFuture(periodEnd);
+
+    // 1) Strong signal from backend
+    if (hasAccess === true) {
+      const bucket = (status === "trialing") ? "TRIAL" : "ACTIVE";
+      return { bucket, access_on: true, status, has_access: hasAccess, periodEnd, trialEnd, reason: "has_access_true" };
+    }
+
+    // 2) Canceled but still in period => still active access UX
+    if (status === "canceled" && stillInPeriod) {
+      return { bucket: "ACTIVE", access_on: true, status, has_access: hasAccess, periodEnd, trialEnd, reason: "canceled_but_in_period" };
+    }
+
+    // 3) Trialing but backend didn't flip has_access yet (rare) => TRIAL
+    if (status === "trialing") {
+      const end = trialEnd || periodEnd;
+      const on = isFuture(end) || hasAccess !== false; // optimistic
+      return { bucket: "TRIAL", access_on: on, status, has_access: hasAccess, periodEnd, trialEnd, reason: "trialing" };
+    }
+
+    // 4) Past due / unpaid: if still in period => GRACE (show access-on but warn)
+    if ((status === "past_due" || status === "unpaid") && stillInPeriod) {
+      return { bucket: "GRACE", access_on: true, status, has_access: hasAccess, periodEnd, trialEnd, reason: "billing_grace" };
+    }
+
+    // 5) Checkout created / incomplete: pending activation (NOT expired)
+    if (status === "checkout_created" || status === "incomplete" || status === "checkout_pending") {
+      // If periodEnd exists & future => active; else pending
+      if (stillInPeriod) return { bucket: "ACTIVE", access_on: true, status, has_access: hasAccess, periodEnd, trialEnd, reason: "checkout_created_but_in_period" };
+      return { bucket: "PENDING", access_on: true, status, has_access: hasAccess, periodEnd, trialEnd, reason: "pending_activation" };
+    }
+
+    // 6) Active but has_access false (webhook delay) => treat as ACTIVE (but note)
+    if (status === "active" && hasAccess === false) {
+      if (stillInPeriod) return { bucket: "ACTIVE", access_on: true, status, has_access: hasAccess, periodEnd, trialEnd, reason: "active_but_access_flag_false_in_period" };
+      return { bucket: "ACTIVE", access_on: false, status, has_access: hasAccess, periodEnd, trialEnd, reason: "active_but_access_flag_false" };
+    }
+
+    // 7) Explicit expired-like states
+    if (status === "incomplete_expired" || status === "expired") {
+      return { bucket: "EXPIRED", access_on: false, status, has_access: hasAccess, periodEnd, trialEnd, reason: "expired_state" };
+    }
+
+    // 8) If period ended and backend says no access => expired
+    if (!stillInPeriod && hasAccess === false) {
+      // includes canceled, unpaid, etc.
+      return { bucket: "EXPIRED", access_on: false, status, has_access: hasAccess, periodEnd, trialEnd, reason: "no_access_and_not_in_period" };
+    }
+
+    // 9) Unknown fallback
+    // If backend doesn't know, keep unknown but do NOT call it expired
+    return { bucket: "UNKNOWN", access_on: (hasAccess === true), status, has_access: hasAccess, periodEnd, trialEnd, reason: "fallback_unknown" };
+  }
+
+  function setAccessBadge(bucket) {
+    const el = document.getElementById("accessBadge");
+    if (!el) return;
+
+    const b = String(bucket || "UNKNOWN").toUpperCase();
+
+    // show
+    el.classList.remove("hidden");
+
+    // remove prior bucket classes
+    el.classList.remove("ACTIVE", "TRIAL", "PENDING", "GRACE", "EXPIRED", "UNKNOWN");
+    el.classList.add(b);
+
+    el.textContent = b;
+  }
+
+  function dispatchEvents(payload) {
+    // 1) rich event
+    try {
+      window.dispatchEvent(new CustomEvent("darrius:subscription-status", { detail: payload }));
+    } catch (_) {}
+
+    // 2) access event (lightweight, for gating / UI)
+    try {
+      window.dispatchEvent(
+        new CustomEvent("darrius:access", {
+          detail: {
+            user_id: payload.user_id,
+            bucket: payload.bucket,
+            access_on: payload.access_on,
+            data_mode: payload.data_mode || null,
+            status: payload.status,
+            plan: payload.plan || null,
+          },
+        })
+      );
+    } catch (_) {}
+  }
+
+  function applySubUX(data, user_id) {
+    const d = data || {};
+    const status = normalizeStripeStatus(d.status);
+    const planKey = d.plan || d.plan_key || d.current_plan || "";
+
+    const decision = decideAccess(d);
+    const bucket = decision.bucket;
+
+    // Compose UX line
+    const periodEnd = decision.periodEnd;
+    const trialEnd = decision.trialEnd;
+
+    let extra = "";
+    if (bucket === "TRIAL") {
+      const end = trialEnd || periodEnd;
+      extra = end ? ` · ends ${fmtYMD(end)} (${fmtRemain(end)})` : " · trial";
+    } else if (bucket === "ACTIVE") {
+      extra = periodEnd ? ` · renews ${fmtYMD(periodEnd)} (${fmtRemain(periodEnd)})` : " · access on";
+    } else if (bucket === "GRACE") {
+      extra = periodEnd ? ` · payment issue, grace until ${fmtYMD(periodEnd)} (${fmtRemain(periodEnd)})` : " · payment issue (grace)";
+    } else if (bucket === "PENDING") {
+      extra = " · activating…";
+    } else if (bucket === "EXPIRED") {
+      extra = periodEnd ? ` · ended ${fmtYMD(periodEnd)}` : " · access off";
+    } else {
+      extra = "";
+    }
+
+    const planPart = planKey ? ` · ${planKey}` : "";
+    const accessPart =
+      (typeof decision.has_access === "boolean")
+        ? (decision.has_access ? " · Access ON" : " · Access OFF")
+        : "";
+
+    const line = `${bucket}${planPart} · ${status}${accessPart}${extra}`;
+    setSubStatusText(line);
+
+    // Badge
+    setAccessBadge(bucket);
+
+    // Manage button behavior: enabled if user_id exists (keep your current rule)
+    const manageBtn = $(IDS.manageBtn);
+    if (manageBtn) {
+      manageBtn.disabled = !user_id;
+      manageBtn.textContent = "Manage · 管理";
+    }
+
+    // Expose to DOM datasets (optional for other modules)
+    try {
+      document.body.dataset.subBucket = bucket;
+      document.body.dataset.subStatus = status;
+      document.body.dataset.subAccess = String(!!decision.access_on);
+    } catch (_) {}
+
+    const payload = {
+      user_id,
+      bucket,
+      access_on: !!decision.access_on,
+      status,
+      has_access: (typeof decision.has_access === "boolean") ? decision.has_access : null,
+      plan: planKey || null,
+      trial_end: trialEnd ? trialEnd.toISOString() : null,
+      period_end: periodEnd ? periodEnd.toISOString() : null,
+      customer_portal: !!d.customer_portal,
+      data_mode: d.data_mode || d.access_mode || null,
+      reason: decision.reason,
+      raw: d,
+    };
+
+    dispatchEvents(payload);
+
+    if (isAdmin()) log(`✅ sub UX: ${line} (reason=${decision.reason})`);
+  }
+
+  // -------- Optional: subscription status --------
+  async function refreshSubscriptionStatus() {
+    const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
+    const manageBtn = $(IDS.manageBtn);
+
+    // no user_id => unknown + hide badge + disable manage
+    if (!user_id) {
+      setSubStatusText("UNKNOWN · please input User ID");
+      const badge = document.getElementById("accessBadge");
+      if (badge) badge.classList.add("hidden");
+      if (manageBtn) manageBtn.disabled = true;
+      return;
+    }
+
+    // optimistic enable manage (your existing behavior)
+    if (manageBtn) {
+      manageBtn.disabled = false;
+      manageBtn.textContent = "Manage · 管理";
+    }
+    setSubStatusText("CHECKING...");
+
+    try {
+      const data = await apiGet(`/api/subscription/status?user_id=${encodeURIComponent(user_id)}`);
+      applySubUX(data, user_id);
+    } catch (e) {
+      setSubStatusText("UNKNOWN · status endpoint unavailable");
+      const badge = document.getElementById("accessBadge");
+      if (badge) {
+        badge.classList.remove("hidden");
+        badge.classList.remove("ACTIVE", "TRIAL", "PENDING", "GRACE", "EXPIRED");
+        badge.classList.add("UNKNOWN");
+        badge.textContent = "UNKNOWN";
+      }
+      if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
+    }
+  }
+
+  function scheduleRefreshStatus() {
+    window.clearTimeout(_subStatusTimer);
+    _subStatusTimer = window.setTimeout(refreshSubscriptionStatus, 420);
+  }
+
 
   function fmtYMD(d) {
     if (!d) return "";
