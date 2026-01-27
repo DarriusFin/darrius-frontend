@@ -326,6 +326,32 @@
     return s || "unknown";
   }
 
+  function resolveBucket(status, hasAccess) {
+  const s = String(status || "").trim().toLowerCase();
+
+  // has_access = true → 永远不算过期
+  if (hasAccess === true) {
+    return s === "trialing" ? "TRIAL" : "ACTIVE";
+  }
+
+  // Stripe checkout / webhook 未同步 → 只能 PENDING
+  if (["checkout_created", "incomplete", "processing"].includes(s)) {
+    return "PENDING";
+  }
+
+  // Stripe 显示 active，但你系统还没开权限 → 等 webhook
+  if (s === "active") {
+    return "PENDING";
+  }
+
+  // 明确失效状态
+  if (["canceled", "unpaid", "past_due", "incomplete_expired", "expired"].includes(s)) {
+    return "EXPIRED";
+  }
+
+  return "UNKNOWN";
+}
+
   function isFuture(d) {
     return !!(d && d instanceof Date && isFinite(d.getTime()) && d.getTime() > Date.now());
   }
