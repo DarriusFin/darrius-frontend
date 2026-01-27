@@ -688,7 +688,7 @@
   function applySubUX(data, user_id) {
     const status = normalizeStripeStatus(data?.status);
     const hasAccess = data?.has_access;
-    const bucket = mapAccessBucket(status, hasAccess);
+    const bucket = resolveBucket(status, hasAccess);
 
     // ✅ update badge
     setAccessBadge(bucket);
