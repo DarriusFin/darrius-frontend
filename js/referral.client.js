@@ -1,214 +1,176 @@
-/* =========================================================================
- * DarriusAI - referral.client.js (PROD SAFE) v2026.01.28
+/* js/referral.client.js  (SAFE / UI-ONLY) v2026.01.29
+ * Purpose:
+ *  - Detect ?ref=CODE from URL
+ *  - Store into localStorage (darr_ref_code)
+ *  - Show a subtle bottom-left toast (2.2s)
+ *  - Clean URL param to avoid accidental sharing
+ *  - Provide getter for checkout flow without touching billing logic
  *
- * Goal (NO UI changes):
- *  1) Capture referral code from URL: ?ref=XXXX
- *  2) Persist it safely: localStorage + (optional) cookie
- *  3) Expose a stable API for other scripts:
- *        window.DarriusReferral.get()
- *        window.DarriusReferral.set(code)
- *        window.DarriusReferral.clear()
- *        window.DarriusReferral.attachToUrl(url)
- *
- * Rules:
- *  - Never touches Stripe / subscription logic
- *  - Never throws (safe wrapper)
- *  - Sanitizes inputs: allow [A-Za-z0-9_-], max 64
- *  - Default TTL: 30 days (cookie); localStorage has no TTL but we store ts
- * ========================================================================= */
+ * Guarantees:
+ *  - No dependency on subscription/payment code
+ *  - Never throws (best-effort only)
+ */
 
 (() => {
   'use strict';
 
-  // -----------------------------
-  // Config (safe defaults)
-  // -----------------------------
-  const CFG = {
-    // storage keys
-    LS_CODE_KEY: 'dref_code',
-    LS_TS_KEY: 'dref_ts',              // unix ms when set
-    // cookie
-    COOKIE_NAME: 'dref',
-    COOKIE_DAYS: 30,
-    // input rules
-    MAX_LEN: 64,
-    // URL param
-    QUERY_PARAM: 'ref',
-    // If true, remove ?ref= from URL after capturing
-    CLEAN_URL_AFTER_CAPTURE: true,
-    // Enable tiny debug var (no UI impact)
-    EXPOSE_DEBUG: true,
-  };
+  const KEY = 'darr_ref_code';
+  const KEY_TS = 'darr_ref_code_ts';
+  const KEY_SEEN = 'darr_ref_toast_seen'; // avoid repeated toast
+  const TOAST_MS = 2200;
 
-  // -----------------------------
-  // No-throw wrapper
-  // -----------------------------
-  function safe(fn) {
-    try { return fn(); } catch (e) { return null; }
+  function safe(fn) { try { return fn(); } catch (e) { return null; } }
+
+  function normalizeRef(raw) {
+    if (!raw) return null;
+    let s = String(raw).trim();
+    // allow A-Z a-z 0-9 _ - with length guard
+    s = s.replace(/[^A-Za-z0-9_\-]/g, '');
+    if (s.length < 4 || s.length > 64) return null;
+    return s;
   }
 
-  // -----------------------------
-  // Sanitization
-  // -----------------------------
-  function sanitize(code) {
-    if (!code) return '';
-    code = String(code).trim();
-    if (!code) return '';
-    if (code.length > CFG.MAX_LEN) code = code.slice(0, CFG.MAX_LEN);
-
-    let out = '';
-    for (let i = 0; i < code.length; i++) {
-      const ch = code[i];
-      const ok =
-        (ch >= '0' && ch <= '9') ||
-        (ch >= 'A' && ch <= 'Z') ||
-        (ch >= 'a' && ch <= 'z') ||
-        ch === '_' || ch === '-';
-      if (ok) out += ch;
-    }
-    return out;
-  }
-
-  // -----------------------------
-  // URL helpers
-  // -----------------------------
-  function getQueryParam(name) {
+  function getUrlRef() {
     return safe(() => {
-      const url = new URL(window.location.href);
-      return url.searchParams.get(name) || '';
-    }) || '';
-  }
-
-  function removeQueryParam(name) {
-    return safe(() => {
-      const url = new URL(window.location.href);
-      if (!url.searchParams.has(name)) return;
-      url.searchParams.delete(name);
-      // keep other params intact; avoid reload
-      window.history.replaceState({}, document.title, url.toString());
+      const u = new URL(window.location.href);
+      const ref = u.searchParams.get('ref');
+      return normalizeRef(ref);
     });
   }
 
-  function attachToUrl(url, code) {
+  function saveRef(code) {
     return safe(() => {
-      const c = sanitize(code);
-      if (!c) return url;
-
-      const u = new URL(url, window.location.origin);
-      if (!u.searchParams.get(CFG.QUERY_PARAM)) {
-        u.searchParams.set(CFG.QUERY_PARAM, c);
-      }
-      return u.toString();
-    }) || url;
+      localStorage.setItem(KEY, code);
+      localStorage.setItem(KEY_TS, String(Date.now()));
+      return true;
+    });
   }
 
-  // -----------------------------
-  // Cookie helpers
-  // -----------------------------
-  function setCookie(name, value, days) {
+  function getSavedRef() {
+    return safe(() => normalizeRef(localStorage.getItem(KEY))) || null;
+  }
+
+  function cleanUrlRefParam() {
+    safe(() => {
+      const u = new URL(window.location.href);
+      if (!u.searchParams.has('ref')) return;
+      u.searchParams.delete('ref');
+      const newUrl = u.pathname + (u.search ? u.search : '') + (u.hash ? u.hash : '');
+      window.history.replaceState(null, '', newUrl);
+    });
+  }
+
+  function alreadyShownToastFor(code) {
     return safe(() => {
-      const d = new Date();
-      d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
-      // SameSite=Lax is correct for typical referral flows
-      // Secure will be automatically applied by modern browsers on https origin in most cases,
-      // but we keep it simple and avoid forcing it.
-      document.cookie =
-        `${name}=${encodeURIComponent(value)}; expires=${d.toUTCString()}; path=/; SameSite=Lax`;
-      return true;
+      const seen = localStorage.getItem(KEY_SEEN);
+      return seen === code;
     }) || false;
   }
 
-  function getCookie(name) {
-    return safe(() => {
-      const esc = name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
-      const m = document.cookie.match(new RegExp('(?:^|; )' + esc + '=([^;]*)'));
-      return m ? decodeURIComponent(m[1]) : '';
-    }) || '';
+  function markToastShown(code) {
+    safe(() => localStorage.setItem(KEY_SEEN, code));
   }
 
-  function deleteCookie(name) {
-    return safe(() => {
-      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
-      return true;
-    }) || false;
+  function showToast(msgLines) {
+    safe(() => {
+      // create container
+      const el = document.createElement('div');
+      el.id = 'darr-ref-toast';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      el.style.position = 'fixed';
+      el.style.left = '16px';
+      el.style.bottom = '16px';
+      el.style.zIndex = '99999';
+      el.style.maxWidth = '320px';
+      el.style.pointerEvents = 'none';
+      el.style.padding = '10px 12px';
+      el.style.borderRadius = '12px';
+      el.style.border = '1px solid rgba(255,255,255,0.10)';
+      el.style.background = 'rgba(10, 14, 22, 0.78)';
+      el.style.backdropFilter = 'blur(10px)';
+      el.style.webkitBackdropFilter = 'blur(10px)';
+      el.style.boxShadow = '0 10px 28px rgba(0,0,0,0.35)';
+      el.style.color = 'rgba(255,255,255,0.92)';
+      el.style.fontSize = '12.5px';
+      el.style.lineHeight = '1.35';
+      el.style.letterSpacing = '0.2px';
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(6px)';
+      el.style.transition = 'opacity 140ms ease, transform 140ms ease';
+
+      const icon = document.createElement('span');
+      icon.textContent = '✅';
+      icon.style.marginRight = '8px';
+
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.alignItems = 'flex-start';
+
+      const text = document.createElement('div');
+      text.style.flex = '1';
+
+      (msgLines || []).forEach((line, i) => {
+        const p = document.createElement('div');
+        p.textContent = line;
+        if (i === 0) p.style.fontWeight = '700';
+        p.style.margin = (i === 0) ? '0 0 3px 0' : '0';
+        text.appendChild(p);
+      });
+
+      wrap.appendChild(icon);
+      wrap.appendChild(text);
+      el.appendChild(wrap);
+
+      document.body.appendChild(el);
+
+      // animate in
+      requestAnimationFrame(() => {
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+      });
+
+      // animate out
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(6px)';
+        setTimeout(() => safe(() => el.remove()), 240);
+      }, TOAST_MS);
+    });
   }
 
-  // -----------------------------
-  // localStorage helpers
-  // -----------------------------
-  function lsSet(code) {
-    return safe(() => {
-      localStorage.setItem(CFG.LS_CODE_KEY, code);
-      localStorage.setItem(CFG.LS_TS_KEY, String(Date.now()));
-      return true;
-    }) || false;
-  }
-
-  function lsGet() {
-    return sanitize(safe(() => localStorage.getItem(CFG.LS_CODE_KEY)) || '');
-  }
-
-  function lsClear() {
-    return safe(() => {
-      localStorage.removeItem(CFG.LS_CODE_KEY);
-      localStorage.removeItem(CFG.LS_TS_KEY);
-      return true;
-    }) || false;
-  }
-
-  // -----------------------------
-  // Public API (stable)
-  // -----------------------------
-  function getRef() {
-    // Priority: localStorage -> cookie -> URL (URL is handled on load)
-    const a = lsGet();
-    if (a) return a;
-    const b = sanitize(getCookie(CFG.COOKIE_NAME));
-    if (b) return b;
-    return '';
-  }
-
-  function setRef(code) {
-    const c = sanitize(code);
-    if (!c) return false;
-    // persist both
-    lsSet(c);
-    setCookie(CFG.COOKIE_NAME, c, CFG.COOKIE_DAYS);
-    if (CFG.EXPOSE_DEBUG) window.__DARRIUS_REF__ = c;
-    return true;
-  }
-
-  function clearRef() {
-    lsClear();
-    deleteCookie(CFG.COOKIE_NAME);
-    if (CFG.EXPOSE_DEBUG) window.__DARRIUS_REF__ = '';
-    return true;
-  }
-
-  // -----------------------------
-  // Init: capture ?ref= on load
-  // -----------------------------
+  // Public bridge (UI only)
+  // Other modules can call: window.DarriusReferral.get()
   safe(() => {
-    const q = sanitize(getQueryParam(CFG.QUERY_PARAM));
-    if (q) {
-      setRef(q);
-      if (CFG.CLEAN_URL_AFTER_CAPTURE) removeQueryParam(CFG.QUERY_PARAM);
-    } else {
-      // Expose existing stored ref for debugging/consumption
-      const existing = getRef();
-      if (CFG.EXPOSE_DEBUG && existing) window.__DARRIUS_REF__ = existing;
+    window.DarriusReferral = window.DarriusReferral || {};
+    window.DarriusReferral.get = () => getSavedRef();
+    window.DarriusReferral.clear = () => safe(() => {
+      localStorage.removeItem(KEY);
+      localStorage.removeItem(KEY_TS);
+      localStorage.removeItem(KEY_SEEN);
+      return true;
+    });
+  });
+
+  // ---- Main flow ----
+  safe(() => {
+    const urlRef = getUrlRef();
+    if (!urlRef) return;
+
+    // Save first
+    saveRef(urlRef);
+
+    // Show toast once per code
+    if (!alreadyShownToastFor(urlRef)) {
+      const isZh = /zh|cn/i.test(navigator.language || '');
+      const msg = isZh
+        ? ['已识别推荐码：' + urlRef, '下单时将自动生效']
+        : ['Referral detected: ' + urlRef, 'Will be applied at checkout'];
+      showToast(msg);
+      markToastShown(urlRef);
     }
-  });
 
-  // Expose API
-  safe(() => {
-    window.DarriusReferral = {
-      get: () => getRef(),
-      set: (code) => setRef(code),
-      clear: () => clearRef(),
-      attachToUrl: (url, code) => attachToUrl(url, code || getRef()),
-      _cfg: CFG, // harmless; helpful for debugging
-    };
+    // Clean URL
+    cleanUrlRefParam();
   });
-
 })();
