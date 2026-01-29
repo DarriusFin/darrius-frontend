@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DarriusAI · Affiliate / 推荐人后台</title>
+
+  <style>
+    :root{
+      --bg0:#071018;
+      --bg1:#0b1622;
+      --card:#0e2030;
+      --card2:#0b1a28;
+      --stroke:rgba(255,255,255,.08);
+      --muted:rgba(255,255,255,.68);
+      --text:rgba(255,255,255,.92);
+      --accentA:#2BE2A6;
+      --accentB:#4CC2FF;
+      --warn:#ffcc66;
+      --bad:#ff5b5b;
+      --ok:#2BE2A6;
+      --shadow: 0 18px 50px rgba(0,0,0,.45);
+      --radius:16px;
+      --radius2:22px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
+      background:
+        radial-gradient(1200px 800px at 20% 0%, rgba(76,194,255,.14), transparent 55%),
+        radial-gradient(1000px 700px at 80% 10%, rgba(43,226,166,.10), transparent 60%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      min-height:100vh;
+    }
+
+    .topbar{
+      position:sticky;
+      top:0;
+      z-index:10;
+      backdrop-filter: blur(10px);
+      background: rgba(7,16,24,.72);
+      border-bottom: 1px solid var(--stroke);
+    }
+    .topbar-inner{
+      max-width:1180px;
+      margin:0 auto;
+      padding:14px 16px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px;
+    }
+    .logo{
+      width:34px; height:34px;
+      border-radius:10px;
+      background: linear-gradient(135deg, var(--accentA), var(--accentB));
+      box-shadow: 0 10px 30px rgba(76,194,255,.12);
+    }
+    .brand h1{
+      margin:0;
+      font-size:16px;
+      font-weight:700;
+      letter-spacing:.2px;
+      line-height:1.15;
+    }
+    .brand .sub{
+      display:block;
+      margin-top:2px;
+      font-size:12px;
+      color:var(--muted);
+      font-weight:500;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 12px;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.03);
+      color:var(--muted);
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .dot{
+      width:8px; height:8px;
+      border-radius:999px;
+      background: rgba(255,255,255,.35);
+    }
+    .dot.ok{ background: var(--ok); }
+    .dot.bad{ background: var(--bad); }
+    .dot.warn{ background: var(--warn); }
+
+    .wrap{
+      max-width:1180px;
+      margin:0 auto;
+      padding:18px 16px 36px;
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:16px;
+    }
+
+    @media (max-width: 980px){
+      .wrap{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      border:1px solid var(--stroke);
+      background: rgba(14,32,48,.72);
+      border-radius: var(--radius2);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card .hd{
+      padding:16px 16px 12px;
+      border-bottom:1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+    }
+    .card .hd h2{
+      margin:0;
+      font-size:14px;
+      font-weight:750;
+      letter-spacing:.2px;
+    }
+    .card .hd p{
+      margin:6px 0 0;
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.45;
+    }
+    .card .bd{
+      padding:16px;
+    }
+
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+    }
+    @media (max-width: 560px){
+      .grid2{ grid-template-columns: 1fr; }
+    }
+
+    .field label{
+      display:block;
+      font-size:12px;
+      color:var(--muted);
+      margin:0 0 6px;
+    }
+    .input, .select{
+      width:100%;
+      padding:10px 12px;
+      border-radius: 12px;
+      border:1px solid var(--stroke);
+      background: rgba(0,0,0,.22);
+      color:var(--text);
+      outline:none;
+    }
+    .input:focus, .select:focus{
+      border-color: rgba(76,194,255,.35);
+      box-shadow: 0 0 0 3px rgba(76,194,255,.10);
+    }
+    .hint{
+      margin-top:6px;
+      font-size:11px;
+      color:rgba(255,255,255,.55);
+      line-height:1.35;
+    }
+
+    .btnrow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:12px;
+    }
+    .btn{
+      appearance:none;
+      border:none;
+      cursor:pointer;
+      padding:10px 14px;
+      border-radius: 14px;
+      font-weight:700;
+      font-size:13px;
+      color:#051018;
+      background: linear-gradient(135deg, var(--accentA), var(--accentB));
+      box-shadow: 0 12px 30px rgba(76,194,255,.12);
+    }
+    .btn.secondary{
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border:1px solid var(--stroke);
+      box-shadow:none;
+    }
+    .btn.danger{
+      background: rgba(255,91,91,.12);
+      color: rgba(255,255,255,.92);
+      border:1px solid rgba(255,91,91,.25);
+    }
+
+    .mono{
+      font-family: var(--mono);
+      font-size:12px;
+      line-height:1.5;
+      color: rgba(255,255,255,.88);
+      background: rgba(0,0,0,.25);
+      border: 1px solid var(--stroke);
+      padding:12px;
+      border-radius: 14px;
+      word-break: break-all;
+    }
+
+    .kpis{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+    }
+    .kpi{
+      border:1px solid var(--stroke);
+      background: rgba(0,0,0,.18);
+      border-radius: 16px;
+      padding:12px;
+    }
+    .kpi .t{
+      font-size:12px;
+      color:var(--muted);
+    }
+    .kpi .v{
+      margin-top:6px;
+      font-size:18px;
+      font-weight:800;
+      letter-spacing:.2px;
+    }
+
+    .note{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.55;
+    }
+    .footer{
+      max-width:1180px;
+      margin:0 auto;
+      padding:14px 16px 26px;
+      color:rgba(255,255,255,.45);
+      font-size:12px;
+    }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 12px;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.03);
+      color:rgba(255,255,255,.88);
+      font-size:12px;
+      font-weight:700;
+    }
+    .badge.ok{ border-color: rgba(43,226,166,.25); }
+    .badge.bad{ border-color: rgba(255,91,91,.25); }
+    .badge.warn{ border-color: rgba(255,204,102,.25); }
+
+    a{ color: rgba(76,194,255,.95); text-decoration:none; }
+    a:hover{ text-decoration:underline; }
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>DarriusAI · Inflection Hunter<span class="sub">Affiliate / 推荐人后台 · V1</span></h1>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <span id="subPill" class="pill" title="Subscription (from backend)">
+          <span id="subDot" class="dot"></span>
+          <span id="subText">Subscription: —</span>
+        </span>
+
+        <button class="btn secondary" id="btnBack">← Back to Dashboard</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <!-- Left: generator + instructions -->
+    <div class="card">
+      <div class="hd">
+        <h2>Affiliate / 推荐人入口（V1）</h2>
+        <p>
+          这里是“轻代理系统”第一版：生成推荐链接、展示基础规则与提示。<br>
+          返佣统计/打款/税务表单等，将在后端 Referral 模块落地后接入（不影响你现在的订阅/支付体系）。
+        </p>
+      </div>
+      <div class="bd">
+        <div class="grid2">
+          <div class="field">
+            <label>User ID（推荐人 ID）</label>
+            <input id="userId" class="input" placeholder="例如：PerryWu" />
+            <div class="hint">
+              V1 会自动尝试从 URL 参数、localStorage/sessionStorage、以及 opener 页面读取（如果可用）。你也可手动填。
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Commission（佣金比例）</label>
+            <select id="commission" class="select">
+              <option value="0.20">20%（默认）</option>
+              <option value="0.15">15%</option>
+              <option value="0.10">10%</option>
+            </select>
+            <div class="hint">
+              规则：续费继续返佣（持续返佣模式）。比例最终以代理协议/后台策略为准。
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Referral Code（dref_code）</label>
+            <input id="drefCode" class="input" placeholder="点击 Generate 自动生成" />
+            <div class="hint">
+              V1：本地生成并保存（localStorage）。后端 referral 落地后，会改为由服务器签发/校验。
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Landing Page（落地页）</label>
+            <select id="landing" class="select">
+              <option value="/">/（Dashboard 首页）</option>
+              <option value="/index.html">/index.html</option>
+              <option value="/subscription.html">/subscription.html（如果你有这页）</option>
+            </select>
+            <div class="hint">
+              推荐链接会把 dref_code 作为参数带到落地页：<span class="mono">?dref=XXX</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="btnrow">
+          <button class="btn" id="btnGenerate">Generate Link（生成推荐链接）</button>
+          <button class="btn secondary" id="btnCopy">Copy Link（复制链接）</button>
+          <button class="btn secondary" id="btnOpen">Open Link（打开链接）</button>
+          <button class="btn danger" id="btnReset">Reset（清空本地）</button>
+        </div>
+
+        <div style="margin-top:12px;">
+          <div class="field">
+            <label>Referral Link（推荐链接）</label>
+            <div id="refLink" class="mono">—</div>
+            <div class="hint">
+              提示：你主站 `index.html` 里已引入 <span class="mono">js/referral.client.js</span>，后续可让它自动识别 <span class="mono">dref</span> 并写入 Stripe checkout metadata。
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <span id="modeBadge" class="badge warn">
+            <span class="dot warn"></span>
+            Policy / 模式：V1 (Static)
+          </span>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--stroke); margin:16px 0;">
+
+        <div class="note">
+          <b>V1 说明（非常重要）：</b><br>
+          1) 你现在生成的 <span class="mono">dref_code</span> 只是 V1 的“前端可用占位”，用于跑通 UI/流程；<br>
+          2) 真正的返佣统计必须以后端为准（Stripe webhook + DB 记账 + 佣金结算）；<br>
+          3) 税务：美国通常需要对代理/推广者做合规收集（例如 W-9/W-8BEN 等），V1 仅做说明占位；<br>
+          4) 我们的原则不变：不碰你已定型的订阅/支付代码，只在外围增加模块与接口。
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: status + kpis + actions -->
+    <div class="card">
+      <div class="hd">
+        <h2>Account & Status</h2>
+        <p>读取你的订阅状态（来自后端 <span class="mono">/api/subscription/status</span>），并给出下一步动作建议。</p>
+      </div>
+      <div class="bd">
+        <div class="kpis">
+          <div class="kpi">
+            <div class="t">Subscription</div>
+            <div class="v" id="kpiSub">—</div>
+          </div>
+          <div class="kpi">
+            <div class="t">Access</div>
+            <div class="v" id="kpiAccess">—</div>
+          </div>
+          <div class="kpi">
+            <div class="t">Referrals (V1 placeholder)</div>
+            <div class="v" id="kpiRefs">0</div>
+          </div>
+          <div class="kpi">
+            <div class="t">Commission (V1 placeholder)</div>
+            <div class="v" id="kpiComm">$0</div>
+          </div>
+        </div>
+
+        <div class="btnrow" style="margin-top:12px;">
+          <button class="btn secondary" id="btnRefreshStatus">Refresh Status（刷新状态）</button>
+          <button class="btn secondary" id="btnAgreement">Open Agreement（代理协议占位）</button>
+        </div>
+
+        <div style="margin-top:14px;" class="note">
+          <b>后续 V2/V3 会做：</b><br>
+          • 代理协议签署（电子签）<br>
+          • 真实推荐码签发（后端）<br>
+          • 点击/注册/付费归因（后端）<br>
+          • 返佣明细与续费持续返佣<br>
+          • 税务合规表单与年度对账（1099/等）
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    © <span id="yy"></span> Darrius FinTech Inc. · Affiliate V1 (static) · This page is informational and for internal workflow validation.
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      // --------- Config (你现在的后端域名) ----------
+      const API_BASE = 'https://darrius-api.onrender.com';
+
+      // --------- Utilities ----------
+      const $ = (id) => document.getElementById(id);
+
+      function nowYear(){ return String(new Date().getFullYear()); }
+
+      function safeJSONParse(s){
+        try{ return JSON.parse(s); } catch(e){ return null; }
+      }
+
+      // 很轻的 hash：用于 V1 本地 dref_code（不作为安全用途）
+      function hash36(str){
+        let h = 2166136261;
+        for (let i=0; i<str.length; i++){
+          h ^= str.charCodeAt(i);
+          h += (h<<1) + (h<<4) + (h<<7) + (h<<8) + (h<<24);
+        }
+        // unsigned
+        h = (h >>> 0);
+        return h.toString(36);
+      }
+
+      function getParam(name){
+        const u = new URL(window.location.href);
+        return u.searchParams.get(name) || '';
+      }
+
+      function setPill(status, hasAccess){
+        const dot = $('subDot');
+        const text = $('subText');
+        const pill = $('subPill');
+
+        let s = (status || '').toLowerCase();
+        let ok = (s === 'active' || s === 'trialing');
+        if (ok) {
+          dot.className = 'dot ok';
+          pill.style.borderColor = 'rgba(43,226,166,.25)';
+        } else if (s === 'none' || s === 'expired' || s === 'canceled' || s === 'incomplete' || s === 'past_due'){
+          dot.className = 'dot bad';
+          pill.style.borderColor = 'rgba(255,91,91,.25)';
+        } else {
+          dot.className = 'dot warn';
+          pill.style.borderColor = 'rgba(255,204,102,.25)';
+        }
+
+        text.textContent = `Subscription: ${status || '—'} · Access: ${hasAccess ? 'ON' : 'OFF'}`;
+      }
+
+      function saveLocal(userId, drefCode){
+        try{
+          localStorage.setItem('darrius_user_id', userId || '');
+          localStorage.setItem('darrius_dref_code', drefCode || '');
+        }catch(e){}
+      }
+
+      function loadLocal(){
+        try{
+          return {
+            userId: localStorage.getItem('darrius_user_id') || '',
+            drefCode: localStorage.getItem('darrius_dref_code') || ''
+          };
+        }catch(e){
+          return { userId:'', drefCode:'' };
+        }
+      }
+
+      function buildReferralLink(dref, landing){
+        const base = window.location.origin;
+        const path = landing || '/';
+        const u = new URL(base + path);
+        if (dref) u.searchParams.set('dref', dref);
+        return u.toString();
+      }
+
+      async function fetchSubStatus(userId){
+        if (!userId) return { ok:false, status:'none', has_access:false };
+        const u = `${API_BASE}/api/subscription/status?user_id=${encodeURIComponent(userId)}`;
+        const res = await fetch(u, { method:'GET', credentials:'omit' });
+        return await res.json();
+      }
+
+      function applyStatusUI(payload){
+        const status = payload?.status || payload?.stripe_status || payload?.subscription_status || '—';
+        const hasAccess = !!(payload?.has_access || payload?.access || payload?.entitled);
+
+        $('kpiSub').textContent = status;
+        $('kpiAccess').textContent = hasAccess ? 'ON' : 'OFF';
+        setPill(status, hasAccess);
+
+        // V1: 仅展示模式占位
+        const badge = $('modeBadge');
+        if (hasAccess) {
+          badge.className = 'badge ok';
+          badge.innerHTML = '<span class="dot ok"></span> Policy / 模式：Eligible (V1)';
+        } else {
+          badge.className = 'badge warn';
+          badge.innerHTML = '<span class="dot warn"></span> Policy / 模式：Trial/None (V1)';
+        }
+      }
+
+      function tryAutoFillUserId(){
+        // 1) URL ?user_id=
+        const q = getParam('user_id');
+        if (q) return q;
+
+        // 2) localStorage/sessionStorage
+        const loc = loadLocal();
+        if (loc.userId) return loc.userId;
+
+        try{
+          const s1 = sessionStorage.getItem('darrius_user_id') || '';
+          if (s1) return s1;
+        }catch(e){}
+
+        // 3) opener window 读取（如果同源且有写）
+        try{
+          if (window.opener && window.opener.location && window.opener.location.origin === window.location.origin){
+            const v = window.opener.localStorage.getItem('darrius_user_id') || '';
+            if (v) return v;
+          }
+        }catch(e){}
+
+        return '';
+      }
+
+      function tryAutoFillDref(){
+        // 1) URL ?dref=
+        const q = getParam('dref');
+        if (q) return q;
+
+        // 2) localStorage
+        const loc = loadLocal();
+        if (loc.drefCode) return loc.drefCode;
+
+        return '';
+      }
+
+      // --------- init ----------
+      $('yy').textContent = nowYear();
+
+      $('btnBack').addEventListener('click', () => {
+        // 回到主页（你也可以改成 /index.html）
+        window.location.href = '/';
+      });
+
+      $('btnAgreement').addEventListener('click', () => {
+        alert('Agreement (placeholder)\n\nV2: 这里将接入代理协议签署（e-sign）与税务条款确认。');
+      });
+
+      const initUserId = tryAutoFillUserId();
+      const initDref = tryAutoFillDref();
+
+      $('userId').value = initUserId || '';
+      $('drefCode').value = initDref || '';
+
+      // 初始显示链接
+      const landingSel = $('landing');
+      const landing = landingSel.value;
+      const link0 = buildReferralLink($('drefCode').value.trim(), landing);
+      $('refLink').textContent = ($('drefCode').value.trim() ? link0 : '—');
+
+      // 初始拉一次订阅状态
+      (async () => {
+        try{
+          if (!initUserId){
+            applyStatusUI({ status:'none', has_access:false });
+            return;
+          }
+          const payload = await fetchSubStatus(initUserId);
+          applyStatusUI(payload);
+        }catch(e){
+          applyStatusUI({ status:'unknown', has_access:false });
+        }
+      })();
+
+      // --------- actions ----------
+      $('btnGenerate').addEventListener('click', async () => {
+        const userId = $('userId').value.trim();
+        if (!userId){
+          alert('Please input User ID first.');
+          return;
+        }
+
+        // V1: 本地生成
+        const code = 'DREF_' + hash36(userId + '::darrius::v1').toUpperCase();
+        $('drefCode').value = code;
+
+        const link = buildReferralLink(code, $('landing').value);
+        $('refLink').textContent = link;
+
+        saveLocal(userId, code);
+
+        // 同时刷新订阅状态
+        try{
+          const payload = await fetchSubStatus(userId);
+          applyStatusUI(payload);
+        }catch(e){}
+      });
+
+      $('btnCopy').addEventListener('click', async () => {
+        const text = $('refLink').textContent.trim();
+        if (!text || text === '—'){
+          alert('No referral link to copy. Click Generate Link first.');
+          return;
+        }
+        try{
+          await navigator.clipboard.writeText(text);
+          alert('Copied ✅');
+        }catch(e){
+          // fallback
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          alert('Copied ✅');
+        }
+      });
+
+      $('btnOpen').addEventListener('click', () => {
+        const text = $('refLink').textContent.trim();
+        if (!text || text === '—'){
+          alert('No referral link to open. Click Generate Link first.');
+          return;
+        }
+        window.open(text, '_blank', 'noopener');
+      });
+
+      $('btnReset').addEventListener('click', () => {
+        if (!confirm('Reset local affiliate fields? (localStorage)')) return;
+        try{
+          localStorage.removeItem('darrius_user_id');
+          localStorage.removeItem('darrius_dref_code');
+        }catch(e){}
+        $('userId').value = '';
+        $('drefCode').value = '';
+        $('refLink').textContent = '—';
+        applyStatusUI({ status:'none', has_access:false });
+      });
+
+      $('btnRefreshStatus').addEventListener('click', async () => {
+        const userId = $('userId').value.trim();
+        if (!userId){
+          alert('Please input User ID first.');
+          return;
+        }
+        try{
+          const payload = await fetchSubStatus(userId);
+          applyStatusUI(payload);
+        }catch(e){
+          alert('Failed to fetch status. Check backend connectivity.');
+        }
+      });
+
+      // 当用户改 landing / dref 时，实时刷新链接显示
+      $('landing').addEventListener('change', () => {
+        const dref = $('drefCode').value.trim();
+        $('refLink').textContent = dref ? buildReferralLink(dref, $('landing').value) : '—';
+      });
+
+      $('drefCode').addEventListener('input', () => {
+        const dref = $('drefCode').value.trim();
+        $('refLink').textContent = dref ? buildReferralLink(dref, $('landing').value) : '—';
+        // 同步保存
+        saveLocal($('userId').value.trim(), dref);
+      });
+
+      $('userId').addEventListener('input', () => {
+        saveLocal($('userId').value.trim(), $('drefCode').value.trim());
+      });
+
+    })();
+  </script>
+</body>
+</html>
