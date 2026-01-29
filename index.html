@@ -1002,5 +1002,39 @@
   <!-- 5) 启动/绑定按钮（保持原） -->
   <script src="js/boot.js?v=20260122"></script>
 
+  <script>
+(() => {
+  function ready(fn){
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  }
+
+  ready(() => {
+    const card = document.getElementById('affiliateCard');
+    if (!card) return;
+
+    // 让卡片可点击（视觉+交互）
+    card.style.cursor = 'pointer';
+    card.style.pointerEvents = 'auto';
+
+    // 避免重复绑定
+    if (card.__AFF_BOUND__) return;
+    card.__AFF_BOUND__ = true;
+
+    card.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // TODO: 这里换成你的真实入口
+      // 方案A：跳转到推荐人页面
+      window.location.href = '/affiliate.html';
+
+      // 方案B：如果你是弹窗/面板
+      // window.dispatchEvent(new CustomEvent('darrius:openAffiliate'));
+    }, true);
+  });
+})();
+</script>
+
 </body>
 </html>
