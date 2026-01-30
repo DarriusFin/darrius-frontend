@@ -1,76 +1,22 @@
 /* =========================================================
- * DarriusAI · Subscription Module (Stable - Deduped)
+ * DarriusAI · Subscription Module (FINAL - Industrial)
  * File: js/subscription.js
  * Purpose:
  *  - Load plans from backend: /api/plans (preferred)
  *  - Fallback: /billing/prices (legacy)
  *  - Fallback: local default plans
- *  - Create checkout: POST /billing/create-checkout-session   ✅ (NEW)
+ *  - Create checkout: POST /billing/create-checkout-session   ✅ (STANDARD)
  *  - Subscription status UX: GET /api/subscription/status?user_id=
  *  - (Optional) Customer portal: POST /api/billing/portal
  *
- * Notes:
+ * Guarantees:
  *  - NO secrets on frontend
  *  - Safe defaults & graceful fallbacks
- *  - Does NOT change payment/subscription business logic
+ *  - Does NOT change your Stripe products/prices
+ *  - Checkout call is unified for Weekly/Monthly/Quarterly/Yearly
  * ========================================================= */
 (function () {
   "use strict";
-  
-// ==============================
-// Unified Checkout Entry (ALL PLANS)
-// ==============================
-
-async function goCheckoutByKey(planKey) {
-  const ref_code = localStorage.getItem('darrius_ref_code') || '';
-
-  const PRICE_MAP = {
-    weekly:    'price_1SpJMmR84UMUVSTg0T7xfm6r', // $4.90
-    monthly:   'price_1SpbvRR84UMUVSTggbg0SFzi', // $19.90
-    quarterly: 'price_1SpbwYR84UMUVSTgMQpUrE42', // $49.90
-    yearly:    'price_1SpbpxR84UMUVSTgapaJDjMX', // $189
-  };
-
-  const price_id = PRICE_MAP[String(planKey || '').toLowerCase()];
-  if (!price_id) {
-    alert('Invalid plan: ' + planKey);
-    return;
-  }
-
-  let res, data;
-  try {
-    res = await fetch(
-      'https://darrius-api.onrender.com/billing/create-checkout-session',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          price_id,
-          ref_code,
-          ref_landing: window.location.pathname + window.location.search,
-          // user_id / email 可将来补
-        }),
-      }
-    );
-    data = await res.json();
-  } catch (e) {
-    alert('Network error');
-    return;
-  }
-
-  const url = data?.url || data?.checkout_url;
-  if (data?.ok && url) {
-    window.location.href = url;
-  } else {
-    alert('Checkout failed: ' + (data?.error || 'unknown'));
-  }
-}
-
-// ---- Optional wrappers (可读性更强) ----
-function goCheckoutWeekly()    { return goCheckoutByKey('weekly'); }
-function goCheckoutMonthly()   { return goCheckoutByKey('monthly'); }
-function goCheckoutQuarterly() { return goCheckoutByKey('quarterly'); }
-function goCheckoutYearly()    { return goCheckoutByKey('yearly'); }
 
   // -----------------------------
   // DOM helpers
@@ -163,6 +109,7 @@ function goCheckoutYearly()    { return goCheckoutByKey('yearly'); }
   // 1) window.DarriusReferral.get()
   // 2) localStorage 'dref_code'
   // 3) localStorage 'dref'
+  // 4) localStorage 'darrius_ref_code' (compat legacy)
   // -----------------------------
   function getDrefCode() {
     try {
@@ -182,18 +129,50 @@ function goCheckoutYearly()    { return goCheckoutByKey('yearly'); }
       if (v2) return v2;
     } catch (_) {}
 
+    try {
+      const v3 = String(localStorage.getItem("darrius_ref_code") || "").trim();
+      if (v3) return v3;
+    } catch (_) {}
+
     return "";
   }
 
+  function getRefLanding() {
+    try {
+      return (window.location.pathname + window.location.search).slice(0, 256);
+    } catch (_) {
+      return "";
+    }
+  }
+
   // -----------------------------
-  // Fallback plans (UI continuity only)
+  // Canonical Price Map (authoritative fallback)
+  // IMPORTANT: keep in sync with your Stripe Price IDs
+  // -----------------------------
+  const PRICE_MAP = {
+    weekly:    "price_1SpJMmR84UMUVSTg0T7xfm6r", // $4.90 / week
+    monthly:   "price_1SpbvRR84UMUVSTggbg0SFzi", // $19.90 / month
+    quarterly: "price_1SpbwYR84UMUVSTgMQpUrE42", // $49.90 / quarter
+    yearly:    "price_1SpbpxR84UMUVSTgapaJDjMX", // $189 / year
+  };
+
+  // UI-only trial badges (actual trial must be enforced by backend/Stripe)
+  const TRIAL_DAYS_BY_KEY = {
+    weekly: 0,
+    monthly: 1,
+    quarterly: 3,
+    yearly: 5,
+  };
+
+  // -----------------------------
+  // Local fallback plans (UI continuity only)
   // -----------------------------
   function getLocalFallbackPlans() {
     return [
-      { key: "weekly", label: "Weekly · $4.90", price_id: "price_weekly_PLACEHOLDER", trial_days: 0 },
-      { key: "monthly", label: "Monthly · $19.90", price_id: "price_monthly_PLACEHOLDER", trial_days: 1 },
-      { key: "quarterly", label: "Quarterly · $49.90", price_id: "price_quarterly_PLACEHOLDER", trial_days: 3 },
-      { key: "yearly", label: "Yearly · $189", price_id: "price_yearly_PLACEHOLDER", trial_days: 5 },
+      { key: "weekly", label: "Weekly · $4.90", price_id: PRICE_MAP.weekly, trial_days: TRIAL_DAYS_BY_KEY.weekly },
+      { key: "monthly", label: "Monthly · $19.90", price_id: PRICE_MAP.monthly, trial_days: TRIAL_DAYS_BY_KEY.monthly },
+      { key: "quarterly", label: "Quarterly · $49.90", price_id: PRICE_MAP.quarterly, trial_days: TRIAL_DAYS_BY_KEY.quarterly },
+      { key: "yearly", label: "Yearly · $189", price_id: PRICE_MAP.yearly, trial_days: TRIAL_DAYS_BY_KEY.yearly },
     ];
   }
 
@@ -260,10 +239,10 @@ function goCheckoutYearly()    { return goCheckoutByKey('yearly'); }
     }
 
     const candidates = [
-      { key: "weekly", label: "Weekly · $4.90", price_id: planToPrice.weekly || "", trial_days: priceToTrial[planToPrice.weekly] || 0 },
-      { key: "monthly", label: "Monthly · $19.90", price_id: planToPrice.monthly || "", trial_days: priceToTrial[planToPrice.monthly] || 1 },
-      { key: "quarterly", label: "Quarterly · $49.90", price_id: planToPrice.quarterly || "", trial_days: priceToTrial[planToPrice.quarterly] || 3 },
-      { key: "yearly", label: "Yearly · $189", price_id: planToPrice.yearly || "", trial_days: priceToTrial[planToPrice.yearly] || 5 },
+      { key: "weekly", label: "Weekly · $4.90", price_id: planToPrice.weekly || PRICE_MAP.weekly, trial_days: priceToTrial[planToPrice.weekly] ?? TRIAL_DAYS_BY_KEY.weekly },
+      { key: "monthly", label: "Monthly · $19.90", price_id: planToPrice.monthly || PRICE_MAP.monthly, trial_days: priceToTrial[planToPrice.monthly] ?? TRIAL_DAYS_BY_KEY.monthly },
+      { key: "quarterly", label: "Quarterly · $49.90", price_id: planToPrice.quarterly || PRICE_MAP.quarterly, trial_days: priceToTrial[planToPrice.quarterly] ?? TRIAL_DAYS_BY_KEY.quarterly },
+      { key: "yearly", label: "Yearly · $189", price_id: planToPrice.yearly || PRICE_MAP.yearly, trial_days: priceToTrial[planToPrice.yearly] ?? TRIAL_DAYS_BY_KEY.yearly },
     ].filter((x) => x.price_id);
 
     if (candidates.length === 0) throw new Error("No legacy price mapping");
@@ -292,6 +271,114 @@ function goCheckoutYearly()    { return goCheckoutByKey('yearly'); }
         setStatusBadge("API Degraded", false);
         if (isAdmin()) log(`❌ initPlans failed: ${e1.message} / ${e2.message} -> local fallback`);
       }
+    }
+  }
+
+  // =========================================================
+  // ✅ Unified Checkout Session Creator (TOP-LEVEL FUNCTION)
+  // MUST stay at top-level (NOT inside click handlers)
+  // =========================================================
+  async function createCheckoutSession(payload) {
+    // payload expected:
+    // { price_id, user_id, email?, dref_code?, ref_landing?, plan? }
+    const body = Object.assign({}, payload || {});
+
+    // Hard safety trims
+    if (body.user_id) body.user_id = String(body.user_id).trim();
+    if (body.email) body.email = String(body.email).trim();
+    if (body.price_id) body.price_id = String(body.price_id).trim();
+    if (body.dref_code) body.dref_code = String(body.dref_code).trim().slice(0, 64);
+    if (body.ref_landing) body.ref_landing = String(body.ref_landing).trim().slice(0, 256);
+    if (body.plan) body.plan = String(body.plan).trim().slice(0, 24);
+
+    // NOTE:
+    // - Trial / invoice behavior MUST be enforced by backend (billing/routes.py)
+    // - Frontend does NOT set trial logic to avoid drift/abuse
+    setStatusBadge("Creating checkout…", true);
+    if (isAdmin()) log(`➡️ [${nowISOTime()}] POST /billing/create-checkout-session ${JSON.stringify(body)}`);
+
+    const resp = await fetch(`${API_BASE}/billing/create-checkout-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const txt = await resp.text();
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 260)}`);
+
+    const data = safeJsonParse(txt) || { raw: txt };
+
+    // accept multiple schemas: {url} / {checkout_url}
+    const checkoutUrl = data.url || data.checkout_url || "";
+    if (!data.ok || !checkoutUrl) {
+      const msg = data.error || "checkout_failed";
+      throw new Error(msg);
+    }
+
+    setStatusBadge("Redirecting to Stripe…", true);
+    window.location.href = checkoutUrl;
+  }
+
+  // -----------------------------
+  // Subscribe (Unified Entry)
+  // - Reads user_id/email/plan selection
+  // - Adds dref_code/ref_landing
+  // - Calls createCheckoutSession()
+  // -----------------------------
+  async function subscribe() {
+    const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
+    const email = (($(IDS.email) && $(IDS.email).value) || "").trim();
+    const planKey = (($(IDS.planSelect) && $(IDS.planSelect).value) || "").trim();
+    const override = (($(IDS.priceOverride) && $(IDS.priceOverride).value) || "").trim();
+
+    if (!user_id) {
+      alert("User ID 必填（用于绑定 Stripe 订阅到你的系统用户）。");
+      $(IDS.userId)?.focus?.();
+      return;
+    }
+
+    // Determine price_id
+    let price_id = "";
+    let pickedPlanKey = planKey;
+
+    if (override) {
+      price_id = override;
+      pickedPlanKey = "override";
+    } else {
+      const p = PLANS.find((x) => x.key === planKey);
+      price_id = (p && p.price_id) ? p.price_id : "";
+      if (!price_id) {
+        // As final fallback, try canonical map
+        price_id = PRICE_MAP[String(planKey || "").toLowerCase()] || "";
+      }
+    }
+
+    if (!price_id) {
+      alert("未找到 price_id（计划价格 ID）。请刷新页面或联系管理员。");
+      return;
+    }
+
+    // Referral
+    const dref_code = getDrefCode();
+    const ref_landing = getRefLanding();
+
+    // Build payload
+    const payload = {
+      price_id,
+      user_id,
+      ref_landing,
+      // Keep plan key for debugging (backend may ignore)
+      plan: pickedPlanKey || "",
+    };
+    if (email) payload.email = email;
+    if (dref_code) payload.dref_code = dref_code;
+
+    try {
+      await createCheckoutSession(payload);
+    } catch (e) {
+      setStatusBadge("Network/API error", false);
+      if (isAdmin()) log(`❌ subscribe failed: ${e.message}`);
+      alert("订阅失败：网络错误/后端未联通或接口报错。\n\n错误：\n" + e.message);
     }
   }
 
@@ -390,8 +477,8 @@ function goCheckoutYearly()    { return goCheckoutByKey('yearly'); }
     }
 
     if (status === "checkout_created" || status === "incomplete" || status === "checkout_pending" || status === "processing") {
-      if (stillInPeriod) return { bucket: "ACTIVE", access_on: true, status, has_access: hasAccess, periodEnd, trialEnd, reason: "pending_but_in_period" };
-      return { bucket: "PENDING", access_on: true, status, has_access: hasAccess, periodEnd, trialEnd, reason: "pending_activation" };
+      // Keep as PENDING unless backend says has_access=true
+      return { bucket: "PENDING", access_on: false, status, has_access: hasAccess, periodEnd, trialEnd, reason: "pending_activation" };
     }
 
     if (status === "active" && hasAccess === false) {
@@ -532,71 +619,6 @@ function goCheckoutYearly()    { return goCheckoutByKey('yearly'); }
   }
 
   // -----------------------------
-  // Subscribe (Checkout Session)
-  // IMPORTANT CHANGE:
-  //   POST /billing/create-checkout-session   ✅
-  // Also:
-  //   include dref_code in payload            ✅
-  // -----------------------------
-  async function subscribe() {
-    const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
-    const email = (($(IDS.email) && $(IDS.email).value) || "").trim();
-    const planKey = (($(IDS.planSelect) && $(IDS.planSelect).value) || "").trim();
-    const override = (($(IDS.priceOverride) && $(IDS.priceOverride).value) || "").trim();
-
-    if (!user_id) {
-      alert("User ID 必填（用于绑定 Stripe 订阅到你的系统用户）。");
-      $(IDS.userId)?.focus?.();
-      return;
-    }
-
-    let payload = { user_id };
-    if (email) payload.email = email;
-
-    // plan/price selection logic kept
-    if (override) {
-      payload.price_id = override;
-    } else {
-      payload.plan = planKey;
-      const p = PLANS.find((x) => x.key === planKey);
-      if (p && p.price_id) payload.price_id = p.price_id;
-    }
-
-    // ✅ add referral
-    const dref = getDrefCode();
-    if (dref) payload.dref_code = dref;
-
-    try {
-      setStatusBadge("Creating checkout…", true);
-      if (isAdmin()) log(`➡️ [${nowISOTime()}] POST /billing/create-checkout-session ${JSON.stringify(payload)}`);
-
-      // ✅ NEW endpoint
-      const resp = await fetch(`${API_BASE}/billing/create-checkout-session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const txt = await resp.text();
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 260)}`);
-
-      const data = safeJsonParse(txt) || { raw: txt };
-
-      // accept multiple schemas: checkout_url / url
-      const checkoutUrl = data.checkout_url || data.url || "";
-      if (!checkoutUrl) throw new Error("No checkout url returned");
-
-      setStatusBadge("Redirecting to Stripe…", true);
-      if (isAdmin()) log(`✅ checkout url ok -> redirect (dref=${dref || "none"})`);
-      window.location.href = checkoutUrl;
-    } catch (e) {
-      setStatusBadge("Network/API error", false);
-      if (isAdmin()) log(`❌ subscribe failed: ${e.message}`);
-      alert("订阅失败：网络错误/后端未联通或接口报错。\n\n错误：\n" + e.message);
-    }
-  }
-
-  // -----------------------------
   // Optional: Customer Portal
   // -----------------------------
   async function openCustomerPortal() {
@@ -613,9 +635,9 @@ function goCheckoutYearly()    { return goCheckoutByKey('yearly'); }
     } catch (e) {
       alert(
         "订阅管理（Customer Portal）暂未开通或接口未部署。\n\n" +
-          "后端需要提供：POST /api/billing/portal -> 返回 {url}\n\n" +
-          "错误：\n" +
-          e.message
+        "后端需要提供：POST /api/billing/portal -> 返回 {url}\n\n" +
+        "错误：\n" +
+        e.message
       );
       if (isAdmin()) log(`❌ open portal: ${e.message}`);
     }
@@ -648,6 +670,14 @@ function goCheckoutYearly()    { return goCheckoutByKey('yearly'); }
     refreshSubscriptionStatus,
     subscribe,
     openCustomerPortal,
-    _debug: { API_BASE, getDrefCode },
+    // Expose for debugging (admin only usage)
+    _debug: {
+      API_BASE,
+      getDrefCode,
+      getRefLanding,
+      PRICE_MAP,
+      TRIAL_DAYS_BY_KEY,
+      createCheckoutSession,
+    },
   };
 })();
