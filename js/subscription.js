@@ -16,6 +16,33 @@
  * ========================================================= */
 (function () {
   "use strict";
+  
+async function goCheckoutWeekly() {
+  const ref_code = localStorage.getItem('darrius_ref_code') || '';
+  const price_id = 'price_1SpJMmR84UMUVSTg0T7xfm6r'; // Weekly
+
+  const res = await fetch(
+    'https://darrius-api.onrender.com/billing/create-checkout-session',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        price_id,
+        ref_code,
+        ref_landing: window.location.pathname + window.location.search,
+      }),
+    }
+  );
+
+  const j = await res.json().catch(() => ({}));
+  const url = j.url || j.checkout_url;
+
+  if (j.ok && url) {
+    window.location.href = url;
+  } else {
+    alert('Checkout failed: ' + (j.error || 'unknown'));
+  }
+}
 
   // -----------------------------
   // DOM helpers
