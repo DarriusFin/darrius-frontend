@@ -17,32 +17,60 @@
 (function () {
   "use strict";
   
-async function goCheckoutWeekly() {
+// ==============================
+// Unified Checkout Entry (ALL PLANS)
+// ==============================
+
+async function goCheckoutByKey(planKey) {
   const ref_code = localStorage.getItem('darrius_ref_code') || '';
-  const price_id = 'price_1SpJMmR84UMUVSTg0T7xfm6r'; // Weekly
 
-  const res = await fetch(
-    'https://darrius-api.onrender.com/billing/create-checkout-session',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        price_id,
-        ref_code,
-        ref_landing: window.location.pathname + window.location.search,
-      }),
-    }
-  );
+  const PRICE_MAP = {
+    weekly:    'price_1SpJMmR84UMUVSTg0T7xfm6r', // $4.90
+    monthly:   'price_1SpbvRR84UMUVSTggbg0SFzi', // $19.90
+    quarterly: 'price_1SpbwYR84UMUVSTgMQpUrE42', // $49.90
+    yearly:    'price_1SpbpxR84UMUVSTgapaJDjMX', // $189
+  };
 
-  const j = await res.json().catch(() => ({}));
-  const url = j.url || j.checkout_url;
+  const price_id = PRICE_MAP[String(planKey || '').toLowerCase()];
+  if (!price_id) {
+    alert('Invalid plan: ' + planKey);
+    return;
+  }
 
-  if (j.ok && url) {
+  let res, data;
+  try {
+    res = await fetch(
+      'https://darrius-api.onrender.com/billing/create-checkout-session',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          price_id,
+          ref_code,
+          ref_landing: window.location.pathname + window.location.search,
+          // user_id / email 可将来补
+        }),
+      }
+    );
+    data = await res.json();
+  } catch (e) {
+    alert('Network error');
+    return;
+  }
+
+  const url = data?.url || data?.checkout_url;
+  if (data?.ok && url) {
     window.location.href = url;
   } else {
-    alert('Checkout failed: ' + (j.error || 'unknown'));
+    alert('Checkout failed: ' + (data?.error || 'unknown'));
   }
 }
+
+// ---- Optional wrappers (可读性更强) ----
+function goCheckoutWeekly()    { return goCheckoutByKey('weekly'); }
+function goCheckoutMonthly()   { return goCheckoutByKey('monthly'); }
+function goCheckoutQuarterly() { return goCheckoutByKey('quarterly'); }
+function goCheckoutYearly()    { return goCheckoutByKey('yearly'); }
 
   // -----------------------------
   // DOM helpers
