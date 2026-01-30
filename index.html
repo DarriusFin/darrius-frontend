@@ -1056,5 +1056,46 @@
 })();
 </script>
 
+  <script>
+(async function darriusBindReferralAfterBootstrap(){
+  try {
+    // 没有 ref 就不用做
+    const ref = localStorage.getItem('darrius_ref_code');
+    if (!ref) return;
+
+    // 已绑定则不重复
+    if (localStorage.getItem('darrius_ref_bound') === '1') return;
+
+    // ✅ 关键：从你现有系统里“取 user_id”
+    // 我们做一个兼容扫描：谁先找到就用谁
+    const candidates = [
+      window.__USER_ID__,
+      window.__DARRIUS_USER_ID__,
+      window.currentUser && window.currentUser.id,
+      window.user && window.user.id,
+      (window.__DARRIUS_APP__ && window.__DARRIUS_APP__.user && window.__DARRIUS_APP__.user.id),
+    ];
+
+    const userId = candidates.find(v => typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v)));
+    if (!userId) {
+      // 没有用户态：就先不绑定（说明你当前版本可能是“无登录态/匿名门禁”）
+      return;
+    }
+
+    const res = await fetch('https://darrius-api.onrender.com/api/referral/bind', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': String(userId),
+      },
+      body: JSON.stringify({ ref_code: ref, user_id: userId })
+    });
+
+    const j = await res.json().catch(() => ({}));
+    if (j && j.ok) localStorage.setItem('darrius_ref_bound', '1');
+  } catch (e) {}
+})();
+</script>
+
 </body>
 </html>
