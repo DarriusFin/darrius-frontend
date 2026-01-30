@@ -1,6 +1,22 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+  <!-- ✅ Referral ref capture (must be earliest) -->
+  <script>
+(function () {
+  try {
+    const url = new URL(window.location.href);
+    const ref = (url.searchParams.get('ref') || '').trim();
+    if (ref) {
+      // 只存储，不校验，不影响主流程
+      localStorage.setItem('darrius_ref_code', ref);
+      localStorage.setItem('darrius_ref_seen_at', String(Date.now()));
+    }
+  } catch (e) {}
+})();
+</script>
+
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>DarriusAI · Inflection Hunter | AI 拐点决策系统</title>
