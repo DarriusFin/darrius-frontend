@@ -299,3 +299,15 @@
     <div class="grid">
       <!-- Left: Subscription Overview -->
      
+<style>
+/* ====== HOTFIX: prevent global CSS from hiding account page ====== */
+html, body { min-height: 100%; overflow: auto; }
+.wrap { position: relative; z-index: 1; }
+
+/* If other global styles override your layout, force it back */
+.grid { display: grid !important; }
+.card { display: block !important; visibility: visible !important; opacity: 1 !important; }
+
+/* In case some global stylesheet sets everything to transparent */
+.card, .topbar { color: rgba(255,255,255,.92) !important; }
+</style>
