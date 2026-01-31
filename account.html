@@ -24,6 +24,7 @@
     }
 
     *{box-sizing:border-box}
+    html, body { min-height: 100%; }
     body{
       margin:0;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
@@ -33,12 +34,13 @@
         radial-gradient(850px 520px at 40% 110%, rgba(255,255,255,.05), transparent 60%),
         var(--bg);
       color: var(--text);
+      overflow-x: hidden;
     }
 
     a{ color:inherit; text-decoration:none; }
     a:hover{ text-decoration:underline; }
 
-    .wrap{ max-width: 1280px; margin: 0 auto; padding: 22px 18px 40px; }
+    .wrap{ max-width: 1280px; margin: 0 auto; padding: 22px 18px 40px; position: relative; z-index: 1; }
     .topbar{
       display:flex; align-items:center; justify-content:space-between;
       gap:12px; padding: 14px 16px;
@@ -52,7 +54,7 @@
     .brand h1{ font-size:18px; margin:0; line-height:1.1; }
     .brand .sub{ color:var(--muted); font-size:12px; margin-top:2px; }
 
-    /* ====== Logo: use your provided image + optional lively gradient halo ====== */
+    /* ====== Logo block (image + halo + fallback) ====== */
     .logoWrap{
       width:38px; height:38px; border-radius: 12px;
       position: relative;
@@ -64,10 +66,15 @@
     }
     .logoHalo{
       position:absolute; inset:-40%;
-      background: conic-gradient(from 120deg, rgba(43,226,166,.95), rgba(76,194,255,.95), rgba(255,120,200,.65), rgba(43,226,166,.95));
+      background: conic-gradient(from 120deg,
+        rgba(43,226,166,.95),
+        rgba(76,194,255,.95),
+        rgba(255,120,200,.65),
+        rgba(43,226,166,.95));
       filter: blur(14px);
       opacity:.55;
       animation: haloSpin 7.5s linear infinite;
+      pointer-events:none;
     }
     @keyframes haloSpin{
       0%{ transform: rotate(0deg); }
@@ -76,8 +83,18 @@
     .logoImg{
       position:absolute; inset:0;
       width:100%; height:100%;
-      object-fit: cover; /* 如果你是正方形图标，这里最稳 */
+      object-fit: cover;
       transform: translateZ(0);
+      display:none; /* 由 JS 探测成功后再显示 */
+    }
+    .logoFallback{
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:900;
+      color: rgba(8,16,24,.92);
+      background: linear-gradient(135deg, rgba(43,226,166,.95), rgba(76,194,255,.95));
+      letter-spacing: .5px;
+      font-size: 14px;
     }
 
     .pills{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
@@ -137,6 +154,9 @@
       box-shadow: var(--shadow);
       backdrop-filter: blur(10px);
       padding: 16px;
+      display:block;
+      visibility:visible;
+      opacity:1;
     }
     .card h2{ margin:0; font-size:16px; letter-spacing:.2px; }
     .muted{ color: var(--muted); }
@@ -182,19 +202,6 @@
       outline:none;
     }
     input:focus{ border-color: rgba(76,194,255,.45); box-shadow: 0 0 0 4px rgba(76,194,255,.12); }
-
-    /* required marker */
-    .req{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      font-size:12px;
-      color: rgba(255,255,255,.75);
-    }
-    .req b{
-      color: rgba(255,95,109,.95);
-      font-weight: 900;
-    }
 
     .plans{
       display:grid;
@@ -260,6 +267,15 @@
     }
 
     .zh{ font-size:12px; color: var(--muted2); margin-top: 4px; }
+
+    /* small helper for inline card inside card */
+    .cardInner{
+      padding:14px;
+      background:rgba(255,255,255,.035);
+      box-shadow:none;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius: 16px;
+    }
   </style>
 </head>
 
@@ -270,8 +286,8 @@
       <div class="brand">
         <div class="logoWrap" aria-label="DarriusAI logo">
           <div class="logoHalo" aria-hidden="true"></div>
-          <!-- TODO: change src to your real logo path -->
-          <img class="logoImg" src="/assets/darrius-logo.png" alt="darrius.ai logo" />
+          <div class="logoFallback" aria-hidden="true">d</div>
+          <img id="logoImg" class="logoImg" alt="darrius.ai logo" />
         </div>
         <div>
           <h1>DarriusAI · Inflection Hunter</h1>
@@ -286,7 +302,6 @@
         </div>
         <div class="pill">
           <span id="dotAccess" class="dot"></span>
-          <!-- ✅ Access badge must be rendered by data_label (no MFV) -->
           <span id="txtAccess">Access: —</span>
         </div>
 
@@ -298,16 +313,322 @@
 
     <div class="grid">
       <!-- Left: Subscription Overview -->
-     
-<style>
-/* ====== HOTFIX: prevent global CSS from hiding account page ====== */
-html, body { min-height: 100%; overflow: auto; }
-.wrap { position: relative; z-index: 1; }
+      <div class="card">
+        <div class="split">
+          <div>
+            <h2>Subscription Overview</h2>
+            <div class="zh">订阅概览</div>
+          </div>
+          <div id="badgeStatus" class="badge warn">STATUS: LOADING</div>
+        </div>
 
-/* If other global styles override your layout, force it back */
-.grid { display: grid !important; }
-.card { display: block !important; visibility: visible !important; opacity: 1 !important; }
+        <div class="muted" style="margin-top:10px; font-size:13px; line-height:1.45">
+          This page manages your subscription. Your dashboard access and data mode are enforced by backend policy.
+          <div class="zh">本页用于订阅管理；仪表盘访问权限与数据模式由后端策略控制。</div>
+        </div>
 
-/* In case some global stylesheet sets everything to transparent */
-.card, .topbar { color: rgba(255,255,255,.92) !important; }
-</style>
+        <div class="hr"></div>
+
+        <!-- Identity -->
+        <div class="cardInner">
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div style="flex:1;min-width:240px">
+              <div style="font-weight:800">
+                User ID <span class="muted2">（用户ID）</span>
+              </div>
+              <input id="uidInput" placeholder="e.g. user_123 / 例如：user_123" />
+              <div class="muted2" style="margin-top:6px;font-size:12px">
+                Used to fetch status and open billing portal. <span class="muted2">（用于获取订阅状态并打开账单管理）</span>
+              </div>
+            </div>
+
+            <div style="flex:1;min-width:240px">
+              <div style="font-weight:800">
+                Email <span class="muted2">（邮箱，可选）</span>
+              </div>
+              <input id="emailInput" placeholder="name@example.com / 邮箱（可选）" />
+              <div class="muted2" style="margin-top:6px;font-size:12px">
+                Optional; helps match customer_email in checkout. <span class="muted2">（可选；有助于Checkout匹配邮箱）</span>
+              </div>
+            </div>
+
+            <button id="btnSaveIdentity" class="btn primary" type="button">
+              Save <span class="muted2">（保存）</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="kv">
+          <div class="k">User <span class="muted2">（用户）</span></div>
+          <div class="v" id="vUser">—</div>
+
+          <div class="k">Current Plan <span class="muted2">（当前套餐）</span></div>
+          <div class="v" id="vPlan">—</div>
+
+          <div class="k">Subscription Status <span class="muted2">（订阅状态）</span></div>
+          <div class="v" id="vSubStatus">—</div>
+
+          <div class="k">Renews / Ends <span class="muted2">（续订/到期）</span></div>
+          <div class="v" id="vPeriodEnd">—</div>
+
+          <div class="k">Data Source Mode <span class="muted2">（数据模式）</span></div>
+          <div class="v" id="vDataMode">—</div>
+        </div>
+
+        <div class="muted2" style="margin-top:12px; font-size:12px; line-height:1.5">
+          Note: After cancellation, access normally remains active until the end of the current billing period (policy-dependent).
+          <div class="zh">说明：取消订阅后，通常会在当前计费周期结束前继续可用（以策略为准）。</div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+          <button id="btnPortal" class="btn primary" type="button">
+            Open Billing Portal <span class="muted2">（账单管理）</span>
+          </button>
+
+          <button id="btnGoPlans" class="btn primary" type="button">
+            Choose / Change Plan <span class="muted2">（选择/更换套餐）</span>
+          </button>
+        </div>
+
+        <div class="hr"></div>
+
+        <!-- Plans -->
+        <div>
+          <div style="font-weight:900; font-size:14px">
+            Plans <span class="muted2">（套餐）</span>
+          </div>
+          <div class="muted2" style="margin-top:6px; font-size:12px; line-height:1.5">
+            Buttons route through your existing checkout flow. This page does not change your data-provider entitlements.
+            <div class="zh">按钮将跳转到你现有的订阅支付流程；本页不改变第三方数据源授权。</div>
+          </div>
+
+          <div id="plansWrap" class="plans">
+            <div class="plan" id="plan_weekly">
+              <div class="row">
+                <div>
+                  <div class="name">Weekly</div>
+                  <div class="zh">周付</div>
+                </div>
+                <div class="price" id="price_weekly">$4.90</div>
+              </div>
+              <div class="desc">
+                Short-term access. Ideal for trials and quick evaluations.
+                <div class="zh">短周期体验，适合试用与快速评估。</div>
+              </div>
+              <div class="actions">
+                <button class="btn primary" data-action="checkout" data-plan="weekly" type="button">
+                  Subscribe <span class="muted2">（订阅）</span>
+                </button>
+                <button class="btn" data-action="learn" data-plan="weekly" type="button">
+                  Details <span class="muted2">（详情）</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="plan" id="plan_monthly">
+              <div class="row">
+                <div>
+                  <div class="name">Monthly</div>
+                  <div class="zh">月付</div>
+                </div>
+                <div class="price" id="price_monthly">$19.90</div>
+              </div>
+              <div class="desc">
+                Most popular. Balanced commitment and flexibility.
+                <div class="zh">最受欢迎：兼顾灵活与成本。</div>
+                <div class="trial">✅ 1-day free trial <span class="muted2">（1天免费试用）</span></div>
+              </div>
+              <div class="actions">
+                <button class="btn primary" data-action="checkout" data-plan="monthly" type="button">
+                  Subscribe <span class="muted2">（订阅）</span>
+                </button>
+                <button class="btn" data-action="learn" data-plan="monthly" type="button">
+                  Details <span class="muted2">（详情）</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="plan" id="plan_quarterly">
+              <div class="row">
+                <div>
+                  <div class="name">Quarterly</div>
+                  <div class="zh">季付</div>
+                </div>
+                <div class="price" id="price_quarterly">$49.90</div>
+              </div>
+              <div class="desc">
+                Better value. Recommended for active users.
+                <div class="zh">性价比更高，适合活跃用户。</div>
+                <div class="trial">✅ 3-day free trial <span class="muted2">（3天免费试用）</span></div>
+              </div>
+              <div class="actions">
+                <button class="btn primary" data-action="checkout" data-plan="quarterly" type="button">
+                  Subscribe <span class="muted2">（订阅）</span>
+                </button>
+                <button class="btn" data-action="learn" data-plan="quarterly" type="button">
+                  Details <span class="muted2">（详情）</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="plan" id="plan_yearly">
+              <div class="row">
+                <div>
+                  <div class="name">Yearly</div>
+                  <div class="zh">年付</div>
+                </div>
+                <div class="price" id="price_yearly">$189.00</div>
+              </div>
+              <div class="desc">
+                Best value. For professionals and long-term users.
+                <div class="zh">最省钱：适合专业用户与长期使用。</div>
+                <div class="trial">✅ 5-day free trial <span class="muted2">（5天免费试用）</span></div>
+              </div>
+              <div class="actions">
+                <button class="btn primary" data-action="checkout" data-plan="yearly" type="button">
+                  Subscribe <span class="muted2">（订阅）</span>
+                </button>
+                <button class="btn" data-action="learn" data-plan="yearly" type="button">
+                  Details <span class="muted2">（详情）</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="muted2" style="font-size:12px; line-height:1.5">
+          Compliance note (display-only): Delayed mode is shown when required by your data provider terms.
+          <div class="zh">合规提示（仅展示）：延迟模式用于满足数据源条款要求。</div>
+        </div>
+      </div>
+
+      <!-- Right: Control Center -->
+      <div class="card">
+        <div class="split">
+          <div>
+            <h2>Control Center</h2>
+            <div class="zh">控制台</div>
+          </div>
+          <div class="badge" style="opacity:.85">SYSTEM <span class="muted2">（系统）</span></div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div style="font-weight:900; font-size:14px">
+          Quick Actions <span class="muted2">（快捷操作）</span>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap">
+          <button id="btnRefresh" class="btn" type="button">
+            Refresh Status <span class="muted2">（刷新状态）</span>
+          </button>
+          <a class="btn" href="/index.html">
+            Open Dashboard <span class="muted2">（打开主界面）</span>
+          </a>
+        </div>
+
+        <div class="hr"></div>
+
+        <div style="font-weight:900; font-size:14px">
+          Support <span class="muted2">（支持）</span>
+        </div>
+        <div class="muted2" style="margin-top:8px; font-size:12px; line-height:1.55">
+          For billing questions, please use the Billing Portal first (invoices, payment methods, cancellations).
+          <div class="zh">账单相关请优先使用“账单管理”（发票、付款方式、取消订阅等）。</div>
+          For technical support: <a href="/index.html#support">Support</a> <span class="muted2">（技术支持）</span>
+        </div>
+
+        <div class="hr"></div>
+
+        <div style="font-weight:900; font-size:14px">
+          System <span class="muted2">（系统信息）</span>
+        </div>
+        <div class="kv" style="margin-top:10px">
+          <div class="k">Build <span class="muted2">（版本）</span></div>
+          <div class="v" id="vBuild">—</div>
+
+          <div class="k">Backend <span class="muted2">（后端）</span></div>
+          <div class="v" id="vBackend">Connected</div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div>© 2026 Darrius FinTech Inc. All Rights Reserved.</div>
+      <div>
+        <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ✅ API_BASE 兜底（account.page.js 会读取 window.__API_BASE__） -->
+  <script>
+    window.__API_BASE__ = (window.__API_BASE__ && String(window.__API_BASE__).trim())
+      || "https://darrius-api.onrender.com";
+  </script>
+
+  <!-- ✅ Logo path fallback: try multiple common locations -->
+  <script>
+    (function () {
+      const img = document.getElementById('logoImg');
+      if (!img) return;
+
+      const candidates = [
+        '/assets/darrius-logo.png',
+        '/assets/logo.png',
+        '/assets/icon.png',
+        '/favicon.png',
+        '/favicon.ico'
+      ];
+
+      let idx = 0;
+
+      function tryNext() {
+        if (idx >= candidates.length) return; // fallback stays
+        const src = candidates[idx++];
+        img.onload = () => {
+          img.style.display = 'block';
+          const fb = img.parentElement && img.parentElement.querySelector('.logoFallback');
+          if (fb) fb.style.display = 'none';
+        };
+        img.onerror = tryNext;
+        img.src = src;
+      }
+
+      tryNext();
+    })();
+  </script>
+
+  <!-- ✅ Debug panel: always show real JS errors (no Console needed) -->
+  <script>
+  (function(){
+    function p(msg){
+      var box = document.getElementById('__dbg__');
+      if(!box){
+        box = document.createElement('pre');
+        box.id='__dbg__';
+        box.style.cssText='position:fixed;right:12px;bottom:12px;max-width:46vw;max-height:40vh;overflow:auto;z-index:99999;padding:10px 12px;border-radius:12px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);color:#fff;font:12px/1.4 ui-monospace,Menlo,Consolas;backdrop-filter:blur(10px)';
+        document.body.appendChild(box);
+      }
+      box.textContent += msg + "\n";
+    }
+    window.addEventListener('error', function(e){
+      p('JS ERROR: ' + (e.message||'') + ' @' + (e.filename||'') + ':' + (e.lineno||0));
+    });
+    window.addEventListener('unhandledrejection', function(e){
+      p('PROMISE REJECTION: ' + (e.reason && (e.reason.message||e.reason)));
+    });
+    p('DBG: page loaded, readyState=' + document.readyState);
+    p('DBG: .grid exists? ' + !!document.querySelector('.grid'));
+    p('DBG: API_BASE=' + (window.__API_BASE__||''));
+  })();
+  </script>
+
+  <!-- IMPORTANT: keep this last -->
+  <script src="/js/account.page.js"></script>
+</body>
+</html>
