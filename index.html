@@ -1,21 +1,19 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-
   <!-- ✅ Referral ref capture (must be earliest) -->
   <script>
-(function () {
-  try {
-    const url = new URL(window.location.href);
-    const ref = (url.searchParams.get('ref') || '').trim();
-    if (ref) {
-      // 只存储，不校验，不影响主流程
-      localStorage.setItem('darrius_ref_code', ref);
-      localStorage.setItem('darrius_ref_seen_at', String(Date.now()));
-    }
-  } catch (e) {}
-})();
-</script>
+  (function () {
+    try {
+      const url = new URL(window.location.href);
+      const ref = (url.searchParams.get('ref') || '').trim();
+      if (ref) {
+        localStorage.setItem('darrius_ref_code', ref);
+        localStorage.setItem('darrius_ref_seen_at', String(Date.now()));
+      }
+    } catch (e) {}
+  })();
+  </script>
 
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -96,24 +94,20 @@
       min-width:420px;
     }
 
-    /* ===============================
-       ✅ 顶栏左上角 LOGO（Dashboard）
-       你页面实际结构是：<div id="brand"><div class="logo"></div>...
-       所以必须覆盖 #brand .logo（不是 .brand .logo）
-       =============================== */
+    /* ✅ 原来的 .logo 是一个动画渐变容器。现在改为真正的 Logo 图片 + 放大 */
     #brand .logo{
-      width:46px;height:46px;border-radius:16px;
-      background: url('/assets/logo.png') center/cover no-repeat !important;
-      border:1px solid rgba(255,255,255,.10);
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      background: url('/assets/logo.png') center/cover no-repeat;
+      border:1px solid rgba(255,255,255,.12);
       box-shadow: 0 14px 30px rgba(0,0,0,.30);
       position:relative;
       overflow:hidden;
       flex:0 0 auto;
     }
-    /* 用图片后关闭你原来的旋转光效层，避免叠加影响视觉 */
+    /* ✅ 禁用旧的旋转伪元素，避免盖住图片 */
     #brand .logo::after{ display:none !important; }
-
-    @keyframes spin{ to{ transform: rotate(360deg);} }
 
     #brandText{ line-height:1.08; }
     #brandLine1{
@@ -305,6 +299,8 @@
       flex:0 0 auto;
       overflow:hidden;
     }
+    @keyframes spin{ to{ transform: rotate(360deg);} }
+
     .gauge::before{
       content:"";
       position:absolute; inset:-38%;
@@ -389,7 +385,6 @@
     /* ===== Center Chart ===== */
     #chartPanel .panelBody{ padding:0; }
 
-    /* ✅ 关键修复：让主图占满剩余高度，Mutant 固定在中间面板最底部 */
     #chartPanel .panelBody{
       display:flex;
       flex-direction:column;
@@ -482,19 +477,6 @@
       border: 1px solid rgba(255,255,255,0.06);
       overflow:hidden;
       position:relative;
-    }
-    #mutantTitle{
-      position:absolute;
-      left:10px; top:8px;
-      font-size:12px;
-      letter-spacing:.2px;
-      color: rgba(234,240,247,.72);
-      z-index:2;
-      padding:2px 8px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.18);
-      pointer-events:none;
     }
     #mutantTitle{ display:none !important; }
 
@@ -595,7 +577,7 @@
 
     .hidden{ display:none !important; }
 
-    /* ✅ 你要求：右侧 Manage 按钮背景和 Start 一样（纯 UI，不动订阅逻辑） */
+    /* ✅ 你要求：右侧 Manage 按钮背景和 Start 一样 */
     #manageBtn{
       border: 0 !important;
       color:#081119 !important;
@@ -604,9 +586,19 @@
       background: var(--gradBrand) !important;
       box-shadow: var(--shadow2) !important;
     }
-    #manageBtn:hover{ filter: brightness(1.04); }
-    #manageBtn:active{ transform: translateY(1px); }
-    #manageBtn:disabled{ opacity:.55; cursor:not-allowed; }
+
+    /* ===== Subscription Access Badge ===== */
+    .accessBadge {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .3px;
+    }
+    .accessBadge.ACTIVE { background: rgba(46, 204, 113, .15); color: #2ecc71; }
+    .accessBadge.TRIAL  { background: rgba(241, 196, 15, .18); color: #f1c40f; }
+    .accessBadge.EXPIRED{ background: rgba(231, 76, 60, .18); color: #e74c3c; }
+    .accessBadge.UNKNOWN{ background: rgba(149, 165, 166, .18); color: #95a5a6; }
 
     @media (max-width: 1180px){
       body{ overflow:auto; }
@@ -620,40 +612,14 @@
       #tfQuick{ justify-content:flex-start; }
       #chartPanel .panelBody{ overflow:auto; }
     }
-
-    /* ===== Subscription Access Badge ===== */
-    .accessBadge {
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: .3px;
-    }
-    .accessBadge.ACTIVE {
-      background: rgba(46, 204, 113, .15);
-      color: #2ecc71;
-    }
-    .accessBadge.TRIAL {
-      background: rgba(241, 196, 15, .18);
-      color: #f1c40f;
-    }
-    .accessBadge.EXPIRED {
-      background: rgba(231, 76, 60, .18);
-      color: #e74c3c;
-    }
-    .accessBadge.UNKNOWN {
-      background: rgba(149, 165, 166, .18);
-      color: #95a5a6;
-    }
   </style>
-
 </head>
 
 <body>
   <!-- Header -->
   <div id="topbar">
     <div id="brand">
-      <div class="logo"></div>
+      <div class="logo" aria-label="darrius.ai logo"></div>
       <div id="brandText">
         <div id="brandLine1">
           <span class="accent">DarriusAI</span> · Inflection Hunter
@@ -666,7 +632,6 @@
     </div>
 
     <div id="topRight">
-      <!-- chart.core.js 会更新这里的内容（数据源强提示/Ready/URL等） -->
       <div id="statusBadge" class="pill">
         <span class="dot"></span>
         <span id="statusText">Ready · 前端就绪</span>
@@ -698,7 +663,6 @@
                 <span>Neutral</span><b id="neuPct">—</b>
                 <span>Net Inflow</span><b id="netInflow" style="color:var(--brand1)">—</b>
               </div>
-
               <div class="small" style="margin-top:10px">
                 <b>Note:</b> Derived from the main chart only.<br/>
                 <b>说明：</b>完全由主图派生。
@@ -741,7 +705,6 @@
           </div>
         </div>
 
-        <!-- Compliance Disclaimer（保留） -->
         <div id="leftDisclaimer">
           <div>
             <b>Disclaimer:</b> Informational use only. Not investment advice. No offer or solicitation to buy/sell any security, futures, FX, crypto, or other financial instrument.
@@ -789,7 +752,7 @@
 
         <div id="mutantPanel">
           <div id="mutantTitle">Darrius Mutant</div>
-          <!-- Darrius Mutant canvas rendered here by js/darrius.mutant.js -->
+          <!-- canvas by js/darrius.mutant.js -->
         </div>
       </div>
     </div>
@@ -801,14 +764,13 @@
       </div>
 
       <div class="panelBody">
-        <!-- Data Source -->
         <div class="card">
           <div class="cardTitle"><b>Data Source · 数据源</b><span class="small">预留接口</span></div>
           <div class="field">
             <div class="label"><span>Source · 来源</span><span class="small">第三方实盘</span></div>
             <select id="dataSource">
               <option value="demo">Demo (Local)</option>
-              <option value="provider">3rd-Party Provider (Market Delayed)</option>
+              <option value="provider">3rd-Party Provider (Delayed)</option>
             </select>
           </div>
 
@@ -818,7 +780,6 @@
           </div>
         </div>
 
-        <!-- Market Control -->
         <div class="card">
           <div class="cardTitle"><b>Market · 品种与周期</b><span class="small">Chart</span></div>
 
@@ -860,7 +821,6 @@
           </div>
         </div>
 
-        <!-- Subscription（保持原结构/ID，不动逻辑） -->
         <div class="card">
           <div class="cardTitle">
             <b>Subscription · 订阅选择</b>
@@ -874,7 +834,7 @@
 
           <div class="field">
             <div class="label"><span><b>User ID</b> · 用户ID</span><span class="small">（必填）</span></div>
-            <input id="userId" placeholder="例如：user_123 / 你的系统用户ID"/>
+            <input id="userId" placeholder="例如：darrius888 / 你的系统用户ID"/>
           </div>
 
           <div class="field">
@@ -890,18 +850,17 @@
           </div>
 
           <div class="row2" style="margin-top:0">
-            <button class="btn" id="subscribeBtn" disabled>Order Start ·  订单开通</button>
+            <button class="btn" id="subscribeBtn" disabled>Order Start · 订单开通</button>
             <button class="btnGhost" id="manageBtn" disabled>Order Manage · 订单管理</button>
           </div>
 
           <div class="note" style="margin-top:10px">
             <b>Subscription Status：</b>
             <span id="subStatusText" style="margin-left:6px;color:rgba(234,240,247,.88)">Unknown</span>
-            <span id="accessBadge" class="accessBadge hidden" style="margin-left:8px;">UNKNOWN</span>
+            <span id="accessBadge" class="accessBadge UNKNOWN hidden" style="margin-left:8px;">UNKNOWN</span>
           </div>
         </div>
 
-        <!-- Share & Export -->
         <div class="card">
           <div class="cardTitle"><b>Share & Export · 分享与导出</b><span class="small">Utilities</span></div>
           <button class="btnGhost" id="copyLinkBtn">Copy Share Link · 复制分享链接</button>
@@ -920,15 +879,14 @@
        GLOBALS (must be before external JS if they read API_BASE on load)
        ========================= -->
   <script>
-    // ✅ 兼容所有旧代码读取方式（不影响订阅逻辑，只避免 UNKNOWN）
+    // ✅ keep both names to be compatible with different JS modules
     window.API_BASE = "https://darrius-api.onrender.com";
-    window.__API_BASE__ = window.API_BASE;
-    window._API_BASE_ = window.API_BASE;
+    window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
 
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
   </script>
 
-  <!-- ✅ Step A：ID 重复/误绑自检（不改任何业务逻辑，只输出诊断） -->
+  <!-- ✅ ID duplicate / binding diagnosis (safe) -->
   <script>
     (function(){
       function findDuplicateIds(){
@@ -942,13 +900,13 @@
         }
         const dupes = [];
         for (const [id, arr] of map.entries()){
-          if (arr.length > 1) dupes.push({ id, count: arr.length, nodes: arr });
+          if (arr.length > 1) dupes.push({ id, count: arr.length });
         }
         return dupes;
       }
 
       const dupes = findDuplicateIds();
-      window.__DARRIUS_ID_DUPES__ = dupes.map(d => ({ id: d.id, count: d.count }));
+      window.__DARRIUS_ID_DUPES__ = dupes;
 
       window.sameAsEntry = function(){
         const e  = document.getElementById("riskEntry");
@@ -956,13 +914,13 @@
         const t  = document.getElementById("riskTargets");
         const c  = document.getElementById("riskConf");
         const wr = document.getElementById("riskWR");
-        if (!e || !s || !t || !c || !wr) return { ok:false, reason:"missing ids", ids:{e:!!e,s:!!s,t:!!t,c:!!c,wr:!!wr} };
+        if (!e || !s || !t || !c || !wr) return { ok:false, reason:"missing ids" };
         const set = new Set([e, s, t, c, wr]);
         return { ok:true, same: (set.size !== 5), size:set.size };
       };
 
       if (dupes.length){
-        console.warn("[ID] Duplicate IDs found:", dupes.map(d => d.id));
+        console.warn("[ID] Duplicate IDs found:", dupes);
       } else {
         console.log("[ID] No duplicate IDs.");
       }
@@ -975,84 +933,78 @@
        不动订阅/支付：subscription.js + boot.js 保持原
        ========================= -->
 
-  <!-- 1) 主图系统（冻结，不动） -->
   <script src="js/chart.core.js?v=20260122"></script>
-
-  <!-- 2) Market Pulse UI（你已替换为 STABLE COMPAT v2026.01.22） -->
   <script src="js/market.pulse.js?v=20260122"></script>
-
-  <!-- 3) Mutant（单独文件） -->
   <script src="js/darrius.mutant.js?v=20260122"></script>
-
-  <!-- 4) 订阅系统（保持原） -->
   <script src="js/subscription.js?v=20260122"></script>
 
-  <!-- ✅ Referral scripts（保留一次即可，避免重复绑定） -->
-  <script src="js/referral.client.js"></script>
+  <!-- ✅ referral client only ONCE -->
+  <script src="js/referral.client.js?v=20260129"></script>
   <script src="js/referral.checkout.js?v=20260129"></script>
 
-  <!-- 5) 启动/绑定按钮（保持原） -->
   <script src="js/boot.js?v=20260122"></script>
 
+  <!-- ✅ Affiliate card click -->
   <script>
-(() => {
-  function ready(fn){
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
-    else fn();
-  }
+  (() => {
+    function ready(fn){
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+      else fn();
+    }
 
-  ready(() => {
-    const card = document.getElementById('affiliateCard');
-    if (!card) return;
+    ready(() => {
+      const card = document.getElementById('affiliateCard');
+      if (!card) return;
 
-    card.style.cursor = 'pointer';
-    card.style.pointerEvents = 'auto';
+      card.style.cursor = 'pointer';
+      card.style.pointerEvents = 'auto';
 
-    if (card.__AFF_BOUND__) return;
-    card.__AFF_BOUND__ = true;
+      if (card.__AFF_BOUND__) return;
+      card.__AFF_BOUND__ = true;
 
-    card.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      window.location.href = '/affiliate.html';
-    }, true);
-  });
-})();
-</script>
-
-  <script>
-(async function darriusBindReferralAfterBootstrap(){
-  try {
-    const ref = localStorage.getItem('darrius_ref_code');
-    if (!ref) return;
-
-    if (localStorage.getItem('darrius_ref_bound') === '1') return;
-
-    const candidates = [
-      window.__USER_ID__,
-      window.__DARRIUS_USER_ID__,
-      window.currentUser && window.currentUser.id,
-      window.user && window.user.id,
-      (window.__DARRIUS_APP__ && window.__DARRIUS_APP__.user && window.__DARRIUS_APP__.user.id),
-    ];
-
-    const userId = candidates.find(v => typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v)));
-    if (!userId) return;
-
-    const res = await fetch('https://darrius-api.onrender.com/api/referral/bind', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': String(userId),
-      },
-      body: JSON.stringify({ ref_code: ref, user_id: userId })
+      card.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = '/affiliate.html';
+      }, true);
     });
+  })();
+  </script>
 
-    const j = await res.json().catch(() => ({}));
-    if (j && j.ok) localStorage.setItem('darrius_ref_bound', '1');
-  } catch (e) {}
-})();
-</script>
+  <!-- ✅ Bind referral after bootstrap (safe, best-effort) -->
+  <script>
+  (async function darriusBindReferralAfterBootstrap(){
+    try {
+      const ref = localStorage.getItem('darrius_ref_code');
+      if (!ref) return;
+      if (localStorage.getItem('darrius_ref_bound') === '1') return;
+
+      const candidates = [
+        window.__USER_ID__,
+        window.__DARRIUS_USER_ID__,
+        window.currentUser && window.currentUser.id,
+        window.user && window.user.id,
+        (window.__DARRIUS_APP__ && window.__DARRIUS_APP__.user && window.__DARRIUS_APP__.user.id),
+      ];
+
+      const userId = candidates.find(v => typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v)));
+      if (!userId) return;
+
+      const base = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,'');
+      const res = await fetch(base + '/api/referral/bind', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': String(userId),
+        },
+        body: JSON.stringify({ ref_code: ref, user_id: userId })
+      });
+
+      const j = await res.json().catch(() => ({}));
+      if (j && j.ok) localStorage.setItem('darrius_ref_bound', '1');
+    } catch (e) {}
+  })();
+  </script>
 
 </body>
 </html>
