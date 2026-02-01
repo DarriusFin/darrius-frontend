@@ -18,15 +18,14 @@
       --danger:#FF5A5A;
       --shadow: 0 18px 45px rgba(0,0,0,.40);
       --shadow2: 0 10px 25px rgba(0,0,0,.28);
-      --r12:12px;
-      --r14:14px;
-      --r18:18px;
+      --r12:12px; --r14:14px; --r18:18px;
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
-      --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
 
-      /* ✅ Logo 大小统一在这里改（你要 2.4 倍就调大；要 2 倍就调小） */
-      --logoSize: 84px;
-      --logoRadius: 20px;
+      /* ✅ Logo control (按你要求 3.3 倍) */
+      --logoBase: 40px;
+      --logoScale: 3.3; /* ← 你要的 3.3 */
+      --logoSize: calc(var(--logoBase) * var(--logoScale));
+      --logoRadius: 18px;
     }
 
     *{ box-sizing:border-box; }
@@ -40,13 +39,12 @@
         linear-gradient(180deg, var(--bg), var(--bg2));
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "PingFang SC","Microsoft YaHei", sans-serif;
     }
-
     a{ color: rgba(76,194,255,.95); text-decoration:none; }
     a:hover{ text-decoration:underline; }
 
-    /* Top bar */
+    /* ===== Top bar ===== */
     #topbar{
-      height:86px;
+      height:78px;
       padding:0 18px;
       display:flex;
       align-items:center;
@@ -63,26 +61,26 @@
       min-width:420px;
     }
 
+    /* ✅ Big logo + remove dark ring/halo */
     .logoBox{
       width: var(--logoSize);
       height: var(--logoSize);
       border-radius: var(--logoRadius);
       overflow:hidden;
-      border:1px solid rgba(255,255,255,.14);
-      box-shadow: 0 14px 30px rgba(0,0,0,.30);
+      border: 0;
+      box-shadow: 0 10px 26px rgba(0,0,0,.22);
       flex:0 0 auto;
-      background: rgba(0,0,0,.12);
+      background: rgba(0,0,0,.10);
       display:flex;
       align-items:center;
       justify-content:center;
     }
     #logoImg{
-      width:100%;
-      height:100%;
+      width: 100%;
+      height: 100%;
       border-radius: var(--logoRadius);
       object-fit: cover;
       display:block;
-      filter: brightness(1.06) contrast(1.04);
     }
 
     .brandText{ line-height:1.08; }
@@ -153,7 +151,6 @@
       background: var(--danger);
       box-shadow: 0 0 0 4px rgba(255,90,90,.10);
     }
-
     .btnTop{
       border:1px solid rgba(255,255,255,.10);
       background: rgba(0,0,0,.14);
@@ -165,15 +162,15 @@
       font-weight:900;
     }
 
-    /* Main */
+    /* ===== Main ===== */
     #wrap{ padding:16px; }
 
-    /* ✅ 左右结构：主内容 + 右侧控制台 */
+    /* ✅ 50/50 equal columns */
     #grid{
       display:grid;
-      grid-template-columns: 1fr 380px;
+      grid-template-columns: 1fr 1fr;
       gap:16px;
-      min-height: calc(100vh - 86px - 40px);
+      min-height: calc(100vh - 78px - 40px);
     }
 
     .panel{
@@ -183,8 +180,8 @@
       box-shadow: var(--shadow);
       overflow:hidden;
       min-height:0;
+      position:relative;
     }
-
     .panelHeader{
       padding:14px 14px 12px 14px;
       border-bottom:1px solid rgba(255,255,255,.06);
@@ -202,10 +199,7 @@
       align-items:center;
       gap:10px;
     }
-    .panelBody{
-      padding:14px;
-      min-height:0;
-    }
+    .panelBody{ padding:14px; min-height:0; }
 
     .badge{
       font-size:12px;
@@ -216,6 +210,11 @@
       color: rgba(234,240,247,.95);
       font-weight:950;
       letter-spacing:.3px;
+      user-select:none;
+    }
+    .badge.bad{
+      border-color: rgba(255,90,90,.30);
+      background: rgba(255,90,90,.12);
     }
 
     .card{
@@ -224,6 +223,8 @@
       border-radius: var(--r14);
       padding:12px;
       margin-bottom:12px;
+      position:relative;
+      z-index:5; /* ✅ 确保按钮可点 */
     }
     .cardTitle{
       display:flex;
@@ -234,11 +235,7 @@
       color: var(--muted);
       font-size:12px;
     }
-    .cardTitle b{
-      color: var(--text);
-      font-size:12.5px;
-      font-weight:900;
-    }
+    .cardTitle b{ color: var(--text); font-size:12.5px; font-weight:900; }
 
     .field{ margin-bottom:10px; }
     .label{
@@ -250,6 +247,7 @@
       font-size:12px;
       color: var(--muted);
     }
+    .label b{ color: var(--text); }
 
     input{
       width:100%;
@@ -265,65 +263,6 @@
     input:focus{
       border-color: rgba(76,194,255,.50);
       box-shadow: 0 0 0 4px rgba(76,194,255,.12);
-    }
-
-    .row2{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:10px;
-      margin-top:10px;
-    }
-
-    /* ✅ 不再“拉满整条”：用 inline-flex */
-    .btnInline{
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
-      border:0;
-      color:#081119;
-      font-weight:950;
-      letter-spacing:.3px;
-      padding:11px 16px;
-      border-radius: var(--r12);
-      cursor:pointer;
-      background: var(--gradBrand);
-      box-shadow: var(--shadow2);
-      transition: transform .06s ease, filter .15s ease;
-      width: fit-content;
-      min-width: 210px; /* ✅ 与 Subscribe 按钮视觉长度接近 */
-      max-width: 100%;
-      white-space:nowrap;
-    }
-    .btnInline:hover{ filter: brightness(1.04); }
-    .btnInline:active{ transform: translateY(1px); }
-
-    .btnGhostInline{
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
-      border:1px solid rgba(255,255,255,.10);
-      color: var(--text);
-      font-weight:900;
-      padding:10px 16px;
-      border-radius: var(--r12);
-      cursor:pointer;
-      background: rgba(0,0,0,.14);
-      transition: transform .06s ease, filter .15s ease;
-      width: fit-content;
-      min-width: 210px;
-      max-width:100%;
-      white-space:nowrap;
-    }
-    .btnGhostInline:hover{ filter: brightness(1.05); }
-    .btnGhostInline:active{ transform: translateY(1px); }
-
-    .btnGhostInline[disabled],
-    .btnInline[disabled]{
-      opacity:.55;
-      cursor:not-allowed;
-      pointer-events:none;
     }
 
     .note{
@@ -342,13 +281,68 @@
     }
     .kv b{ color: var(--text); font-weight:900; }
 
-    .divider{
-      height:1px;
-      background: rgba(255,255,255,.06);
-      margin:12px 0;
+    /* ✅ Buttons: fixed width like Subscribe */
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      border:0;
+      color:#081119;
+      font-weight:950;
+      letter-spacing:.3px;
+      padding:10px 16px;
+      border-radius: var(--r12);
+      cursor:pointer;
+      background: var(--gradBrand);
+      box-shadow: var(--shadow2);
+      transition: transform .06s ease, filter .15s ease;
+      user-select:none;
+      min-width: 170px;
+      position:relative;
+      z-index:20; /* ✅ 绝对保证能点 */
+    }
+    .btn:hover{ filter: brightness(1.04); }
+    .btn:active{ transform: translateY(1px); }
+
+    .btnGhost{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--text);
+      font-weight:900;
+      padding:10px 16px;
+      border-radius: var(--r12);
+      cursor:pointer;
+      background: rgba(0,0,0,.14);
+      transition: transform .06s ease, filter .15s ease;
+      user-select:none;
+      min-width: 170px;
+      position:relative;
+      z-index:20;
+    }
+    .btnGhost:hover{ filter: brightness(1.05); }
+    .btnGhost:active{ transform: translateY(1px); }
+
+    .btnRow{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-start;
+      margin-top:10px;
+      position:relative;
+      z-index:10;
+    }
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
     }
 
-    /* Plans grid */
+    /* Plans */
     .plansGrid{
       display:grid;
       grid-template-columns: 1fr 1fr;
@@ -356,60 +350,47 @@
       margin-top:10px;
     }
     .planCard{
-      background: rgba(0,0,0,.18);
-      border:1px solid rgba(255,255,255,.07);
-      border-radius: 16px;
-      padding:14px;
-      box-shadow: 0 10px 22px rgba(0,0,0,.22);
+      background: rgba(0,0,0,.16);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius: var(--r14);
+      padding:12px;
+      overflow:hidden;
+      min-height: 150px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      position:relative;
+      z-index:5;
     }
     .planTop{
       display:flex;
-      align-items:flex-start;
       justify-content:space-between;
-      gap:10px;
-      margin-bottom:10px;
+      gap:12px;
+      align-items:flex-start;
     }
-    .planName{
-      font-weight:950;
-      letter-spacing:.2px;
-      font-size:14px;
-    }
-    .planPrice{
-      font-weight:950;
-      font-size:14px;
-      color: rgba(234,240,247,.92);
-      white-space:nowrap;
-    }
-    .planDesc{
-      font-size:12px;
-      color: rgba(162,176,194,.92);
-      line-height:1.45;
-      margin-bottom:10px;
-    }
-    .trialChip{
+    .planName{ font-weight:950; letter-spacing:.2px; }
+    .planPrice{ font-weight:950; }
+    .planDesc{ margin-top:6px; font-size:12px; color: var(--muted); line-height:1.4; }
+    .pillMini{
       display:inline-flex;
       align-items:center;
-      gap:7px;
+      gap:6px;
       font-size:11px;
-      padding:4px 10px;
+      padding:3px 10px;
       border-radius:999px;
-      border:1px solid rgba(43,226,166,.30);
+      border:1px solid rgba(43,226,166,.22);
       background: rgba(43,226,166,.10);
-      color: rgba(234,240,247,.92);
-      margin-bottom:10px;
-      white-space:nowrap;
+      color: rgba(234,240,247,.90);
+      margin-top:8px;
+      width: fit-content;
     }
-    .trialDot{
-      width:8px;height:8px;border-radius:50%;
-      background: var(--brand1);
-      box-shadow: 0 0 0 4px rgba(43,226,166,.10);
-    }
-
     .planActions{
       display:flex;
       gap:10px;
+      margin-top:12px;
       flex-wrap:wrap;
-      margin-top:8px;
+      position:relative;
+      z-index:20;
     }
 
     footer{
@@ -421,20 +402,6 @@
       align-items:center;
       gap:10px;
       opacity:.9;
-    }
-
-    .miniCheck{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      font-size:12px;
-      color: rgba(234,240,247,.88);
-      user-select:none;
-    }
-    .miniCheck input{
-      width:auto;
-      margin:0;
-      transform: translateY(1px);
     }
 
     @media (max-width: 1180px){
@@ -455,7 +422,7 @@
       <div class="brandText">
         <div class="brandLine1"><span class="accent">DarriusAI</span> · Inflection Hunter</div>
         <div class="brandLine2">
-          <span class="chip brand">Account & Subscription Management</span>
+          <span class="chip brand">Account & Subscription</span>
           <span class="chip">账户与订阅管理</span>
         </div>
       </div>
@@ -463,60 +430,60 @@
 
     <div class="topRight">
       <div class="pill" id="loginPill"><span class="dot" id="loginDot"></span><span id="loginText">Logged in · 已登录</span></div>
-      <div class="pill" id="accessPill"><span class="dot" id="accessDot"></span><span id="accessText">Access: DELAYED · 市场数据（延时）</span></div>
+      <div class="pill" id="accessPill"><span class="dot"></span><span id="accessText">Access: DELAYED · 市场数据（延时）</span></div>
       <button class="btnTop" id="backBtn">← Back to Dashboard（返回主界面）</button>
     </div>
   </div>
 
   <div id="wrap">
     <div id="grid">
-      <!-- LEFT -->
+      <!-- LEFT: Identity + Status + Actions -->
       <div class="panel">
         <div class="panelHeader">
           <div class="h">Subscription Overview · 订阅概览</div>
-          <div class="badge" id="statusBadge">STATUS: —</div>
+          <div class="badge bad" id="statusBadge">STATUS: UNKNOWN</div>
         </div>
 
         <div class="panelBody">
 
           <div class="note" style="margin-bottom:12px">
-            This page manages your subscription. Your dashboard access and data mode are enforced by backend policy.<br/>
-            本页用于订阅管理；仪表盘访问权限与数据模式由后端策略控制。
+            本页用于订阅管理；仪表盘访问权限与数据模式由后端策略控制。<br/>
+            This page manages your subscription. Access and data mode are enforced by backend policy.
           </div>
 
           <!-- Identity -->
           <div class="card">
-            <div class="cardTitle"><b>Identity · 身份信息</b><span class="note" id="backendHint">—</span></div>
+            <div class="cardTitle"><b>Identity · 身份信息</b><span class="note" id="backendHint">Backend: —</span></div>
 
-            <div class="row2" style="grid-template-columns: 1fr 1fr; align-items:end;">
-              <div class="field" style="margin-bottom:0">
-                <div class="label"><span><b>User ID</b>（用户ID）</span><span class="small">必填</span></div>
+            <div class="row2">
+              <div class="field">
+                <div class="label"><span><b>User ID</b>（用户ID）</span><span>必填</span></div>
                 <input id="userId" placeholder="例如：darrius888"/>
-                <div class="note" style="margin-top:6px">Used to fetch status and open billing portal.<br/>用于获取订阅状态并打开账单管理。</div>
+                <div class="note" style="margin-top:6px">用于状态查询与账单管理。</div>
               </div>
 
-              <div class="field" style="margin-bottom:0">
-                <div class="label"><span>Email（邮箱，可选）</span><span class="small">可选</span></div>
-                <input id="email" placeholder="perry.darrius@outlook.com"/>
-                <div class="note" style="margin-top:6px">Optional; only used if you enable Stripe matching below.<br/>可选：仅在你启用“用邮箱匹配 Stripe”时才会参与状态查询。</div>
+              <div class="field">
+                <div class="label"><span>Email（邮箱，可选）</span><span>可选</span></div>
+                <input id="email" placeholder="用于Checkout/收据兜底（默认不参与状态匹配）"/>
+                <div class="note" style="margin-top:6px">只有勾选“Use email for Stripe match”才会把 email 传给后端匹配。</div>
               </div>
             </div>
 
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:12px;">
-              <label class="miniCheck">
-                <input type="checkbox" id="useEmailMatch">
-                Use email for Stripe match（用邮箱匹配 Stripe）
+            <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+              <input id="useEmailMatch" type="checkbox" style="width:auto;transform:translateY(1px)"/>
+              <label for="useEmailMatch" class="note" style="cursor:pointer">
+                <b>Use email for Stripe match</b>（用邮箱参与 Stripe Customer 匹配）
               </label>
+            </div>
 
-              <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button class="btnInline" id="saveBtn">Save（保存/刷新）</button>
-                <button class="btnGhostInline" id="refreshBtn">Refresh Status（刷新状态）</button>
-              </div>
+            <div class="btnRow">
+              <button class="btn" id="saveBtn">Save（保存/刷新）</button>
+              <button class="btnGhost" id="refreshBtn">Refresh Status（刷新状态）</button>
             </div>
 
             <div class="note" style="margin-top:10px">
-              说明：你遇到“只填 ID 是 Active，但填 Email 变 Unknown/DEMO”的根因，通常是后端在“email -> stripe customer”匹配时找到了错误对象或找不到对象，导致状态被覆盖为 Unknown。<br/>
-              ✅ 本页已默认只用 <b>user_id</b> 查询；只有你勾选上面的复选框才会把 email 传给后端。
+              说明：如果只填 user_id 是 Active，但一填 email 就 Unknown，通常是 email 与 Stripe Customer 不匹配。
+              本页默认不让 email 参与状态匹配，避免误判。
             </div>
           </div>
 
@@ -524,10 +491,10 @@
           <div class="card">
             <div class="cardTitle">
               <b>Status · 状态信息</b>
-              <span class="note" id="updatedAt">—</span>
+              <span class="note" id="updatedAt">Updated: —</span>
             </div>
 
-            <div class="kv" id="statusKV">
+            <div class="kv">
               <span>User（用户）</span><b id="kvUser">—</b>
               <span>Current Plan（当前套餐）</span><b id="kvPlan">—</b>
               <span>Subscription Status（订阅状态）</span><b id="kvSubStatus">—</b>
@@ -536,81 +503,85 @@
             </div>
 
             <div class="note" style="margin-top:10px">
-              Note: After cancellation, access normally remains active until the end of the current billing period (policy-dependent).<br/>
+              Note: Cancellation usually keeps access active until period end (policy-dependent).<br/>
               说明：取消订阅后，通常会在当前计费周期结束前继续可用（以策略为准）。
             </div>
           </div>
 
           <!-- Actions -->
           <div class="card">
-            <div class="cardTitle">
-              <b>Actions · 操作</b>
-              <span class="note">Route-only</span>
+            <div class="cardTitle"><b>Actions · 操作</b><span class="note">Route-only</span></div>
+            <div class="btnRow">
+              <button class="btn" id="openPortalBtn">Open Billing Portal（账单管理）</button>
+              <button class="btn" id="scrollPlansBtn">Go to Plans（查看套餐）</button>
             </div>
-
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-              <button class="btnInline" id="openPortalBtn">Open Billing Portal（账单管理）</button>
-              <button class="btnInline" id="choosePlanBtn">Choose / Change Plan（选择/更换套餐）</button>
-            </div>
-
             <div class="note" style="margin-top:10px">
-              These buttons route through your existing billing flow (do not change your payment logic).<br/>
-              这些按钮只做跳转调用，不改动你现有的订阅支付逻辑。
-            </div>
-          </div>
-
-          <!-- Plans -->
-          <div class="card">
-            <div class="cardTitle">
-              <b>Plans（套餐）</b>
-              <span class="note" id="plansSource">—</span>
-            </div>
-
-            <div class="note">
-              We render plan cards by calling your existing <b>/billing/prices</b> endpoint.<br/>
-              通过后端 <b>/billing/prices</b> 获取计划；若后端不可用，仍会用本地 4 计划兜底（永不为空）。
-            </div>
-
-            <div class="plansGrid" id="plansGrid"></div>
-
-            <div class="note" style="margin-top:12px">
-              Compliance note (display-only): Delayed mode is shown when required by your data provider terms.<br/>
-              合规提示（仅展示）：当数据授权要求时，会显示 Delayed。
+              这些按钮只做跳转/调用后端 endpoint，不改你既有支付逻辑。<br/>
+              This page routes through your existing billing flow (does not change payment logic).
             </div>
           </div>
 
         </div>
       </div>
 
-      <!-- RIGHT -->
-      <div class="panel">
+      <!-- RIGHT: Plans + Control -->
+      <div class="panel" id="rightPanel">
         <div class="panelHeader">
-          <div class="h">Control Center · 控制台</div>
-          <div class="badge" style="border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.06);" id="sysBadge">SYSTEM（系统）</div>
+          <div class="h">Plans & Control · 套餐与控制</div>
+          <div class="badge" style="border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.06);" id="sysBadge">SYSTEM</div>
         </div>
+
         <div class="panelBody">
 
-          <div class="card">
-            <div class="cardTitle"><b>Quick Actions（快捷操作）</b></div>
-            <button class="btnGhostInline" id="openDashBtn">Open Dashboard（打开主界面）</button>
-          </div>
+          <!-- Plans -->
+          <div class="card" id="plansCard">
+            <div class="cardTitle">
+              <b>Plans（套餐 / 4个产品订购）</b>
+              <span class="note" id="plansSource">plans: —</span>
+            </div>
 
-          <div class="card">
-            <div class="cardTitle"><b>Support（支持）</b></div>
             <div class="note">
-              For billing questions, use Billing Portal first (invoices, payment methods, cancellations).<br/>
-              账单相关请优先使用账单管理（发票、付款方式、取消订阅）。<br/>
-              For technical support: support@darrius.ai
+              优先调用后端 <b>/billing/prices</b> 渲染；后端不可用也会 fallback 显示 4 个计划（永不为空）。
+            </div>
+
+            <div class="plansGrid" id="plansGrid"></div>
+
+            <div class="note" style="margin-top:10px">
+              Compliance note (display-only): When required by your data provider terms, the dashboard shows Delayed.<br/>
+              合规提示（仅展示）：当数据提供方条款要求时，前端会显示 Delayed。
             </div>
           </div>
 
+          <!-- Quick actions -->
+          <div class="card">
+            <div class="cardTitle"><b>Quick Actions（快捷操作）</b></div>
+            <div class="btnRow">
+              <button class="btnGhost" id="openDashBtn">Open Dashboard（打开主界面）</button>
+            </div>
+          </div>
+
+          <!-- Support / System -->
           <div class="card">
             <div class="cardTitle"><b>System（系统信息）</b></div>
             <div class="kv">
               <span>Build（版本）</span><b id="buildText">—</b>
               <span>Backend（后端）</span><b id="backendText">—</b>
-              <span>Plans Source（计划来源）</span><b id="plansText">—</b>
+              <span>Plans Source（计划来源）</span><b id="plansSource2">—</b>
             </div>
+          </div>
+
+          <div class="card">
+            <div class="cardTitle"><b>Support（支持）</b></div>
+            <div class="note">
+              Billing: use Billing Portal first (invoices, payment methods, cancellations).<br/>
+              账单相关请优先使用账单管理（发票、付款方式、取消订阅）。<br/>
+              Technical: support@darrius.ai
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="cardTitle"><b>Endpoint Map（接口）</b></div>
+            <div class="note" id="endpointMap" style="white-space:pre-wrap"></div>
           </div>
 
         </div>
@@ -624,25 +595,25 @@
   </div>
 
   <script>
+    // ===== Globals =====
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
+
+    // ✅ 路由可配置（你后端现在 /billing/status 404，需要补后端或改为真实路由）
+    window.DARRIUS_BILLING_STATUS_PATH = window.DARRIUS_BILLING_STATUS_PATH || "/billing/status";
+    window.DARRIUS_BILLING_PRICES_PATH = window.DARRIUS_BILLING_PRICES_PATH || "/billing/prices";
+    window.DARRIUS_BILLING_CHECKOUT_PATH = window.DARRIUS_BILLING_CHECKOUT_PATH || "/billing/checkout";
+    window.DARRIUS_BILLING_PORTAL_PATH  = window.DARRIUS_BILLING_PORTAL_PATH  || "/billing/portal";
+
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
-    // ✅ load logo
+    // ✅ load logo (try multiple paths)
     (function(){
       const img = document.getElementById('logoImg');
       if (!img) return;
-      const candidates = [
-        '/assets/logo.png',
-        '/assets/icon.png',
-        '/favicon.png',
-        '/favicon.ico'
-      ];
+      const candidates = ['/assets/logo.png','/assets/icon.png','/favicon.png','/favicon.ico'];
       let idx = 0;
-      img.onerror = () => {
-        idx += 1;
-        if (idx < candidates.length) img.src = candidates[idx];
-      };
+      img.onerror = () => { idx += 1; if (idx < candidates.length) img.src = candidates[idx]; };
       img.src = candidates[0];
     })();
   </script>
@@ -656,66 +627,53 @@
       const emailEl  = $('email');
       const useEmailEl = $('useEmailMatch');
 
-      const LS = {
-        uid: 'darrius_user_id',
-        em:  'darrius_email',
-        useEmail: 'darrius_use_email_match',
-        lastStatus: 'darrius_last_status_cache',
-      };
+      function endpointText(){
+        return [
+          "STATUS  : " + base + window.DARRIUS_BILLING_STATUS_PATH,
+          "PRICES  : " + base + window.DARRIUS_BILLING_PRICES_PATH,
+          "CHECKOUT: " + base + window.DARRIUS_BILLING_CHECKOUT_PATH,
+          "PORTAL  : " + base + window.DARRIUS_BILLING_PORTAL_PATH,
+        ].join("\n");
+      }
+      $('endpointMap').textContent = endpointText();
 
-      function setBadge(text, ok=true){
+      // Restore previous input
+      try{
+        const uid = localStorage.getItem('darrius_user_id') || '';
+        const em  = localStorage.getItem('darrius_email') || '';
+        const useEm = localStorage.getItem('darrius_use_email_match') || '0';
+        if (uid && userIdEl) userIdEl.value = uid;
+        if (em && emailEl) emailEl.value = em;
+        if (useEmailEl) useEmailEl.checked = (useEm === '1');
+      }catch(e){}
+
+      function setBadge(ok, text){
         const b = $('statusBadge');
         if (!b) return;
-        b.textContent = text;
-        b.style.borderColor = ok ? 'rgba(43,226,166,.30)' : 'rgba(255,90,90,.30)';
-        b.style.background  = ok ? 'rgba(43,226,166,.12)' : 'rgba(255,90,90,.12)';
+        b.textContent = text || (ok ? "STATUS: ACTIVE" : "STATUS: UNKNOWN");
+        b.classList.toggle('bad', !ok);
       }
 
-      function setBackendConnected(connected){
-        $('backendText').textContent = connected ? 'Connected' : 'Disconnected';
-        $('backendHint').textContent = connected ? 'Backend connected' : 'Backend disconnected';
-        const dot = $('accessDot');
-        if (dot){
-          dot.classList.toggle('bad', !connected);
-        }
+      function setBackendState(connected){
+        $('backendText').textContent = connected ? "Connected" : "Disconnected";
+        $('backendHint').textContent = "Backend: " + (connected ? "connected" : "disconnected");
+        // login dot just for visual
+        const dot = $('loginDot');
+        if (dot) dot.classList.toggle('bad', !connected);
       }
 
-      function fillStatusKV(j, fallbackUid){
-        $('kvUser').textContent = (j.user || j.user_id || fallbackUid || '—');
-        $('kvPlan').textContent = (j.plan || j.current_plan || j.plan_name || '—');
-        $('kvSubStatus').textContent = (j.status || j.subscription_status || j.sub_status || '—');
-        $('kvEnds').textContent = (j.renews_or_ends || j.ends_at || j.current_period_end || '—');
-        $('kvDataMode').textContent = (j.data_mode || j.dataSourceMode || 'DELAYED');
+      function setUpdatedNow(){
+        $('updatedAt').textContent = "Updated: " + new Date().toISOString().replace('T',' ').replace('Z','Z');
+        $('buildText').textContent = new Date().toISOString();
       }
 
-      function nowStamp(){
-        const d = new Date();
-        const pad = (n)=> String(n).padStart(2,'0');
-        return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-      }
-
-      function restore(){
-        try{
-          const uid = localStorage.getItem(LS.uid) || '';
-          const em  = localStorage.getItem(LS.em) || '';
-          const ue  = localStorage.getItem(LS.useEmail) === '1';
-
-          if (uid && userIdEl) userIdEl.value = uid;
-          if (em && emailEl) emailEl.value = em;
-          if (useEmailEl) useEmailEl.checked = ue;
-
-          const cache = localStorage.getItem(LS.lastStatus);
-          if (cache){
-            const j = JSON.parse(cache);
-            fillStatusKV(j, uid);
-            $('updatedAt').textContent = 'Updated: ' + (j.__updated_at || nowStamp());
-            setBadge('STATUS: ' + (j.status || j.subscription_status || 'CACHED'), true);
-          }
-        }catch(e){}
-      }
-
-      async function safeJson(res){
-        try{ return await res.json(); }catch(e){ return {}; }
+      function fillStatusFallback(uid){
+        $('kvUser').textContent = uid || '—';
+        $('kvPlan').textContent = '—';
+        $('kvSubStatus').textContent = '—';
+        $('kvEnds').textContent = '—';
+        $('kvDataMode').textContent = 'DELAYED';
+        setUpdatedNow();
       }
 
       async function refreshStatus(){
@@ -724,273 +682,228 @@
         const useEmail = !!(useEmailEl && useEmailEl.checked);
 
         if (!uid){
-          setBadge('STATUS: MISSING USER', false);
+          setBadge(false, "STATUS: MISSING USER");
           return;
         }
 
+        // persist
         try{
-          localStorage.setItem(LS.uid, uid);
-          if (em) localStorage.setItem(LS.em, em);
-          localStorage.setItem(LS.useEmail, useEmail ? '1' : '0');
+          localStorage.setItem('darrius_user_id', uid);
+          if (em) localStorage.setItem('darrius_email', em);
+          localStorage.setItem('darrius_use_email_match', useEmail ? '1' : '0');
         }catch(e){}
 
-        // ✅ 默认只用 user_id；只有你勾选 useEmail 才传 email
         const qs = new URLSearchParams();
         qs.set('user_id', uid);
         if (useEmail && em) qs.set('email', em);
 
+        const url = base + window.DARRIUS_BILLING_STATUS_PATH + "?" + qs.toString();
+
         try{
-          const url = base + '/billing/status?' + qs.toString();
           const res = await fetch(url, { method:'GET' });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const j = await safeJson(res);
+          if (!res.ok) throw new Error("HTTP " + res.status);
 
-          setBackendConnected(true);
+          const j = await res.json().catch(()=> ({}));
+          $('kvUser').textContent = j.user || j.user_id || uid;
+          $('kvPlan').textContent = j.plan || j.current_plan || j.price_nickname || '—';
+          $('kvSubStatus').textContent = j.status || j.subscription_status || '—';
+          $('kvEnds').textContent = j.renews_or_ends || j.ends_at || j.current_period_end || '—';
+          $('kvDataMode').textContent = j.data_mode || 'DELAYED';
 
-          // 统一字段
-          const normalized = Object.assign({}, j);
-          normalized.__updated_at = nowStamp();
-
-          fillStatusKV(normalized, uid);
-          $('updatedAt').textContent = 'Updated: ' + normalized.__updated_at;
-
-          const statusText = (normalized.status || normalized.subscription_status || 'ACTIVE');
-          setBadge('STATUS: ' + statusText, true);
-
-          // cache
-          try{ localStorage.setItem(LS.lastStatus, JSON.stringify(normalized)); }catch(e){}
+          setUpdatedNow();
+          setBackendState(true);
+          setBadge(true, "STATUS: " + String(j.status || j.subscription_status || 'ACTIVE').toUpperCase());
         }catch(e){
-          setBackendConnected(false);
-
-          // fallback: 尝试从缓存恢复，否则显示基本信息
-          try{
-            const cache = localStorage.getItem(LS.lastStatus);
-            if (cache){
-              const j = JSON.parse(cache);
-              fillStatusKV(j, uid);
-              $('updatedAt').textContent = 'Updated: ' + (j.__updated_at || nowStamp());
-              setBadge('STATUS: ' + (j.status || 'CACHED'), true);
-            } else {
-              fillStatusKV({ data_mode:'DELAYED' }, uid);
-              $('updatedAt').textContent = 'Updated: ' + nowStamp();
-              setBadge('STATUS: UNKNOWN', false);
-            }
-          }catch(_){
-            fillStatusKV({ data_mode:'DELAYED' }, uid);
-            $('updatedAt').textContent = 'Updated: ' + nowStamp();
-            setBadge('STATUS: UNKNOWN', false);
-          }
+          setBackendState(false);
+          fillStatusFallback(uid);
+          setBadge(false, "STATUS: UNKNOWN");
         }
       }
 
-      // -------- Plans --------
+      // ---------- Plans ----------
       const FALLBACK_PLANS = [
-        {
-          key:'weekly',
-          name:'Weekly · 周付',
-          priceText:'$4.90',
-          desc:'Short-term access. Ideal for trials and quick evaluations. 短期体验，适合试用与快速评估。',
-          trial:'—',
-          price_id:'price_weekly'
-        },
-        {
-          key:'monthly',
-          name:'Monthly · 月付',
-          priceText:'$19.90',
-          desc:'Most popular. Balanced commitment and flexibility. 最受欢迎，兼顾灵活与稳定。',
-          trial:'1-day free trial（1天免费试用）',
-          price_id:'price_monthly'
-        },
-        {
-          key:'quarterly',
-          name:'Quarterly · 季付',
-          priceText:'$49.90',
-          desc:'Better value. Recommended for active users. 性价比更高，适合活跃用户。',
-          trial:'3-day free trial（3天免费试用）',
-          price_id:'price_quarterly'
-        },
-        {
-          key:'yearly',
-          name:'Yearly · 年付',
-          priceText:'$189.00',
-          desc:'Best value. For professionals and long-term users. 最佳价值，适合专业与长期用户。',
-          trial:'5-day free trial（5天免费试用）',
-          price_id:'price_yearly'
-        },
+        { key:"weekly",   name:"Weekly · 周付",    price:"$4.90",  desc:"Short-term access. Ideal for trials and quick evaluations. 短期体验。", trial:"—",  price_id:"" },
+        { key:"monthly",  name:"Monthly · 月付",   price:"$19.90", desc:"Most popular. Balanced commitment and flexibility. 最受欢迎。", trial:"1-day free trial（1天免费试用）", price_id:"" },
+        { key:"quarterly",name:"Quarterly · 季付", price:"$49.90", desc:"Better value. Recommended for active users. 性价比更高。", trial:"3-day free trial（3天免费试用）", price_id:"" },
+        { key:"yearly",   name:"Yearly · 年付",    price:"$189.00",desc:"Best value for professionals and long-term users. 专业长期。", trial:"5-day free trial（5天免费试用）", price_id:"" },
       ];
 
-      function planCardHTML(p){
-        const trial = p.trial && p.trial !== '—'
-          ? `<div class="trialChip"><span class="trialDot"></span><span>${escapeHtml(p.trial)}</span></div>`
-          : '';
-
-        return `
-          <div class="planCard" data-plan="${escapeHtml(p.key)}">
-            <div class="planTop">
-              <div>
-                <div class="planName">${escapeHtml(p.name)}</div>
-              </div>
-              <div class="planPrice">${escapeHtml(p.priceText || '')}</div>
-            </div>
-            <div class="planDesc">${escapeHtml(p.desc || '')}</div>
-            ${trial}
-            <div class="planActions">
-              <button class="btnInline" data-action="subscribe" data-price-id="${escapeHtml(p.price_id || '')}">Subscribe（订阅）</button>
-              <button class="btnGhostInline" data-action="details">Details（详情）</button>
-            </div>
-          </div>
-        `;
-      }
-
       function escapeHtml(s){
-        return String(s || '').replace(/[&<>"']/g, (c) => ({
-          '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-        }[c]));
+        return String(s ?? "")
+          .replaceAll("&","&amp;")
+          .replaceAll("<","&lt;")
+          .replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
       }
 
-      function renderPlans(list, sourceLabel){
+      function renderPlans(plans, sourceLabel){
+        $('plansSource').textContent = "plans: " + sourceLabel;
+        $('plansSource2').textContent = sourceLabel;
+
         const grid = $('plansGrid');
-        if (!grid) return;
-        grid.innerHTML = (list || []).map(planCardHTML).join('');
-        $('plansSource').textContent = sourceLabel || '—';
-        $('plansText').textContent = sourceLabel || '—';
+        grid.innerHTML = "";
 
-        // bind
-        grid.querySelectorAll('button[data-action="subscribe"]').forEach(btn=>{
-          btn.addEventListener('click', async (e)=>{
-            e.preventDefault();
-            const priceId = btn.getAttribute('data-price-id') || '';
-            await startCheckout(priceId);
-          });
-        });
+        plans.forEach(p => {
+          const card = document.createElement('div');
+          card.className = "planCard";
 
-        grid.querySelectorAll('button[data-action="details"]').forEach(btn=>{
-          btn.addEventListener('click', (e)=>{
-            e.preventDefault();
-            alert('Details: you can link this to a modal / pricing detail page later.');
+          const trialHtml = (p.trial && p.trial !== "—")
+            ? `<div class="pillMini">● ${escapeHtml(p.trial)}</div>`
+            : "";
+
+          card.innerHTML = `
+            <div>
+              <div class="planTop">
+                <div>
+                  <div class="planName">${escapeHtml(p.name || p.nickname || "Plan")}</div>
+                  <div class="planDesc">${escapeHtml(p.desc || "")}</div>
+                  ${trialHtml}
+                </div>
+                <div class="planPrice">${escapeHtml(p.price || "")}</div>
+              </div>
+            </div>
+            <div class="planActions">
+              <button class="btn" data-act="subscribe">Subscribe（订阅）</button>
+              <button class="btnGhost" data-act="details">Details（详情）</button>
+            </div>
+          `;
+
+          // ✅ Bind clicks (ensures "clickable")
+          card.querySelector('[data-act="subscribe"]').addEventListener('click', async (ev) => {
+            ev.preventDefault(); ev.stopPropagation();
+            await startCheckout(p);
           });
+          card.querySelector('[data-act="details"]').addEventListener('click', (ev) => {
+            ev.preventDefault(); ev.stopPropagation();
+            alert((p.name || "Plan") + "\n" + (p.desc || "") + (p.trial ? ("\n" + p.trial) : ""));
+          });
+
+          grid.appendChild(card);
         });
       }
 
       async function loadPlans(){
-        // 优先 backend /billing/prices
+        const url = base + window.DARRIUS_BILLING_PRICES_PATH;
         try{
-          const res = await fetch(base + '/billing/prices', { method:'GET' });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const j = await safeJson(res);
+          const res = await fetch(url, { method:'GET' });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const j = await res.json().catch(()=> ({}));
 
-          // 兼容多种返回：[{id,nickname,unit_amount,trial_days}] 或 {prices:[...]}
           const arr = Array.isArray(j) ? j : (Array.isArray(j.prices) ? j.prices : []);
-          if (!arr.length) throw new Error('empty');
+          if (!arr.length) throw new Error("empty");
 
-          const mapped = arr.map((x)=>{
-            const amount = (x.unit_amount != null) ? (Number(x.unit_amount)/100).toFixed(2) : '';
-            const trialDays = x.trial_days || x.trial || x.trial_period_days || 0;
-            const trial = trialDays ? `${trialDays}-day free trial（${trialDays}天免费试用）` : '—';
-            return {
-              key: String(x.lookup_key || x.nickname || x.id || '').toLowerCase() || 'plan',
-              name: (x.nickname || x.name || 'Plan') + (x.interval ? ` · ${x.interval}` : ''),
-              priceText: amount ? `$${amount}` : (x.priceText || ''),
-              desc: x.description || '',
-              trial,
-              price_id: x.id || x.price_id || ''
-            };
-          });
+          const mapped = arr.map(x => ({
+            name: x.nickname || x.name || x.product_name || x.id,
+            price: x.unit_amount_display || x.price_display || x.display || (x.unit_amount ? ("$"+(x.unit_amount/100).toFixed(2)) : ""),
+            desc: x.description || "",
+            trial: x.trial || "",
+            price_id: x.id || x.price_id || ""
+          }));
 
-          renderPlans(mapped.slice(0, 4), 'backend /billing/prices');
-          setBackendConnected(true);
+          renderPlans(mapped, "backend");
+          setBackendState(true);
         }catch(e){
-          renderPlans(FALLBACK_PLANS, 'fallback (backend unavailable)');
-          // 不强制断线，仅标识计划来源
+          renderPlans(FALLBACK_PLANS, "fallback (backend unavailable)");
         }
       }
 
-      // -------- Billing actions (real wiring, best-effort) --------
-      async function openBillingPortal(){
+      async function startCheckout(plan){
         const uid = (userIdEl && userIdEl.value || '').trim();
         const em  = (emailEl && emailEl.value || '').trim();
 
         if (!uid){
-          alert('Please input User ID first.');
+          alert("Please enter User ID first.");
           return;
         }
 
+        const payload = {
+          user_id: uid,
+          email: em || undefined,
+          price_id: plan.price_id || undefined,
+          plan_key: plan.key || undefined,
+          success_url: window.location.origin + "/account.html?checkout=success",
+          cancel_url: window.location.origin + "/account.html?checkout=cancel"
+        };
+
+        const url = base + window.DARRIUS_BILLING_CHECKOUT_PATH;
         try{
-          const res = await fetch(base + '/billing/portal', {
+          const res = await fetch(url, {
             method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ user_id: uid, email: em || undefined })
+            headers: { 'Content-Type':'application/json' },
+            body: JSON.stringify(payload)
           });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const j = await res.json().catch(()=> ({}));
 
-          const j = await safeJson(res);
-          const url = j.url || j.portal_url || j.redirect_url;
+          const checkoutUrl = j.url || j.checkout_url;
+          if (!checkoutUrl) throw new Error("no url");
 
-          if (res.ok && url){
-            window.location.href = url;
-            return;
-          }
-          alert('Billing Portal not available: backend did not return [url].');
+          window.location.href = checkoutUrl;
         }catch(e){
-          alert('Billing Portal not available. Please wire /billing/portal in backend.');
+          alert("Checkout not ready: backend did not return [url].\nPlease verify endpoint: " + url);
         }
       }
 
-      async function startCheckout(priceId){
+      async function openPortal(){
         const uid = (userIdEl && userIdEl.value || '').trim();
         const em  = (emailEl && emailEl.value || '').trim();
+        const useEmail = !!(useEmailEl && useEmailEl.checked);
 
         if (!uid){
-          alert('Please input User ID first.');
+          alert("Please enter User ID first.");
           return;
         }
 
-        // 你后端可能用 /billing/checkout 或 /create-checkout-session；这里做双路 fallback
-        const payload = { user_id: uid, email: em || undefined, price_id: priceId || undefined };
-        const endpoints = ['/billing/checkout', '/create-checkout-session'];
+        const payload = {
+          user_id: uid,
+          email: (useEmail ? (em || undefined) : undefined),
+          return_url: window.location.origin + "/account.html"
+        };
 
-        for (const ep of endpoints){
-          try{
-            const res = await fetch(base + ep, {
-              method:'POST',
-              headers:{ 'Content-Type':'application/json' },
-              body: JSON.stringify(payload)
-            });
-            const j = await safeJson(res);
-            const url = j.url || j.checkout_url || j.redirect_url;
+        const url = base + window.DARRIUS_BILLING_PORTAL_PATH;
+        try{
+          const res = await fetch(url, {
+            method:'POST',
+            headers: { 'Content-Type':'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const j = await res.json().catch(()=> ({}));
 
-            if (res.ok && url){
-              window.location.href = url;
-              return;
-            }
-          }catch(e){}
+          const portalUrl = j.url || j.portal_url;
+          if (!portalUrl) throw new Error("no url");
+
+          window.location.href = portalUrl;
+        }catch(e){
+          alert("Billing Portal not available. Please wire billing portal route in backend.\nEndpoint: " + url);
         }
-
-        alert('Checkout not ready: backend did not return [url].');
       }
 
-      function scrollToPlans(){
-        const grid = $('plansGrid');
-        if (!grid) return;
-        grid.scrollIntoView({ behavior:'smooth', block:'start' });
-      }
+      // ===== Wire UI events (fix "buttons not clickable") =====
+      $('saveBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); refreshStatus(); });
+      $('refreshBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); refreshStatus(); });
 
-      // Buttons
-      $('saveBtn')?.addEventListener('click', refreshStatus);
-      $('refreshBtn')?.addEventListener('click', refreshStatus);
+      $('openPortalBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); openPortal(); });
 
-      $('openDashBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
-      $('backBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
+      $('scrollPlansBtn').addEventListener('click', (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        const el = $('plansCard');
+        if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+      });
 
-      $('openPortalBtn')?.addEventListener('click', openBillingPortal);
-      $('choosePlanBtn')?.addEventListener('click', scrollToPlans);
+      $('openDashBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
+      $('backBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
 
-      // init
-      restore();
-      loadPlans();
-      setTimeout(refreshStatus, 220);
+      // ===== init =====
+      (async function init(){
+        setBackendState(true);
+        $('backendHint').textContent = "Backend: checking…";
+        $('buildText').textContent = new Date().toISOString();
 
-      // expose for debug
-      window.__DARRIUS_ACCOUNT__ = { refreshStatus, loadPlans };
+        await loadPlans();
+        setTimeout(refreshStatus, 250);
+      })();
     })();
   </script>
 </body>
