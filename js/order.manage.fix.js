@@ -1,12 +1,13 @@
-// js/order.manage.fix.js (UNIFIED - FULL REPLACE) v2026.02.01
+// js/order.manage.fix.js (AUTO-BIND BY BUTTON TEXT) v2026.02.01
 (() => {
   'use strict';
 
-  const $ = (id) => document.getElementById(id);
+  // -----------------------------
+  // helpers
+  // -----------------------------
+  const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const lower = (s) => norm(s).toLowerCase();
 
-  // -----------------------------
-  // fetch helpers (GET/POST JSON)
-  // -----------------------------
   async function fetchJSON(url, opts = {}) {
     const r = await fetch(url, {
       credentials: 'include',
@@ -20,34 +21,19 @@
     const text = await r.text();
     let data = null;
     try { data = JSON.parse(text); } catch { data = { ok: false, raw: text }; }
-
     data.__http = { ok: r.ok, status: r.status };
     return data;
   }
 
   const jget = (url) => fetchJSON(url, { method: 'GET' });
-  const jpost = (url, body) => fetchJSON(url, {
-    method: 'POST',
-    body: JSON.stringify(body || {})
-  });
+  const jpost = (url, body) => fetchJSON(url, { method: 'POST', body: JSON.stringify(body || {}) });
 
-  // -----------------------------
-  // dom helpers
-  // -----------------------------
-  function setText(id, v, dash = true) {
-    const el = $(id);
-    if (!el) return;
-    const val = (v == null || v === '') ? (dash ? '-' : '') : String(v);
-    el.textContent = val;
-  }
-
-  function enableBtn(id, enabled) {
-    const b = $(id);
-    if (!b) return;
-    b.disabled = !enabled;
-    b.style.pointerEvents = enabled ? 'auto' : 'none';
-    b.style.opacity = enabled ? '1' : '0.55';
-    b.style.cursor = enabled ? 'pointer' : 'not-allowed';
+  function enableBtn(btn, enabled) {
+    if (!btn) return;
+    btn.disabled = !enabled;
+    btn.style.pointerEvents = enabled ? 'auto' : 'none';
+    btn.style.opacity = enabled ? '1' : '0.55';
+    btn.style.cursor = enabled ? 'pointer' : 'not-allowed';
   }
 
   function pick(obj, keys, fallback = null) {
@@ -63,103 +49,153 @@
   }
 
   // -----------------------------
-  // API loaders (your real routes)
+  // find buttons by text
   // -----------------------------
-  async function loadMe() {
-    // /api/me exists now
-    const me = await jget('/api/me');
-    return me || {};
+  function findButtonByTextIncludes(needles) {
+    const btns = Array.from(document.querySelectorAll('button'));
+    for (const b of btns) {
+      const t = lower(b.textContent);
+      if (!t) continue;
+      if (needles.some(n => t.includes(n))) return b;
+    }
+    return null;
   }
 
-  async function loadEntitlements() {
-    // /api/me/entitlements
-    const ent = await jget('/api/me/entitlements');
-    return ent || {};
-  }
+  function getButtons() {
+    const portalBtn = findButtonByTextIncludes([
+      'open billing portal', 'billing portal', '账单管理'
+    ]);
 
-  async function loadSubStatus() {
-    // /api/subscription/status
-    const st = await jget('/api/subscription/status');
-    return st || {};
-  }
+    const subscribeBtn = findButtonByTextIncludes([
+      'subscribe', '订阅'
+    ]);
 
-  async function refreshStripeSync() {
-    // /api/subscription/refresh (GET) - optional
-    const r = await jget('/api/subscription/refresh');
-    return r || {};
+    const refreshBtn = findButtonByTextIncludes([
+      'refresh status', '刷新状态', 'refresh'
+    ]);
+
+    return { portalBtn, subscribeBtn, refreshBtn };
   }
 
   // -----------------------------
-  // unified render (supports both UI-id schemas)
+  // render panel (fallback UI)
   // -----------------------------
-  async function renderAll() {
-    // 1) me
-    const me = await loadMe();
+  function ensurePanel() {
+    let panel = document.getElementById('om_autoPanel');
+    if (panel) return panel;
+
+    panel = document.createElement('div');
+    panel.id = 'om_autoPanel';
+    panel.style.cssText = [
+      'position:relative',
+      'margin:12px 0',
+      'padding:12px 14px',
+      'border:1px solid rgba(255,255,255,0.12)',
+      'border-radius:12px',
+      'background:rgba(0,0,0,0.25)',
+      'font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif',
+      'font-size:13px',
+      'line-height:1.35'
+    ].join(';');
+
+    panel.innerHTML = `
+      <div style="font-weight:700; font-size:14px; margin-bottom:8px;">Order / Subscription Status</div>
+      <div style="display:grid; grid-template-columns: 140px 1fr; gap:6px 10px;">
+        <div style="opacity:.8;">User Email</div><div id="om_auto_email">-</div>
+        <div style="opacity:.8;">Entitlement Plan</div><div id="om_auto_plan">-</div>
+        <div style="opacity:.8;">Stripe Customer</div><div id="om_auto_cus">-</div>
+        <div style="opacity:.8;">Stripe Subscription</div><div id="om_auto_sub">-</div>
+        <div style="opacity:.8;">Stripe Status</div><div id="om_auto_status">-</div>
+        <div style="opacity:.8;">Period End</div><div id="om_auto_cpe">-</div>
+        <div style="opacity:.8;">Trial End</div><div id="om_auto_trial">-</div>
+        <div style="opacity:.8;">Cancel At Period End</div><div id="om_auto_cancel">-</div>
+      </div>
+      <div id="om_auto_hint" style="margin-top:10px; opacity:.75;"></div>
+    `;
+
+    // insert near top of main content
+    const target =
+      document.querySelector('main') ||
+      document.querySelector('#main') ||
+      document.body;
+
+    if (target.firstChild) target.insertBefore(panel, target.firstChild);
+    else target.appendChild(panel);
+
+    return panel;
+  }
+
+  function setPanelText(id, v) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = (v == null || v === '') ? '-' : String(v);
+  }
+
+  // -----------------------------
+  // data load + render
+  // -----------------------------
+  async function loadAndRender() {
+    const panel = ensurePanel();
+
+    const [me, entResp, subResp] = await Promise.all([
+      jget('/api/me'),
+      jget('/api/me/entitlements'),
+      jget('/api/subscription/status')
+    ]);
+
+    // me
     const email = pick(me, ['email', 'user_email'], pick(me.user || {}, ['email'], '-'));
-    // schema B
-    setText('om_userEmail', email);
-    // (如果你旧 UI 没这个字段，就跳过)
+    setPanelText('om_auto_email', email);
 
-    // 2) entitlement
-    const entResp = await loadEntitlements();
+    // entitlement
     const ent = entResp.entitlement || entResp.data || entResp || {};
+    const plan = pick(ent, ['plan', 'tier', 'product'], '-');
+    const customerId = pick(ent, ['stripe_customer_id', 'customer_id'], '-');
+    const subscriptionId = pick(ent, ['stripe_subscription_id', 'subscription_id'], '-');
 
-    const active = !!pick(ent, ['active', 'is_active', 'entitled'], false);
-    const plan = pick(ent, ['plan', 'tier', 'product'], active ? 'ACTIVE' : 'DEMO');
-    const customerId = pick(ent, ['stripe_customer_id', 'customer_id'], '');
-    const subId = pick(ent, ['stripe_subscription_id', 'subscription_id'], '');
+    setPanelText('om_auto_plan', plan);
+    setPanelText('om_auto_cus', customerId);
+    setPanelText('om_auto_sub', subscriptionId);
 
-    // old schema ids (your existing)
-    setText('subLocalActive', active ? 'ACTIVE' : 'DEMO', false);
-    setText('subLocalPlan', plan, false);
-    setText('subStripeCustomer', customerId || '-', true);
-    setText('subStripeSub', subId || '-', true);
-
-    // new schema ids (patch schema)
-    setText('om_plan', plan);
-    setText('om_customerId', customerId || '-');
-    setText('om_subscriptionId', subId || '-');
-
-    // 3) subscription status
-    const subResp = await loadSubStatus();
+    // subscription
     const s = subResp.subscription || subResp.data || subResp || {};
-
     const status = pick(s, ['status', 'subscription_status'], 'UNKNOWN');
     const cpe = pick(s, ['current_period_end', 'period_end'], null);
     const trialEnd = pick(s, ['trial_end'], null);
     const cancelAtPeriodEnd = !!pick(s, ['cancel_at_period_end'], false);
 
-    // old schema ids
-    setText('subStripeStatus', status);
-    setText('subCancelAtPeriodEnd', cancelAtPeriodEnd ? 'YES' : 'NO');
-    setText('subCurrentPeriodEnd', tsToLocal(cpe));
-    setText('subTrialEnd', tsToLocal(trialEnd));
+    setPanelText('om_auto_status', status);
+    setPanelText('om_auto_cpe', tsToLocal(cpe));
+    setPanelText('om_auto_trial', tsToLocal(trialEnd));
+    setPanelText('om_auto_cancel', cancelAtPeriodEnd ? 'YES' : 'NO');
 
-    // new schema ids
-    setText('om_subStatus', status);
-    setText('om_periodEnd', tsToLocal(cpe));
-    setText('om_trialEnd', tsToLocal(trialEnd));
+    // buttons: make sure clickable
+    const { portalBtn, subscribeBtn, refreshBtn } = getButtons();
+    if (portalBtn) enableBtn(portalBtn, true);
+    if (subscribeBtn) enableBtn(subscribeBtn, true);
+    if (refreshBtn) enableBtn(refreshBtn, true);
 
-    // 4) buttons
-    // Billing Portal：你旧逻辑是 “有 customerId 才开放”，这个很合理，保留
-    enableBtn('btnBillingPortal', !!customerId);
-
-    // Subscribe：永远不要灰（跳转由你原 checkout 流程负责）
-    enableBtn('btnSubscribe', true);
-
-    // Refresh（如果存在）
-    enableBtn('btnRefreshSub', true);
+    // hint
+    const hintEl = document.getElementById('om_auto_hint');
+    if (hintEl) {
+      const h = [];
+      if (me && me.__http && !me.__http.ok) h.push(`me: HTTP ${me.__http.status}`);
+      if (entResp && entResp.__http && !entResp.__http.ok) h.push(`entitlements: HTTP ${entResp.__http.status}`);
+      if (subResp && subResp.__http && !subResp.__http.ok) h.push(`subscription: HTTP ${subResp.__http.status}`);
+      hintEl.textContent = h.length ? `API hints: ${h.join(' | ')}` : '';
+    }
   }
 
   // -----------------------------
-  // bindings
+  // bind actions
   // -----------------------------
-  function bindAll() {
-    // Billing Portal
-    const portalBtn = $('btnBillingPortal');
-    if (portalBtn) {
+  function bindActions() {
+    const { portalBtn, refreshBtn } = getButtons();
+
+    if (portalBtn && !portalBtn.__om_bound) {
+      portalBtn.__om_bound = true;
       portalBtn.onclick = async () => {
-        enableBtn('btnBillingPortal', false);
+        enableBtn(portalBtn, false);
         try {
           const resp = await jpost('/api/billing/portal', { return_url: window.location.href });
           const url = resp.url || (resp.data && resp.data.url) || (resp.portal && resp.portal.url);
@@ -176,36 +212,33 @@
 
           alert('Billing portal error: ' + (resp.error || resp.detail || resp.raw || 'unknown'));
         } finally {
-          // 注意：这里不要强行 enable=true；应该按 entitlement 再决定
-          await renderAll().catch(() => {});
+          enableBtn(portalBtn, true);
         }
       };
     }
 
-    // Refresh status
-    const refreshBtn = $('btnRefreshSub');
-    if (refreshBtn) {
+    if (refreshBtn && !refreshBtn.__om_bound) {
+      refreshBtn.__om_bound = true;
       refreshBtn.onclick = async () => {
-        enableBtn('btnRefreshSub', false);
+        enableBtn(refreshBtn, false);
         try {
-          await refreshStripeSync();
-          await renderAll();
+          // optional sync first
+          await jget('/api/subscription/refresh');
+          await loadAndRender();
         } finally {
-          enableBtn('btnRefreshSub', true);
+          enableBtn(refreshBtn, true);
         }
       };
     }
-
-    // Subscribe：这里不改 onclick（你已有 checkout），只确保它别被灰
-    const subBtn = $('btnSubscribe');
-    if (subBtn) enableBtn('btnSubscribe', true);
   }
 
   // -----------------------------
   // boot
   // -----------------------------
   window.addEventListener('DOMContentLoaded', () => {
-    bindAll();
-    renderAll().catch(() => {});
+    try {
+      bindActions();
+      loadAndRender().catch(() => {});
+    } catch (_) {}
   });
 })();
