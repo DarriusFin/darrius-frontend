@@ -1,33 +1,60 @@
-// js/account.manage.fix.js
+// js/account.manage.fix.js  (FINAL - tolerant mapping)
 (() => {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
 
-  function pick(v, fallback = '—') {
+  const pick = (v, fallback = '—') => {
     if (v === null || v === undefined) return fallback;
     const s = String(v).trim();
     return s ? s : fallback;
-  }
+  };
 
-  function setText(id, text) {
+  const setText = (id, text) => {
     const el = $(id);
-    if (!el) return false;
+    if (!el) return;
     el.textContent = pick(text, '—');
-    return true;
-  }
+  };
 
-  function setBadge(ok, text) {
+  const setBadge = (ok) => {
     const b = $('statusBadge');
     if (!b) return;
-    b.textContent = text || (ok ? 'STATUS: OK' : 'STATUS: UNKNOWN');
+    b.textContent = ok ? 'STATUS: OK' : 'STATUS: UNKNOWN';
     b.classList.toggle('bad', !ok);
-  }
+  };
 
-  function setUpdated(ts) {
+  const setUpdated = (ts) => {
     const el = $('updatedAt');
     if (!el) return;
-    el.textContent = 'Updated: ' + pick(ts, new Date().toISOString().replace('T', ' ').replace('Z', 'Z'));
+    el.textContent = 'Updated: ' + pick(ts, new Date().toISOString().replace('T',' ').replace('Z','Z'));
+  };
+
+  function normalizeStatus(j, uidInput) {
+    // 兼容不同后端字段名
+    const currentPlan =
+      j.current_plan ?? j.plan ?? j.plan_name ?? j.product ?? j.tier ?? '—';
+
+    const subStatus =
+      j.subscription_status ?? j.status ?? j.sub_status ?? '—';
+
+    const renewsOrEnds =
+      j.renews_or_ends ?? j.renew_end ?? j.period ?? j.current_period_end ?? j.ends_at ?? '—';
+
+    const dataMode =
+      j.data_source_mode ?? j.data_mode ?? j.mode ?? 'DELAYED';
+
+    const updatedAt =
+      j.updated_at ?? j.updated ?? j.ts ?? null;
+
+    return {
+      ok: j.ok === true,
+      user_id: j.user_id ?? uidInput ?? '',
+      current_plan: currentPlan,
+      subscription_status: subStatus,
+      renews_or_ends: renewsOrEnds,
+      data_source_mode: dataMode,
+      updated_at: updatedAt,
+    };
   }
 
   async function fetchStatus() {
@@ -50,47 +77,52 @@
     qs.set('use_email_match', useEmail ? '1' : '0');
 
     const url = `${base}/billing/status?${qs.toString()}`;
-
     const r = await fetch(url, { method:'GET', credentials:'include' });
     const text = await r.text();
+
     let j = null;
     try { j = JSON.parse(text); } catch { j = { ok:false, raw:text }; }
 
-    if (!r.ok) {
-      return { ok:false, http:r.status, detail:j && (j.detail || j.error || j.raw) };
-    }
+    if (!r.ok) return { ok:false, http:r.status, detail:(j && (j.detail || j.error || j.raw)) };
 
+    // ok:true or has meaningful fields
     if (j && j.ok === true) return j;
 
-    const maybeOk = j && (j.subscription_status || j.current_plan || j.renews_or_ends);
-    if (maybeOk) return { ok:true, ...j };
+    const maybe = j && (j.subscription_status || j.status || j.current_plan || j.plan || j.current_period_end);
+    if (maybe) return { ok:true, ...j };
 
     return { ok:false, detail:(j && (j.detail || j.error || j.raw)) || 'unknown' };
   }
 
-  function render(j) {
-    setText('kvUser', j.user_id || ( $('userId')?.value || '' ));
-    setText('kvPlan', j.current_plan);
-    setText('kvSubStatus', j.subscription_status);
-    setText('kvEnds', j.renews_or_ends);
-    setText('kvDataMode', j.data_source_mode || j.data_mode || 'DELAYED');
-    setUpdated(j.updated_at);
-    setBadge(j && j.ok === true, (j && j.ok === true) ? 'STATUS: OK' : 'STATUS: UNKNOWN');
+  function render(norm) {
+    setText('kvUser', norm.user_id);
+    setText('kvPlan', norm.current_plan);
+    setText('kvSubStatus', norm.subscription_status);
+    setText('kvEnds', norm.renews_or_ends);
+    setText('kvDataMode', norm.data_source_mode || 'DELAYED');
+    setUpdated(norm.updated_at);
+    setBadge(norm.ok);
   }
 
   async function refreshStatus() {
-    // 清空旧值
-    render({ ok:false, user_id: $('userId')?.value || '' });
+    const uid = (($('userId') && $('userId').value) || '').trim();
+    render({ ok:false, user_id: uid, current_plan:'—', subscription_status:'—', renews_or_ends:'—', data_source_mode:'DELAYED' });
 
     try {
-      const j = await fetchStatus();
-      if (!j || j.ok !== true) {
-        setBadge(false, 'STATUS: UNKNOWN');
+      const raw = await fetchStatus();
+      const norm = normalizeStatus(raw || {}, uid);
+      // 如果后端 ok=false 或字段空，仍然保持 UNKNOWN
+      if (!norm.ok && pick(norm.current_plan) === '—' && pick(norm.subscription_status) === '—') {
+        setBadge(false);
         return;
       }
-      render(j);
+      // 若后端没显式 ok:true 但有字段，则当作 ok
+      if (!norm.ok && (pick(norm.current_plan) !== '—' || pick(norm.subscription_status) !== '—')) {
+        norm.ok = true;
+      }
+      render(norm);
     } catch {
-      setBadge(false, 'STATUS: UNKNOWN');
+      setBadge(false);
     }
   }
 
