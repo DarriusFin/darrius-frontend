@@ -16,6 +16,10 @@
       --brand1:#2BE2A6;
       --brand2:#4CC2FF;
       --danger:#FF5A5A;
+
+      /* ✅ 亮绿色（更醒目） */
+      --ok:#39F3A1;
+
       --shadow: 0 18px 45px rgba(0,0,0,.40);
       --shadow2: 0 10px 25px rgba(0,0,0,.28);
       --r12:12px;
@@ -23,6 +27,10 @@
       --r18:18px;
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
       --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
+
+      /* ✅ Logo 放大 1.85x：46px × 1.85 ≈ 85.1 */
+      --logoSize: 86px;
+      --logoRadius: 28px;
     }
 
     *{ box-sizing:border-box; }
@@ -59,27 +67,41 @@
       min-width:420px;
     }
 
-    /* ✅ Logo bigger */
-    .logoBox{
-      width: 64px;
-      height: 64px;
-      border-radius: 18px;
+    /* ✅ 同款 Logo（放大 1.85x + ::after 旋转光效） */
+    .logo{
+      width: var(--logoSize);
+      height: var(--logoSize);
+      border-radius: var(--logoRadius);
+      position:relative;
       overflow:hidden;
+      flex:0 0 auto;
+
+      /* 先给个品牌底色 + 再贴图 */
+      background:
+        var(--gradBrandSoft),
+        url('/assets/logo.png') center/cover no-repeat;
+
       border:1px solid rgba(255,255,255,.12);
       box-shadow: 0 14px 30px rgba(0,0,0,.30);
-      flex:0 0 auto;
-      background: rgba(0,0,0,.12);
-      display:flex;
-      align-items:center;
-      justify-content:center;
     }
-    #logoImg{
-      width: 64px;
-      height: 64px;
-      border-radius: 18px;
-      object-fit: cover;
-      display:block;
+
+    .logo::after{
+      content:"";
+      position:absolute;
+      inset:-65%;
+      background: conic-gradient(from 180deg,
+        rgba(43,226,166,0),
+        rgba(43,226,166,.70),
+        rgba(76,194,255,.70),
+        rgba(255,90,90,.55),
+        rgba(43,226,166,0));
+      animation: spin 6.5s linear infinite;
+      filter: blur(0.2px);
+      opacity:.85;
+      pointer-events:none;
+      mix-blend-mode: screen;
     }
+    @keyframes spin{ to{ transform: rotate(360deg);} }
 
     .brandText{ line-height:1.08; }
     .brandLine1{
@@ -141,8 +163,8 @@
     }
     .dot{
       width:9px;height:9px;border-radius:50%;
-      background: var(--brand1);
-      box-shadow: 0 0 0 4px rgba(43,226,166,.10);
+      background: var(--ok);
+      box-shadow: 0 0 0 4px rgba(57,243,161,.12);
       flex:0 0 auto;
     }
     .btnTop{
@@ -157,10 +179,7 @@
     }
 
     /* Main */
-    #wrap{
-      padding:16px;
-    }
-
+    #wrap{ padding:16px; }
     #grid{
       display:grid;
       grid-template-columns: 1fr 380px;
@@ -203,8 +222,8 @@
       font-size:12px;
       padding:6px 10px;
       border-radius:999px;
-      border:1px solid rgba(43,226,166,.30);
-      background: rgba(43,226,166,.12);
+      border:1px solid rgba(57,243,161,.35);
+      background: rgba(57,243,161,.14);
       color: rgba(234,240,247,.95);
       font-weight:950;
       letter-spacing:.3px;
@@ -242,6 +261,8 @@
       font-size:12px;
       color: var(--muted);
     }
+    .small{ font-size:12px; color: var(--muted); }
+
     input{
       width:100%;
       background: rgba(0,0,0,.24);
@@ -258,11 +279,19 @@
       box-shadow: 0 0 0 4px rgba(76,194,255,.12);
     }
 
+    /* ✅ 修复：原先 row2 被你临时改成三列写在 style 里，容易导致响应式变形
+       这里明确给一个稳定三列类 .row3，并在小屏自动折行 */
     .row2{
       display:grid;
       grid-template-columns: 1fr 1fr;
       gap:10px;
       margin-top:10px;
+    }
+    .row3{
+      display:grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap:10px;
+      align-items:end;
     }
 
     .btn{
@@ -326,6 +355,8 @@
       #grid{ grid-template-columns: 1fr; }
       .brand{ min-width:0; }
       .topRight{ min-width:0; }
+      .row3{ grid-template-columns: 1fr; align-items:stretch; }
+      .row3 .btn{ width:100%; }
     }
   </style>
 </head>
@@ -333,9 +364,9 @@
 <body>
   <div id="topbar">
     <div class="brand">
-      <div class="logoBox" aria-hidden="true">
-        <img id="logoImg" alt="darrius.ai logo" />
-      </div>
+      <!-- ✅ 同款 logo（无需 img） -->
+      <div class="logo" aria-hidden="true"></div>
+
       <div class="brandText">
         <div class="brandLine1"><span class="accent">DarriusAI</span> · Inflection Hunter</div>
         <div class="brandLine2">
@@ -368,7 +399,8 @@
           </div>
 
           <div class="card">
-            <div class="row2" style="grid-template-columns: 1fr 1fr auto; align-items:end;">
+            <!-- ✅ 修复：稳定三列，不再“变形” -->
+            <div class="row3">
               <div class="field" style="margin-bottom:0">
                 <div class="label"><span><b>User ID</b>（用户ID）</span><span class="small">必填</span></div>
                 <input id="userId" placeholder="例如：darrius888"/>
@@ -381,7 +413,7 @@
                 <div class="note" style="margin-top:6px">Optional; helps match customer email in checkout.<br/>可选：帮助 Checkout 匹配邮箱。</div>
               </div>
 
-              <button class="btn" id="saveBtn" style="width:auto; padding:12px 18px;">Save（保存）</button>
+              <button class="btn" id="saveBtn" style="width:auto; padding:12px 18px; white-space:nowrap;">Save（保存）</button>
             </div>
 
             <div style="height:10px"></div>
@@ -463,24 +495,6 @@
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
-
-    // ✅ load logo
-    (function(){
-      const img = document.getElementById('logoImg');
-      if (!img) return;
-      const candidates = [
-        '/assets/logo.png',
-        '/assets/icon.png',
-        '/favicon.png',
-        '/favicon.ico'
-      ];
-      let idx = 0;
-      img.onerror = () => {
-        idx += 1;
-        if (idx < candidates.length) img.src = candidates[idx];
-      };
-      img.src = candidates[0];
-    })();
   </script>
 
   <!-- Minimal wiring (safe, best-effort, does NOT change payment logic) -->
@@ -504,8 +518,55 @@
         const b = $('statusBadge');
         if (!b) return;
         b.textContent = text;
-        b.style.borderColor = ok ? 'rgba(43,226,166,.30)' : 'rgba(255,90,90,.30)';
-        b.style.background  = ok ? 'rgba(43,226,166,.12)' : 'rgba(255,90,90,.12)';
+
+        if (ok){
+          b.style.borderColor = 'rgba(57,243,161,.35)';
+          b.style.background  = 'rgba(57,243,161,.14)';
+          b.style.color       = 'rgba(234,240,247,.95)';
+        } else {
+          b.style.borderColor = 'rgba(255,90,90,.35)';
+          b.style.background  = 'rgba(255,90,90,.12)';
+          b.style.color       = 'rgba(234,240,247,.95)';
+        }
+      }
+
+      // ✅ 尝试多路径取状态：先 /api/subscription/status（你截图里出现过），再 fallback /billing/status
+      async function fetchStatus(uid, em){
+        const tries = [
+          { url: base + '/api/subscription/status?user_id=' + encodeURIComponent(uid) + (em ? '&email=' + encodeURIComponent(em) : ''), tag:'api/subscription/status' },
+          { url: base + '/billing/status?user_id=' + encodeURIComponent(uid) + (em ? '&email=' + encodeURIComponent(em) : ''), tag:'billing/status' },
+        ];
+
+        let lastErr = null;
+        for (const t of tries){
+          try{
+            const res = await fetch(t.url, { method:'GET' });
+            if (!res.ok) throw new Error(t.tag + ' HTTP ' + res.status);
+            const j = await res.json().catch(()=> ({}));
+            return { ok:true, data:j, from:t.tag };
+          } catch(e){
+            lastErr = e;
+          }
+        }
+        return { ok:false, error:lastErr };
+      }
+
+      function normalizeStatus(j){
+        const status = (j.status || j.subscription_status || j.sub_status || '').toString();
+        const plan   = (j.plan || j.current_plan || j.plan_name || '').toString();
+        const ends   = (j.renews_or_ends || j.ends_at || j.renews_at || j.current_period_end || '').toString();
+        const user   = (j.user || j.user_id || j.uid || '').toString();
+        const mode   = (j.data_mode || j.data_source_mode || j.market_mode || '').toString();
+
+        return {
+          status: status || 'ACTIVE',
+          plan: plan || '—',
+          ends: ends || '—',
+          user: user || '—',
+          dataMode: mode || 'Market (Delayed) / 市场数据（延时）',
+          build: (j.build || j.version || '').toString(),
+          backend: (j.backend || j.connected || '').toString()
+        };
       }
 
       async function refreshStatus(){
@@ -523,26 +584,35 @@
           if (em) localStorage.setItem('darrius_email', em);
         }catch(e){}
 
-        // Best-effort: call backend status (if your backend path differs, it won't break the page)
         try{
-          const url = base + '/billing/status?user_id=' + encodeURIComponent(uid) + (em ? '&email=' + encodeURIComponent(em) : '');
-          const res = await fetch(url, { method:'GET' });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const j = await res.json().catch(()=> ({}));
+          const r = await fetchStatus(uid, em);
 
-          // expected shape (best guess)
-          $('kvUser').textContent = j.user || uid;
-          $('kvPlan').textContent = j.plan || j.current_plan || '—';
-          $('kvSubStatus').textContent = j.status || j.subscription_status || '—';
-          $('kvEnds').textContent = j.renews_or_ends || j.ends_at || '—';
-          $('kvDataMode').textContent = j.data_mode || 'Market (Delayed) / 市场数据（延时）';
+          if (r.ok){
+            const n = normalizeStatus(r.data);
 
-          $('buildText').textContent = j.build || new Date().toISOString();
-          $('backendText').textContent = 'Connected';
+            $('kvUser').textContent = n.user === '—' ? uid : n.user;
+            $('kvPlan').textContent = n.plan;
+            $('kvSubStatus').textContent = n.status;
+            $('kvEnds').textContent = n.ends;
+            $('kvDataMode').textContent = n.dataMode;
 
-          setStatusBadge('STATUS: ' + (j.status || 'ACTIVE'), true);
+            $('buildText').textContent = n.build || new Date().toISOString();
+            $('backendText').textContent = 'Connected';
+
+            const st = (n.status || '').toUpperCase();
+            const ok = (st.includes('ACTIVE') || st.includes('TRIAL') || st.includes('PAID'));
+            setStatusBadge('STATUS: ' + (st || 'ACTIVE'), ok);
+
+            // 顶部 pills（可选加强）
+            const accessText = $('accessText');
+            if (accessText) accessText.textContent = 'Access: ' + (n.dataMode || 'Market (Delayed)') + ' · 市场数据（延时）';
+
+            return;
+          }
+
+          throw r.error || new Error('status fetch failed');
         }catch(e){
-          // fallback display: still not crash
+          // fallback: 不崩溃
           $('kvUser').textContent = uid;
           $('kvPlan').textContent = '—';
           $('kvSubStatus').textContent = '—';
@@ -563,12 +633,8 @@
       $('openDashBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
       $('backBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
 
-      // Billing portal / Change plan:
-      // ✅ do NOT implement actual checkout here (avoid touching your payment logic).
-      // Just route to your existing endpoints/pages if you already have them.
+      // ✅ 不触动你原有支付逻辑：这里只做“跳转占位”，你后面把它改成你自己的既有 route 即可
       $('openPortalBtn')?.addEventListener('click', () => {
-        // If you already have a billing portal route, replace this:
-        // window.location.href = base + '/billing/portal?...'
         alert('Open Billing Portal: please wire this to your existing billing portal route in your backend.');
       });
 
@@ -577,7 +643,7 @@
       });
 
       // initial best-effort refresh
-      setTimeout(refreshStatus, 300);
+      setTimeout(refreshStatus, 250);
     })();
   </script>
 </body>
