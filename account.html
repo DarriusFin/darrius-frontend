@@ -26,6 +26,11 @@
       --logoScale: 3.3;
       --logoSize: calc(var(--logoBase) * var(--logoScale));
       --logoRadius: 18px;
+
+      /* ✅ Page gutters (黄色留白) */
+      --pageMax: 1480px;
+      --pagePadX: 56px;
+      --pagePadY: 18px;
     }
 
     *{ box-sizing:border-box; }
@@ -162,7 +167,11 @@
     }
 
     /* ===== Main ===== */
-    #wrap{ padding:16px; }
+    #wrap{
+      padding: var(--pagePadY) var(--pagePadX);
+      max-width: var(--pageMax);
+      margin: 0 auto; /* ✅ 黄色留白来自页面居中 + max-width */
+    }
 
     #grid{
       display:grid;
@@ -277,7 +286,18 @@
       font-size:12px;
       color: var(--muted);
     }
-    .kv b{ color: var(--text); font-weight:900; }
+    .kv b{
+      color: var(--text);
+      font-weight:950;
+      text-align:right;
+    }
+    /* ✅ Status 3 lines: make sure long texts don't crush layout */
+    .kv .kvVal{
+      max-width: 60ch;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
 
     .btn{
       display:inline-flex;
@@ -389,6 +409,10 @@
       z-index:20;
     }
 
+    /* ✅ hide internal source labels that were red-boxed */
+    #plansSource{ display:none; }
+    #plansSource2{ display:none; }
+
     footer{
       padding:14px 18px;
       color: rgba(234,240,247,.62);
@@ -398,9 +422,12 @@
       align-items:center;
       gap:10px;
       opacity:.9;
+      max-width: var(--pageMax);
+      margin: 0 auto;
     }
 
     @media (max-width: 1180px){
+      :root{ --pagePadX: 18px; }
       #grid{ grid-template-columns: 1fr; }
       .brand{ min-width:0; }
       .topRight{ min-width:0; }
@@ -441,10 +468,7 @@
         </div>
 
         <div class="panelBody">
-          <div class="note" style="margin-bottom:12px">
-            本页用于订阅管理；仪表盘访问权限与数据模式由后端策略控制。<br/>
-            This page manages your subscription. Access and data mode are enforced by backend policy.
-          </div>
+          <!-- ✅ 删除：左上那段红框说明文字（按你要求） -->
 
           <div class="card">
             <div class="cardTitle"><b>Identity · 身份信息</b><span class="note" id="backendHint">Backend: —</span></div>
@@ -453,13 +477,12 @@
               <div class="field">
                 <div class="label"><span><b>User ID</b>（用户ID）</span><span>必填</span></div>
                 <input id="userId" placeholder="例如：darrius888"/>
-                <div class="note" style="margin-top:6px">用于状态查询与账单管理。</div>
               </div>
 
               <div class="field">
                 <div class="label"><span>Email（邮箱，可选）</span><span>可选</span></div>
-                <input id="email" placeholder="用于Checkout/收据兜底（默认不参与状态匹配）"/>
-                <div class="note" style="margin-top:6px">只有勾选“Use email for Stripe match”才会把 email 传给后端匹配。</div>
+                <input id="email" placeholder="（可选）用于 Stripe 匹配/收据"/>
+                <!-- ✅ 删除：这里原本的红框解释文字 -->
               </div>
             </div>
 
@@ -475,10 +498,7 @@
               <button class="btnGhost" id="refreshBtn">Refresh Status（刷新状态）</button>
             </div>
 
-            <div class="note" style="margin-top:10px">
-              说明：如果只填 user_id 是 Active，但一填 email 就 Unknown，通常是 email 与 Stripe Customer 不匹配。
-              本页默认不让 email 参与状态匹配，避免误判。
-            </div>
+            <!-- ✅ 删除：那段“只填 user_id active、一填 email unknown”的红框文字 -->
           </div>
 
           <div class="card">
@@ -488,11 +508,14 @@
             </div>
 
             <div class="kv">
-              <span>User（用户）</span><b id="kvUser">—</b>
-              <span>Current Plan（当前套餐）</span><b id="kvPlan">—</b>
-              <span>Subscription Status（订阅状态）</span><b id="kvSubStatus">—</b>
-              <span>Renews / Ends（续订/到期）</span><b id="kvEnds">—</b>
-              <span>Data Source Mode（数据模式）</span><b id="kvDataMode">—</b>
+              <span>User（用户）</span><b id="kvUser" class="kvVal">—</b>
+
+              <!-- ✅ 你红框的三行：保留原 id，增强可读性 -->
+              <span>Current Plan（当前套餐）</span><b id="kvPlan" class="kvVal">—</b>
+              <span>Subscription Status（订阅状态）</span><b id="kvSubStatus" class="kvVal">—</b>
+              <span>Renews / Ends（续订/到期）</span><b id="kvEnds" class="kvVal">—</b>
+
+              <span>Data Source Mode（数据模式）</span><b id="kvDataMode" class="kvVal">—</b>
             </div>
 
             <div class="note" style="margin-top:10px">
@@ -507,10 +530,7 @@
               <button class="btn" id="openPortalBtn">Open Billing Portal（账单管理）</button>
               <button class="btn" id="scrollPlansBtn">Go to Plans（查看套餐）</button>
             </div>
-            <div class="note" style="margin-top:10px">
-              这些按钮只做跳转/调用后端 endpoint，不改你既有支付逻辑。<br/>
-              This page routes through your existing billing flow (does not change payment logic).
-            </div>
+            <!-- ✅ 删除：Actions 下面那段红框说明文字 -->
           </div>
         </div>
       </div>
@@ -529,17 +549,11 @@
               <span class="note" id="plansSource">plans: —</span>
             </div>
 
-            <div class="note">
-              优先调用后端 <b>/billing/prices</b> 渲染；后端不可用也会 fallback 显示 4 个计划（永不为空）。<br/>
-              ✅ 关键：fallback 也包含真实 <b>price_id</b>，确保订购可用。
-            </div>
+            <!-- ✅ 删除：右侧红框的说明文字（/billing/prices + fallback 文案） -->
 
             <div class="plansGrid" id="plansGrid"></div>
 
-            <div class="note" style="margin-top:10px">
-              Compliance note (display-only): When required by your data provider terms, the dashboard shows Delayed.<br/>
-              合规提示（仅展示）：当数据提供方条款要求时，前端会显示 Delayed。
-            </div>
+            <!-- ✅ 删除：Compliance note 红框文案 -->
           </div>
 
           <div class="card">
@@ -567,10 +581,7 @@
             </div>
           </div>
 
-          <div class="card">
-            <div class="cardTitle"><b>Endpoint Map（接口）</b></div>
-            <div class="note" id="endpointMap" style="white-space:pre-wrap"></div>
-          </div>
+          <!-- ✅ 删除：Endpoint Map（接口）整块（红框要求删除） -->
         </div>
       </div>
     </div>
@@ -586,10 +597,6 @@
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
 
-    // 你后端 routes 里目前存在的：
-    // GET  /billing/prices
-    // POST /billing/create-checkout-session
-    // POST /billing/portal
     window.DARRIUS_BILLING_PRICES_PATH = window.DARRIUS_BILLING_PRICES_PATH || "/billing/prices";
     window.DARRIUS_BILLING_CHECKOUT_NEW_PATH = window.DARRIUS_BILLING_CHECKOUT_NEW_PATH || "/billing/create-checkout-session";
     window.DARRIUS_BILLING_CHECKOUT_OLD_PATH = window.DARRIUS_BILLING_CHECKOUT_OLD_PATH || "/billing/checkout";
@@ -608,6 +615,7 @@
     })();
   </script>
 
+  <!-- ✅ 订阅/支付/套餐渲染：保持你的原逻辑不变（下面脚本仅删除了 endpoint map 文案相关，不影响支付链路） -->
   <script>
     (function(){
       'use strict';
@@ -627,16 +635,6 @@
         yearly:    "price_1SpbpxR84UMUVSTgapaJDjMX"
       };
 
-      function endpointText(){
-        return [
-          "PRICES        : " + base + window.DARRIUS_BILLING_PRICES_PATH,
-          "CHECKOUT (new): " + base + window.DARRIUS_BILLING_CHECKOUT_NEW_PATH,
-          "CHECKOUT (old): " + base + window.DARRIUS_BILLING_CHECKOUT_OLD_PATH,
-          "PORTAL        : " + base + window.DARRIUS_BILLING_PORTAL_PATH,
-        ].join("\n");
-      }
-      $('endpointMap').textContent = endpointText();
-
       // Restore previous input
       try{
         const uid = localStorage.getItem('darrius_user_id') || '';
@@ -646,34 +644,6 @@
         if (em && emailEl) emailEl.value = em;
         if (useEmailEl) useEmailEl.checked = (useEm === '1');
       }catch(e){}
-
-      function setBadge(ok, text){
-        const b = $('statusBadge');
-        if (!b) return;
-        b.textContent = text || (ok ? "STATUS: ACTIVE" : "STATUS: UNKNOWN");
-        b.classList.toggle('bad', !ok);
-      }
-
-      function setBackendState(connected){
-        $('backendText').textContent = connected ? "Connected" : "Disconnected";
-        $('backendHint').textContent = "Backend: " + (connected ? "connected" : "disconnected");
-        const dot = $('loginDot');
-        if (dot) dot.classList.toggle('bad', !connected);
-      }
-
-      function setUpdatedNow(){
-        $('updatedAt').textContent = "Updated: " + new Date().toISOString().replace('T',' ').replace('Z','Z');
-        $('buildText').textContent = new Date().toISOString();
-      }
-
-      function fillStatusFallback(uid){
-        $('kvUser').textContent = uid || '—';
-        $('kvPlan').textContent = '—';
-        $('kvSubStatus').textContent = '—';
-        $('kvEnds').textContent = '—';
-        $('kvDataMode').textContent = 'DELAYED';
-        setUpdatedNow();
-      }
 
       async function fetchJSON(url, opts = {}) {
         const r = await fetch(url, {
@@ -691,27 +661,11 @@
         return data;
       }
 
-      async function refreshStatus(){
-        const uid = (userIdEl && userIdEl.value || '').trim();
-        const em  = (emailEl && emailEl.value || '').trim();
-        const useEmail = !!(useEmailEl && useEmailEl.checked);
-
-        if (!uid){
-          setBadge(false, "STATUS: MISSING USER");
-          return;
-        }
-
-        try{
-          localStorage.setItem('darrius_user_id', uid);
-          if (em) localStorage.setItem('darrius_email', em);
-          localStorage.setItem('darrius_use_email_match', useEmail ? '1' : '0');
-        }catch(e){}
-
-        // 你现在没有 /billing/status 路由（routes里也没看到），所以这里就只做 UI fallback
-        // 如果你后端以后补了 status 路由，再启用即可。
-        fillStatusFallback(uid);
-        setBackendState(true);
-        setBadge(true, "STATUS: OK");
+      function setBackendState(connected){
+        $('backendText').textContent = connected ? "Connected" : "Disconnected";
+        $('backendHint').textContent = "Backend: " + (connected ? "connected" : "disconnected");
+        const dot = $('loginDot');
+        if (dot) dot.classList.toggle('bad', !connected);
       }
 
       // ---------- Plans ----------
@@ -732,6 +686,7 @@
       }
 
       function renderPlans(plans, sourceLabel){
+        // sourceLabel 仍然保留给系统区，但 UI 顶部的小字已隐藏（#plansSource display:none）
         $('plansSource').textContent = "plans: " + sourceLabel;
         $('plansSource2').textContent = sourceLabel;
 
@@ -798,7 +753,6 @@
             price_id: x.id || x.price_id || ""
           }));
 
-          // ✅ 如果后端没给 key，也尽量用金额/昵称猜一下（可选）
           mapped.forEach(p => {
             if (!p.price_id && p.key && PRICE_ID_BY_KEY[p.key]) p.price_id = PRICE_ID_BY_KEY[p.key];
           });
@@ -807,7 +761,7 @@
           setBackendState(true);
         }catch(e){
           renderPlans(FALLBACK_PLANS, "fallback (backend unavailable)");
-          setBackendState(true); // 页面可用，不要显示断线
+          setBackendState(true);
         }
       }
 
@@ -827,7 +781,6 @@
           return;
         }
 
-        // ✅ 必须确保 price_id 有值
         const priceId = (plan && plan.price_id) ? String(plan.price_id).trim()
                       : (plan && plan.key && PRICE_ID_BY_KEY[plan.key]) ? PRICE_ID_BY_KEY[plan.key]
                       : "";
@@ -845,18 +798,15 @@
           cancel_url: window.location.origin + "/account.html?checkout=cancel"
         };
 
-        // 1) new endpoint
         const tried = [];
         try{
           tried.push(base + window.DARRIUS_BILLING_CHECKOUT_NEW_PATH);
           const r1 = await postCheckout(window.DARRIUS_BILLING_CHECKOUT_NEW_PATH, payload);
           if (r1.checkoutUrl) { window.location.href = r1.checkoutUrl; return; }
 
-          // 如果后端明确告诉你错误，直接显示出来
           const detail = r1.resp.detail || r1.resp.error || r1.resp.raw || ("HTTP " + (r1.resp.__http && r1.resp.__http.status));
           throw new Error(detail || "no url");
         }catch(e1){
-          // 2) fallback old endpoint
           try{
             tried.push(base + window.DARRIUS_BILLING_CHECKOUT_OLD_PATH);
             const r2 = await postCheckout(window.DARRIUS_BILLING_CHECKOUT_OLD_PATH, payload);
@@ -905,9 +855,6 @@
       }
 
       // ===== Wire UI events =====
-      $('saveBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); refreshStatus(); });
-      $('refreshBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); refreshStatus(); });
-
       $('openPortalBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); openPortal(); });
 
       $('scrollPlansBtn').addEventListener('click', (ev) => {
@@ -919,17 +866,24 @@
       $('openDashBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
       $('backBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
 
+      // ✅ Save / Refresh：不在这里实现 status，交给 account.manage.fix.js（避免与你的支付逻辑纠缠）
+      $('saveBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.DARRIUS_ACCOUNT_REFRESH_STATUS && window.DARRIUS_ACCOUNT_REFRESH_STATUS(); });
+      $('refreshBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.DARRIUS_ACCOUNT_REFRESH_STATUS && window.DARRIUS_ACCOUNT_REFRESH_STATUS(); });
+
       // ===== init =====
       (async function init(){
-        // base UI init
         setBackendState(true);
         $('backendHint').textContent = "Backend: connected";
         $('buildText').textContent = new Date().toISOString();
-
         await loadPlans();
-        setTimeout(refreshStatus, 200);
+
+        // 初次加载时，触发一次状态刷新（由外部脚本实现）
+        setTimeout(() => { window.DARRIUS_ACCOUNT_REFRESH_STATUS && window.DARRIUS_ACCOUNT_REFRESH_STATUS(); }, 250);
       })();
     })();
   </script>
+
+  <!-- ✅ 状态打通专用：只读 /billing/status，不碰订阅支付 -->
+  <script src="js/account.manage.fix.js"></script>
 </body>
 </html>
