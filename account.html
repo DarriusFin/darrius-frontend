@@ -9,31 +9,24 @@
     :root{
       --bg:#0B0F17;
       --bg2:#0A1220;
+      --panel:#121A28;
       --border:rgba(255,255,255,.08);
       --text:#EAF0F7;
       --muted:#A2B0C2;
-
       --brand1:#2BE2A6;
       --brand2:#4CC2FF;
-      --warn:#FFB86C;
       --danger:#FF5A5A;
-      --ok:#39F3A1;
-
       --shadow: 0 18px 45px rgba(0,0,0,.40);
       --shadow2: 0 10px 25px rgba(0,0,0,.28);
-
       --r12:12px;
       --r14:14px;
       --r18:18px;
-
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
+      --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
 
-      /* ✅ Logo 放大到 2.5x */
-      --logoSize:160px;
-      --logoRadius:44px;
-      --logoGlowOpacity:.72;
-      --logoGlowBlur:.3px;
-      --logoGlowSpeed:6.8s;
+      /* ✅ Logo unified sizing (≈2x feel) */
+      --logoSize: 72px;
+      --logoRadius: 20px;
     }
 
     *{ box-sizing:border-box; }
@@ -46,14 +39,15 @@
         radial-gradient(900px 520px at 88% 12%, rgba(43,226,166,.10), transparent 62%),
         linear-gradient(180deg, var(--bg), var(--bg2));
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "PingFang SC","Microsoft YaHei", sans-serif;
+      overflow-x:hidden;
     }
 
     a{ color: rgba(76,194,255,.95); text-decoration:none; }
     a:hover{ text-decoration:underline; }
 
-    /* ===== Topbar ===== */
+    /* Top bar */
     #topbar{
-      height:96px;
+      height:78px;
       padding:0 18px;
       display:flex;
       align-items:center;
@@ -63,65 +57,48 @@
       backdrop-filter: blur(10px);
     }
 
-    #brand{
+    .brand{
       display:flex;
       align-items:center;
-      gap:16px;
-      min-width:460px;
+      gap:14px;
+      min-width:420px;
+      min-height:56px;
     }
 
-    .logo{
+    /* ✅ Real logo image, NO rotating halo */
+    .logoBox{
       width: var(--logoSize);
       height: var(--logoSize);
       border-radius: var(--logoRadius);
+      overflow:hidden;
       border:1px solid rgba(255,255,255,.12);
       box-shadow: 0 14px 30px rgba(0,0,0,.30);
-      position:relative;
-      overflow:hidden;
       flex:0 0 auto;
-      background: rgba(0,0,0,.16);
-      isolation:isolate;
+      background: rgba(0,0,0,.12);
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
-    .logo img{
-      position:absolute; inset:0;
-      width:100%; height:100%;
-      object-fit:cover;
-      border-radius:inherit;
+    #logoImg{
+      width: 100%;
+      height: 100%;
+      border-radius: var(--logoRadius);
+      object-fit: cover;
       display:block;
-      z-index:1;
-      user-select:none;
-      -webkit-user-drag:none;
-    }
-    @keyframes logoSpin{ to{ transform: rotate(360deg);} }
-    .logo::after{
-      content:"";
-      position:absolute; inset:-70%;
-      background: conic-gradient(from 180deg,
-        rgba(43,226,166,0),
-        rgba(43,226,166,.68),
-        rgba(76,194,255,.68),
-        rgba(255,90,90,.52),
-        rgba(43,226,166,0));
-      animation: logoSpin var(--logoGlowSpeed) linear infinite;
-      opacity: var(--logoGlowOpacity);
-      pointer-events:none;
-      z-index:2;
-      mix-blend-mode: screen;
-      filter: blur(var(--logoGlowBlur));
     }
 
-    #brandText{ line-height:1.08; }
-    #brandLine1{
+    .brandText{ line-height:1.08; }
+    .brandLine1{
       font-weight:950;
       letter-spacing:.3px;
-      font-size:26px;
+      font-size:22px;
     }
-    #brandLine1 .accent{
+    .brandLine1 .accent{
       background: var(--gradBrand);
       -webkit-background-clip:text;
       -webkit-text-fill-color:transparent;
     }
-    #brandLine2{
+    .brandLine2{
       margin-top:7px;
       color:var(--muted);
       font-size:13px;
@@ -145,12 +122,12 @@
       color: rgba(234,240,247,.95);
     }
 
-    #topRight{
+    .topRight{
       display:flex;
       align-items:center;
       gap:10px;
       justify-content:flex-end;
-      min-width:380px;
+      min-width:360px;
     }
     .pill{
       display:inline-flex;
@@ -164,15 +141,19 @@
       font-size:12px;
       color: var(--text);
       white-space:nowrap;
-      max-width: 46vw;
+      max-width: 42vw;
       overflow:hidden;
       text-overflow:ellipsis;
     }
     .dot{
       width:9px;height:9px;border-radius:50%;
-      background: var(--ok);
-      box-shadow: 0 0 0 4px rgba(57,243,161,.12);
+      background: var(--brand1);
+      box-shadow: 0 0 0 4px rgba(43,226,166,.10);
       flex:0 0 auto;
+    }
+    .dot.bad{
+      background: var(--danger);
+      box-shadow: 0 0 0 4px rgba(255,90,90,.10);
     }
     .btnTop{
       border:1px solid rgba(255,255,255,.10);
@@ -185,14 +166,18 @@
       font-weight:900;
     }
 
-    /* ===== Layout ===== */
-    #wrap{ padding:16px; }
+    /* Main */
+    #wrap{
+      padding:16px;
+    }
+
+    /* ✅ Layout fix: stable grid + min-width:0 prevents squish + content overflow issues */
     #grid{
-      height: calc(100vh - 96px);
       display:grid;
-      grid-template-columns: 1fr 380px;
+      grid-template-columns: minmax(0, 1fr) 380px;
       gap:16px;
-      min-height:0;
+      min-height: calc(100vh - 78px - 58px);
+      align-items:start;
     }
 
     .panel{
@@ -202,8 +187,7 @@
       box-shadow: var(--shadow);
       overflow:hidden;
       min-height:0;
-      display:flex;
-      flex-direction:column;
+      min-width:0;
     }
 
     .panelHeader{
@@ -225,7 +209,6 @@
     }
     .panelBody{
       padding:14px;
-      overflow:auto;
       min-height:0;
     }
 
@@ -233,20 +216,22 @@
       font-size:12px;
       padding:6px 10px;
       border-radius:999px;
-      border:1px solid rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.14);
       background: rgba(255,255,255,.06);
-      color: rgba(234,240,247,.92);
+      color: rgba(234,240,247,.95);
       font-weight:950;
       letter-spacing:.3px;
       white-space:nowrap;
     }
     .badge.ok{
-      border-color: rgba(57,243,161,.35);
-      background: rgba(57,243,161,.14);
+      border-color: rgba(43,226,166,.35);
+      background: rgba(43,226,166,.14);
+      color: rgba(234,240,247,.96);
     }
     .badge.bad{
       border-color: rgba(255,90,90,.35);
-      background: rgba(255,90,90,.12);
+      background: rgba(255,90,90,.14);
+      color: rgba(234,240,247,.96);
     }
 
     .card{
@@ -255,8 +240,8 @@
       border-radius: var(--r14);
       padding:12px;
       margin-bottom:12px;
+      min-width:0;
     }
-
     .cardTitle{
       display:flex;
       align-items:center;
@@ -272,14 +257,7 @@
       font-weight:900;
     }
 
-    .note{
-      font-size:12px;
-      color: var(--muted);
-      line-height:1.45;
-    }
-    .note b{ color: var(--text); }
-
-    .field{ margin-bottom:10px; }
+    .field{ margin-bottom:10px; min-width:0; }
     .label{
       display:flex;
       align-items:center;
@@ -288,8 +266,10 @@
       margin-bottom:6px;
       font-size:12px;
       color: var(--muted);
+      min-width:0;
     }
-    .label b{ color: var(--text); }
+    .label span{ min-width:0; }
+    .small{ font-size:12px; color: var(--muted); }
 
     input{
       width:100%;
@@ -300,6 +280,7 @@
       border-radius: var(--r12);
       outline:none;
       font-size:13px;
+      min-width:0;
     }
     input::placeholder{ color: rgba(162,176,194,.80); }
     input:focus{
@@ -309,10 +290,20 @@
 
     .row2{
       display:grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0,1fr) minmax(0,1fr);
       gap:10px;
       margin-top:10px;
+      align-items:stretch;
+      min-width:0;
     }
+    .row3{
+      display:grid;
+      grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto;
+      gap:10px;
+      align-items:end;
+      min-width:0;
+    }
+
     .btn{
       width:100%;
       border:0;
@@ -325,6 +316,7 @@
       background: var(--gradBrand);
       box-shadow: var(--shadow2);
       transition: transform .06s ease, filter .15s ease;
+      white-space:nowrap;
     }
     .btn:hover{ filter: brightness(1.04); }
     .btn:active{ transform: translateY(1px); }
@@ -339,143 +331,267 @@
       cursor:pointer;
       background: rgba(0,0,0,.14);
       transition: transform .06s ease, filter .15s ease;
+      white-space:nowrap;
     }
     .btnGhost:hover{ filter: brightness(1.05); }
     .btnGhost:active{ transform: translateY(1px); }
 
-    .kv{
-      display:grid;
-      grid-template-columns: 220px 1fr; /* ✅ 左标签右值，稳定不乱 */
-      gap:10px 14px;
+    .note{
       font-size:12px;
       color: var(--muted);
-      align-items:center;
+      line-height:1.45;
     }
-    .kv b{ color: var(--text); font-weight:950; }
-    .kv .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .note b{ color: var(--text); }
+
+    .kv{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px 10px;
+      font-size:12px;
+      color: var(--muted);
+    }
+    .kv b{ color: var(--text); font-weight:900; }
+
+    /* Plans grid */
+    .plansGrid{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap:12px;
+      margin-top:10px;
+    }
+    .planCard{
+      background: rgba(0,0,0,.16);
+      border:1px solid rgba(255,255,255,.07);
+      border-radius: var(--r14);
+      padding:12px;
+      min-width:0;
+      position:relative;
+    }
+    .planTop{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:8px;
+    }
+    .planName{
+      font-weight:950;
+      letter-spacing:.2px;
+    }
+    .planPrice{
+      font-weight:950;
+      color: rgba(234,240,247,.95);
+    }
+    .trialPill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:5px 10px;
+      border-radius:999px;
+      border:1px solid rgba(43,226,166,.28);
+      background: rgba(43,226,166,.10);
+      color: rgba(234,240,247,.92);
+      font-size:12px;
+      margin-top:8px;
+      white-space:nowrap;
+    }
+    .trialDot{
+      width:10px;height:10px;border-radius:50%;
+      background: var(--brand1);
+      box-shadow: 0 0 0 4px rgba(43,226,166,.10);
+    }
+    .planBtns{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:12px;
+    }
+
+    footer{
+      padding:14px 18px;
+      color: rgba(234,240,247,.62);
+      font-size:12px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      opacity:.9;
+    }
 
     @media (max-width: 1180px){
-      #topbar{ height:auto; padding:12px 14px; align-items:flex-start; }
-      #grid{ height:auto; grid-template-columns: 1fr; }
-      #brand{ min-width:0; }
-      #topRight{ min-width:0; }
-      :root{
-        --logoSize: 120px;
-        --logoRadius: 34px;
-      }
-      .kv{ grid-template-columns: 140px 1fr; }
+      #grid{ grid-template-columns: 1fr; }
+      .brand{ min-width:0; }
+      .topRight{ min-width:0; }
+      .plansGrid{ grid-template-columns: 1fr; }
     }
   </style>
 </head>
 
 <body>
   <div id="topbar">
-    <div id="brand">
-      <div class="logo" aria-label="darrius.ai logo">
-        <img id="logoImg" alt="darrius.ai logo">
+    <div class="brand">
+      <div class="logoBox" aria-hidden="true">
+        <img id="logoImg" alt="darrius.ai logo" />
       </div>
-      <div id="brandText">
-        <div id="brandLine1"><span class="accent">DarriusAI</span> · Inflection Hunter</div>
-        <div id="brandLine2">
+      <div class="brandText">
+        <div class="brandLine1"><span class="accent">DarriusAI</span> · Inflection Hunter</div>
+        <div class="brandLine2">
           <span class="chip brand">Account & Subscription Management</span>
           <span class="chip">账户与订阅管理</span>
         </div>
       </div>
     </div>
 
-    <div id="topRight">
-      <div class="pill"><span class="dot"></span><span id="loginText">Logged in · 已登录</span></div>
-      <div class="pill"><span class="dot"></span><span id="accessText">Access: DELAYED · 市场数据（延时）</span></div>
+    <div class="topRight">
+      <div class="pill" id="loginPill"><span class="dot"></span><span id="loginText">Logged in · 已登录</span></div>
+      <div class="pill" id="accessPill"><span class="dot"></span><span id="accessText">Access: —</span></div>
       <button class="btnTop" id="backBtn">← Back to Dashboard（返回主界面）</button>
     </div>
   </div>
 
   <div id="wrap">
     <div id="grid">
-
-      <!-- LEFT MAIN -->
+      <!-- LEFT -->
       <div class="panel">
         <div class="panelHeader">
           <div class="h">Subscription Overview · 订阅概览</div>
-          <div class="badge" id="statusBadge">STATUS: UNKNOWN</div>
+          <div class="badge" id="statusBadge">STATUS: —</div>
         </div>
 
         <div class="panelBody">
           <div class="note" style="margin-bottom:12px">
-            This page manages your subscription. Access & data mode are enforced by backend policy.<br/>
-            本页用于订阅管理；访问权限与数据模式由后端策略控制。
+            This page manages your subscription. Your dashboard access and data mode are enforced by backend policy.<br/>
+            本页用于订阅管理；仪表盘访问权限与数据模式由后端策略控制。
           </div>
 
-          <!-- Input Card -->
+          <!-- Identity -->
           <div class="card">
-            <div class="cardTitle"><b>Identity · 身份信息</b><span class="note">用于拉取订阅状态</span></div>
+            <div class="cardTitle"><b>Identity · 身份信息</b><span class="small">用于匹配订阅</span></div>
 
-            <div class="row2" style="margin-top:0">
+            <div class="row3">
               <div class="field" style="margin-bottom:0">
-                <div class="label"><span><b>User ID</b>（用户ID）</span><span class="note">必填</span></div>
-                <input id="userId" placeholder="例如：darrius888">
-                <div class="note" style="margin-top:6px">Used to fetch status and open portal.<br/>用于查询状态并进入账单管理。</div>
+                <div class="label"><span><b>User ID</b>（用户ID）</span><span class="small">必填</span></div>
+                <input id="userId" placeholder="例如：darrius888"/>
+                <div class="note" style="margin-top:6px">Used to fetch status and open billing portal.<br/>用于获取订阅状态并打开账单管理。</div>
               </div>
 
               <div class="field" style="margin-bottom:0">
-                <div class="label"><span>Email（邮箱）</span><span class="note">可选</span></div>
-                <input id="email" placeholder="例如：perry.darrius@outlook.com">
+                <div class="label"><span>Email（邮箱，可选）</span><span class="small">可选</span></div>
+                <input id="email" placeholder="perry.darrius@outlook.com"/>
                 <div class="note" style="margin-top:6px">Optional; helps match Stripe customer.<br/>可选：帮助匹配 Stripe 客户。</div>
               </div>
+
+              <button class="btn" id="saveBtn" style="width:auto; padding:12px 18px;">Save（保存/刷新）</button>
             </div>
 
-            <div class="row2">
-              <button class="btn" id="saveBtn">Save（保存/刷新）</button>
-              <button class="btnGhost" id="refreshBtn">Refresh Status（刷新状态）</button>
-            </div>
-          </div>
-
-          <!-- Status Card -->
-          <div class="card">
-            <div class="cardTitle"><b>Status · 状态信息</b><span class="note" id="backendHint">Backend: —</span></div>
+            <div style="height:10px"></div>
 
             <div class="kv">
-              <span>User（用户）</span><b class="mono" id="kvUser">—</b>
+              <span>User（用户）</span><b id="kvUser">—</b>
               <span>Current Plan（当前套餐）</span><b id="kvPlan">—</b>
               <span>Subscription Status（订阅状态）</span><b id="kvSubStatus">—</b>
-              <span>Renews / Ends（续订/到期）</span><b class="mono" id="kvEnds">—</b>
+              <span>Renews / Ends（续订/到期）</span><b id="kvEnds">—</b>
               <span>Data Source Mode（数据模式）</span><b id="kvDataMode">—</b>
             </div>
 
             <div class="note" style="margin-top:10px">
-              Note: After cancellation, access often remains active until period end (policy-dependent).<br/>
-              说明：取消订阅后通常可用至周期结束（以策略为准）。
+              Note: After cancellation, access normally remains active until the end of the current billing period (policy-dependent).<br/>
+              说明：取消订阅后，通常会在当前计费周期结束前继续可用（以策略为准）。
             </div>
           </div>
 
           <!-- Actions -->
           <div class="card">
-            <div class="cardTitle"><b>Actions · 操作</b><span class="note">不改变你的数据授权</span></div>
-
-            <div class="row2" style="margin-top:0">
-              <button class="btn" id="portalBtn">Open Billing Portal（账单管理）</button>
-              <button class="btn" id="chooseBtn">Choose / Change Plan（选择/更换套餐）</button>
+            <div class="cardTitle"><b>Actions · 操作</b><span class="small">不改变数据源授权</span></div>
+            <div class="row2">
+              <button class="btn" id="openPortalBtn">Open Billing Portal（账单管理）</button>
+              <button class="btn" id="choosePlanBtn">Choose / Change Plan（选择/更换套餐）</button>
             </div>
-
             <div class="note" style="margin-top:10px">
-              These buttons should route to your existing billing flow.<br/>
-              这两个按钮应跳转到你现有的订阅支付/管理流程（不在本页硬改逻辑）。
+              These buttons route through your existing billing flow（不会改动你现有支付逻辑）。<br/>
+              这些按钮只是调用你已有后端入口（不在前端重写支付逻辑）。
             </div>
           </div>
 
-          <!-- Plans placeholder -->
+          <!-- Plans -->
           <div class="card">
-            <div class="cardTitle"><b>Plans（套餐）</b><span class="note">Overview</span></div>
+            <div class="cardTitle"><b>Plans（套餐）</b><span class="small">Overview</span></div>
             <div class="note">
-              If you want, we can render plan cards here by calling your existing <b>/billing/prices</b> API and mapping IDs.<br/>
-              如需恢复套餐列表，我们可直接读取你后端 prices 接口展示（不动支付逻辑）。
+              Buttons route through your existing checkout flow. This page does not change your data-provider entitlements.<br/>
+              按钮将跳转到你现有的订阅支付流程；本页不改变第三方数据源授权。
+            </div>
+
+            <div class="plansGrid" id="plansGrid">
+              <!-- JS can overwrite with /billing/prices, but static fallback is always visible -->
+              <div class="planCard" data-plan="weekly">
+                <div class="planTop">
+                  <div>
+                    <div class="planName">Weekly<span class="small"> · 周付</span></div>
+                    <div class="note">Short-term access. Ideal for trials and quick evaluations.<br/>短期体验，适合试用与快速评估。</div>
+                  </div>
+                  <div class="planPrice">$4.90</div>
+                </div>
+                <div class="planBtns">
+                  <button class="btn" data-action="subscribe" data-plan-key="weekly">Subscribe（订阅）</button>
+                  <button class="btnGhost" data-action="details" data-plan-key="weekly">Details（详情）</button>
+                </div>
+              </div>
+
+              <div class="planCard" data-plan="monthly" style="outline: 1px solid rgba(43,226,166,.20);">
+                <div class="planTop">
+                  <div>
+                    <div class="planName">Monthly<span class="small"> · 月付</span></div>
+                    <div class="note">Most popular. Balanced commitment and flexibility.<br/>最受欢迎：兼顾灵活与成本。</div>
+                    <div class="trialPill"><span class="trialDot"></span>1-day free trial（1天免费试用）</div>
+                  </div>
+                  <div class="planPrice">$19.90</div>
+                </div>
+                <div class="planBtns">
+                  <button class="btn" data-action="subscribe" data-plan-key="monthly">Subscribe（订阅）</button>
+                  <button class="btnGhost" data-action="details" data-plan-key="monthly">Details（详情）</button>
+                </div>
+              </div>
+
+              <div class="planCard" data-plan="quarterly">
+                <div class="planTop">
+                  <div>
+                    <div class="planName">Quarterly<span class="small"> · 季付</span></div>
+                    <div class="note">Better value. Recommended for active users.<br/>性价比更高，适合活跃用户。</div>
+                    <div class="trialPill"><span class="trialDot"></span>3-day free trial（3天免费试用）</div>
+                  </div>
+                  <div class="planPrice">$49.90</div>
+                </div>
+                <div class="planBtns">
+                  <button class="btn" data-action="subscribe" data-plan-key="quarterly">Subscribe（订阅）</button>
+                  <button class="btnGhost" data-action="details" data-plan-key="quarterly">Details（详情）</button>
+                </div>
+              </div>
+
+              <div class="planCard" data-plan="yearly">
+                <div class="planTop">
+                  <div>
+                    <div class="planName">Yearly<span class="small"> · 年付</span></div>
+                    <div class="note">Best value. For professionals and long-term users.<br/>最省钱：适合专业用户与长期使用。</div>
+                    <div class="trialPill"><span class="trialDot"></span>5-day free trial（5天免费试用）</div>
+                  </div>
+                  <div class="planPrice">$189.00</div>
+                </div>
+                <div class="planBtns">
+                  <button class="btn" data-action="subscribe" data-plan-key="yearly">Subscribe（订阅）</button>
+                  <button class="btnGhost" data-action="details" data-plan-key="yearly">Details（详情）</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="note" style="margin-top:12px">
+              Compliance note (display-only): Delayed mode is shown when required by your data provider terms.<br/>
+              合规提示（仅展示）：当数据源条款要求延时展示时，会显示 Delayed。
             </div>
           </div>
-
         </div>
       </div>
 
-      <!-- RIGHT SIDEBAR -->
+      <!-- RIGHT -->
       <div class="panel">
         <div class="panelHeader">
           <div class="h">Control Center · 控制台</div>
@@ -485,43 +601,49 @@
         <div class="panelBody">
           <div class="card">
             <div class="cardTitle"><b>Quick Actions（快捷操作）</b></div>
+            <button class="btnGhost" id="refreshBtn">Refresh Status（刷新状态）</button>
+            <div style="height:10px"></div>
             <button class="btnGhost" id="openDashBtn">Open Dashboard（打开主界面）</button>
           </div>
 
           <div class="card">
             <div class="cardTitle"><b>Support（支持）</b></div>
             <div class="note">
-              Billing: use Billing Portal first (invoices, payment methods, cancellations).<br/>
-              账单：优先使用账单管理（发票、付款方式、取消订阅）。<br/>
-              Tech: support@darrius.ai
+              For billing questions, please use the Billing Portal first (invoices, payment methods, cancellations).<br/>
+              账单相关请优先使用账单管理（发票、付款方式、取消订阅）。<br/>
+              For technical support: support@darrius.ai
             </div>
           </div>
 
           <div class="card">
             <div class="cardTitle"><b>System（系统信息）</b></div>
-            <div class="kv" style="grid-template-columns: 120px 1fr;">
-              <span>Build（版本）</span><b class="mono" id="buildText">—</b>
+            <div class="kv">
+              <span>Build（版本）</span><b id="buildText">—</b>
               <span>Backend（后端）</span><b id="backendText">—</b>
             </div>
           </div>
-
         </div>
       </div>
-
     </div>
+
+    <footer>
+      <div>© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
+      <div><a href="#" onclick="alert('Terms / Privacy later');return false;">Terms</a> · <a href="#" onclick="alert('Privacy later');return false;">Privacy</a></div>
+    </footer>
   </div>
 
+  <!-- Globals -->
   <script>
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
+    document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
-    // ✅ Logo loader w/ fallback
+    // ✅ load logo
     (function(){
       const img = document.getElementById('logoImg');
       if (!img) return;
       const candidates = [
         '/assets/logo.png',
-        '/assets/logo.webp',
         '/assets/icon.png',
         '/favicon.png',
         '/favicon.ico'
@@ -535,6 +657,7 @@
     })();
   </script>
 
+  <!-- Wiring (safe, best-effort, does NOT change payment logic) -->
   <script>
     (function(){
       const base = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,'');
@@ -543,17 +666,92 @@
       const userIdEl = $('userId');
       const emailEl  = $('email');
 
-      function setBadge(kind, text){
+      function setStatusBadge(text, mode){
         const b = $('statusBadge');
         if (!b) return;
+        b.textContent = text;
+
         b.classList.remove('ok','bad');
-        if (kind === 'ok') b.classList.add('ok');
-        if (kind === 'bad') b.classList.add('bad');
-        b.textContent = text || 'STATUS: UNKNOWN';
+        if (mode === 'ok') b.classList.add('ok');
+        else if (mode === 'bad') b.classList.add('bad');
       }
 
-      function normStatus(s){
-        return (s || '').toString().trim().toUpperCase();
+      function setBackendConnected(ok){
+        $('backendText').textContent = ok ? 'Connected' : 'Disconnected';
+        const sys = $('sysBadge');
+        if (sys){
+          sys.textContent = ok ? 'SYSTEM（系统）' : 'SYSTEM（离线）';
+          sys.classList.remove('ok','bad');
+          sys.classList.add(ok ? 'ok' : 'bad');
+        }
+      }
+
+      function normalizeStatus(s){
+        const x = String(s || '').toLowerCase();
+        if (!x) return 'UNKNOWN';
+        if (x.includes('trial')) return 'TRIAL';
+        if (x.includes('active')) return 'ACTIVE';
+        if (x.includes('cancel')) return 'CANCELLED';
+        if (x.includes('expired')) return 'EXPIRED';
+        if (x.includes('past_due')) return 'PAST_DUE';
+        return x.toUpperCase();
+      }
+
+      function setAccessPill(text, ok=true){
+        const pill = $('accessPill');
+        const dot = pill ? pill.querySelector('.dot') : null;
+        if ($('accessText')) $('accessText').textContent = text;
+        if (dot){
+          dot.classList.toggle('bad', !ok);
+        }
+      }
+
+      function setLoginPill(ok=true){
+        const pill = $('loginPill');
+        const dot = pill ? pill.querySelector('.dot') : null;
+        if (dot) dot.classList.toggle('bad', !ok);
+      }
+
+      function readQueryDefaults(){
+        try{
+          const u = new URL(window.location.href);
+          const uid = (u.searchParams.get('user_id') || u.searchParams.get('uid') || '').trim();
+          const em  = (u.searchParams.get('email') || '').trim();
+          if (uid && userIdEl) userIdEl.value = uid;
+          if (em && emailEl) emailEl.value = em;
+        }catch(e){}
+      }
+
+      // restore from localStorage
+      function restore(){
+        try{
+          const uid = localStorage.getItem('darrius_user_id') || '';
+          const em  = localStorage.getItem('darrius_email') || '';
+          if (uid && userIdEl && !userIdEl.value) userIdEl.value = uid;
+          if (em && emailEl && !emailEl.value) emailEl.value = em;
+        }catch(e){}
+      }
+
+      function persist(uid, em){
+        try{
+          if (uid) localStorage.setItem('darrius_user_id', uid);
+          if (em) localStorage.setItem('darrius_email', em);
+        }catch(e){}
+      }
+
+      async function fetchJsonFirst(urls, opts){
+        let lastErr = null;
+        for (const u of urls){
+          try{
+            const r = await fetch(u, opts || { method:'GET' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const j = await r.json().catch(()=> ({}));
+            return { ok:true, url:u, json:j };
+          }catch(e){
+            lastErr = e;
+          }
+        }
+        return { ok:false, error:lastErr };
       }
 
       async function refreshStatus(){
@@ -561,82 +759,218 @@
         const em  = (emailEl && emailEl.value || '').trim();
 
         if (!uid){
-          setBadge('bad', 'STATUS: MISSING USER');
+          setStatusBadge('STATUS: MISSING USER', 'bad');
+          setLoginPill(false);
           return;
         }
 
-        try{
-          localStorage.setItem('darrius_user_id', uid);
-          if (em) localStorage.setItem('darrius_email', em);
-        }catch(e){}
+        persist(uid, em);
 
-        $('backendHint').textContent = 'Backend: fetching…';
-        $('backendText').textContent = 'Connecting…';
+        $('kvUser').textContent = uid;
 
-        try{
-          const url = base + '/billing/status?user_id=' + encodeURIComponent(uid) + (em ? '&email=' + encodeURIComponent(em) : '');
-          const res = await fetch(url, { method:'GET' });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const j = await res.json().catch(() => ({}));
+        const qs = 'user_id=' + encodeURIComponent(uid) + (em ? '&email=' + encodeURIComponent(em) : '');
+        const urls = [
+          base + '/api/subscription/status?' + qs,
+          base + '/billing/status?' + qs,
+          base + '/subscription/status?' + qs,
+        ];
 
-          const plan   = j.plan || j.current_plan || j.price_name || '—';
-          const status = j.status || j.subscription_status || '—';
-          const ends   = j.renews_or_ends || j.ends_at || j.current_period_end || '—';
-          const mode   = j.data_mode || j.data_source || 'DELAYED';
-
-          $('kvUser').textContent = j.user || uid;
-          $('kvPlan').textContent = plan;
-          $('kvSubStatus').textContent = status;
-          $('kvEnds').textContent = ends;
-          $('kvDataMode').textContent = mode;
-
-          $('buildText').textContent = j.build || new Date().toISOString();
-          $('backendText').textContent = 'Connected';
-          $('backendHint').textContent = 'Backend: connected';
-
-          const st = normStatus(status);
-          if (st.includes('ACTIVE') || st.includes('TRIAL')) setBadge('ok', 'STATUS: ' + st);
-          else if (st && st !== '—') setBadge('bad', 'STATUS: ' + st);
-          else setBadge('', 'STATUS: UNKNOWN');
-        }catch(e){
-          // ✅ 不假 ACTIVE：失败就 UNKNOWN（方便你定位真实问题）
-          $('kvUser').textContent = uid;
-          $('kvPlan').textContent = '—';
-          $('kvSubStatus').textContent = '—';
-          $('kvEnds').textContent = '—';
-          $('kvDataMode').textContent = '—';
-
+        const res = await fetchJsonFirst(urls, { method:'GET' });
+        if (!res.ok){
+          // still show stable UI
+          setBackendConnected(false);
           $('buildText').textContent = new Date().toISOString();
-          $('backendText').textContent = 'Disconnected';
-          $('backendHint').textContent = 'Backend: disconnected';
-
-          setBadge('', 'STATUS: UNKNOWN');
+          $('kvPlan').textContent = '—';
+          $('kvSubStatus').textContent = 'UNKNOWN';
+          $('kvEnds').textContent = '—';
+          $('kvDataMode').textContent = 'DELAYED';
+          setAccessPill('Access: DELAYED · 市场数据（延时）', true);
+          setStatusBadge('STATUS: UNKNOWN', 'bad');
+          return;
         }
+
+        const j = res.json || {};
+        setBackendConnected(true);
+
+        // read common shapes
+        const plan = j.plan || j.current_plan || j.price_nickname || j.product || '—';
+        const statusRaw = j.status || j.subscription_status || j.sub_status || j.state || 'UNKNOWN';
+        const status = normalizeStatus(statusRaw);
+        const ends = j.renews_or_ends || j.ends_at || j.current_period_end || j.renewal || '—';
+        const dataMode = (j.data_mode || j.data_source_mode || j.mode || j.access_mode || '').toString() || 'DELAYED';
+
+        $('kvUser').textContent = j.user || j.user_id || uid;
+        $('kvPlan').textContent = plan;
+        $('kvSubStatus').textContent = status;
+        $('kvEnds').textContent = ends;
+        $('kvDataMode').textContent = dataMode;
+
+        $('buildText').textContent = j.build || new Date().toISOString();
+
+        // pill + badge
+        const isActive = (status === 'ACTIVE' || status === 'TRIAL');
+        setStatusBadge('STATUS: ' + status, isActive ? 'ok' : 'bad');
+        setLoginPill(true);
+
+        // Access pill
+        const delayed = String(dataMode).toLowerCase().includes('delay') || String(dataMode).toUpperCase() === 'DELAYED';
+        setAccessPill('Access: ' + (delayed ? 'DELAYED' : 'MARKET') + ' · ' + (delayed ? '市场数据（延时）' : '市场数据'), true);
       }
 
-      // restore cached
-      try{
-        const uid = localStorage.getItem('darrius_user_id') || '';
-        const em  = localStorage.getItem('darrius_email') || '';
-        if (uid) userIdEl.value = uid;
-        if (em) emailEl.value = em;
-      }catch(e){}
+      async function openBillingPortal(){
+        const uid = (userIdEl && userIdEl.value || '').trim();
+        const em  = (emailEl && emailEl.value || '').trim();
+        if (!uid){ alert('请先填写 User ID'); return; }
 
+        // preferred: POST /billing/portal => {url}
+        const payload = { user_id: uid };
+        if (em) payload.email = em;
+
+        const urls = [
+          base + '/billing/portal',
+          base + '/api/billing/portal',
+        ];
+
+        for (const u of urls){
+          try{
+            const r = await fetch(u, {
+              method:'POST',
+              headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify(payload)
+            });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const j = await r.json().catch(()=> ({}));
+            const url = j.url || j.portal_url || j.session_url;
+            if (url){
+              window.location.href = url;
+              return;
+            }
+          }catch(e){}
+        }
+
+        alert('Billing Portal 未返回可跳转 URL。请确认后端是否提供 /billing/portal 并返回 {url}。');
+      }
+
+      async function startCheckout(planKey){
+        const uid = (userIdEl && userIdEl.value || '').trim();
+        const em  = (emailEl && emailEl.value || '').trim();
+        if (!uid){ alert('请先填写 User ID'); return; }
+
+        // try map planKey -> price id from /billing/prices if present
+        const priceId = window.__DARRIUS_PRICE_MAP__ && window.__DARRIUS_PRICE_MAP__[planKey] ? window.__DARRIUS_PRICE_MAP__[planKey] : '';
+
+        const ref = (localStorage.getItem('darrius_ref_code') || '').trim();
+        const payload = {
+          user_id: uid,
+          email: em || undefined,
+          plan: planKey,
+          price_id: priceId || undefined,
+          ref: ref || undefined
+        };
+
+        // do not change logic: call your existing backend endpoints
+        const urls = [
+          base + '/billing/checkout',
+          base + '/create-checkout-session'
+        ];
+
+        for (const u of urls){
+          try{
+            const r = await fetch(u, {
+              method:'POST',
+              headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify(payload)
+            });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const j = await r.json().catch(()=> ({}));
+            const url = j.url || j.checkout_url || j.session_url;
+            if (url){
+              window.location.href = url;
+              return;
+            }
+          }catch(e){}
+        }
+
+        alert('Checkout 未返回可跳转 URL。请确认后端 /billing/checkout 或 /create-checkout-session 返回 {url}。');
+      }
+
+      function showPlanDetails(planKey){
+        const map = {
+          weekly:  'Weekly：短期体验，适合快速评估。\n价格：$4.90 / week\n试用：无（可按需配置）',
+          monthly: 'Monthly：最受欢迎。\n价格：$19.90 / month\n试用：1 day free trial',
+          quarterly:'Quarterly：性价比更高。\n价格：$49.90 / quarter\n试用：3 days free trial',
+          yearly:  'Yearly：长期用户最佳。\n价格：$189.00 / year\n试用：5 days free trial'
+        };
+        alert(map[planKey] || 'Details later');
+      }
+
+      async function hydratePrices(){
+        // optional: fetch /billing/prices to map price IDs for checkout (if your backend has it)
+        const urls = [
+          base + '/billing/prices',
+          base + '/prices'
+        ];
+        const res = await fetchJsonFirst(urls, { method:'GET' });
+        if (!res.ok) return;
+
+        const j = res.json || {};
+        // Accept shapes:
+        // 1) { prices:[{id, nickname, unit_amount, ...}] }
+        // 2) [{...}]
+        const arr = Array.isArray(j) ? j : (Array.isArray(j.prices) ? j.prices : []);
+        if (!arr.length) return;
+
+        const map = {};
+        for (const p of arr){
+          const nick = (p.nickname || p.name || p.lookup_key || '').toString().toLowerCase();
+          const id = p.id || p.price_id;
+          if (!id) continue;
+          if (nick.includes('week')) map.weekly = id;
+          if (nick.includes('month')) map.monthly = id;
+          if (nick.includes('quarter')) map.quarterly = id;
+          if (nick.includes('year')) map.yearly = id;
+        }
+        window.__DARRIUS_PRICE_MAP__ = map;
+      }
+
+      function bindPlanButtons(){
+        const grid = document.getElementById('plansGrid');
+        if (!grid) return;
+
+        grid.addEventListener('click', (e)=>{
+          const btn = e.target && e.target.closest && e.target.closest('button');
+          if (!btn) return;
+
+          const action = btn.getAttribute('data-action');
+          const key = btn.getAttribute('data-plan-key');
+          if (!action || !key) return;
+
+          if (action === 'subscribe') startCheckout(key);
+          if (action === 'details') showPlanDetails(key);
+        }, true);
+      }
+
+      // Buttons
       $('saveBtn')?.addEventListener('click', refreshStatus);
       $('refreshBtn')?.addEventListener('click', refreshStatus);
 
       $('openDashBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
       $('backBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
 
-      // ✅ 不碰你现有订阅支付逻辑：这里只做“跳转占位”
-      $('portalBtn')?.addEventListener('click', () => {
-        alert('请将该按钮接到你后端已有的 Billing Portal 路由（例如 /billing/portal 或 /billing/manage）。目前保持占位，不改支付逻辑。');
-      });
-      $('chooseBtn')?.addEventListener('click', () => {
-        alert('请将该按钮接到你现有的 Checkout Flow（例如 /billing/checkout 或 create-checkout-session）。目前保持占位，不改支付逻辑。');
+      $('openPortalBtn')?.addEventListener('click', openBillingPortal);
+      $('choosePlanBtn')?.addEventListener('click', () => {
+        // same as opening checkout modal: just scroll to plans section
+        const el = document.getElementById('plansGrid');
+        if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
       });
 
-      // auto refresh once
+      // Init
+      restore();
+      readQueryDefaults();
+      bindPlanButtons();
+      hydratePrices().catch(()=>{});
+
+      // initial refresh
       setTimeout(refreshStatus, 250);
     })();
   </script>
