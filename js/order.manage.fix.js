@@ -1,12 +1,41 @@
-// js/order.manage.fix.js (AUTO-BIND BY BUTTON TEXT) v2026.02.01
+// js/order.manage.fix.js  (FULL REPLACEMENT) v2026-02-01
 (() => {
   'use strict';
+
+  const $ = (id) => document.getElementById(id);
 
   // -----------------------------
   // helpers
   // -----------------------------
-  const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
-  const lower = (s) => norm(s).toLowerCase();
+  function normText(s) {
+    return (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+
+  function pick(obj, keys, fallback = null) {
+    for (const k of keys) {
+      if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
+    }
+    return fallback;
+  }
+
+  function setTextAny(ids, v) {
+    const val = (v == null || v === '') ? '-' : String(v);
+    for (const id of ids) {
+      const el = $(id);
+      if (el) el.textContent = val;
+    }
+  }
+
+  function enableBtnAny(ids, enabled) {
+    for (const id of ids) {
+      const b = $(id);
+      if (!b) continue;
+      b.disabled = !enabled;
+      b.style.pointerEvents = enabled ? 'auto' : 'none';
+      b.style.opacity = enabled ? '1' : '0.55';
+      b.style.cursor = enabled ? 'pointer' : 'not-allowed';
+    }
+  }
 
   async function fetchJSON(url, opts = {}) {
     const r = await fetch(url, {
@@ -17,228 +46,196 @@
         ...(opts.headers || {})
       }
     });
-
     const text = await r.text();
     let data = null;
     try { data = JSON.parse(text); } catch { data = { ok: false, raw: text }; }
-    data.__http = { ok: r.ok, status: r.status };
+    data.__http = { ok: r.ok, status: r.status, url };
     return data;
   }
 
-  const jget = (url) => fetchJSON(url, { method: 'GET' });
-  const jpost = (url, body) => fetchJSON(url, { method: 'POST', body: JSON.stringify(body || {}) });
-
-  function enableBtn(btn, enabled) {
-    if (!btn) return;
-    btn.disabled = !enabled;
-    btn.style.pointerEvents = enabled ? 'auto' : 'none';
-    btn.style.opacity = enabled ? '1' : '0.55';
-    btn.style.cursor = enabled ? 'pointer' : 'not-allowed';
-  }
-
-  function pick(obj, keys, fallback = null) {
-    for (const k of keys) {
-      if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
+  async function tryPOST(urls, bodyObj) {
+    for (const url of urls) {
+      const resp = await fetchJSON(url, { method: 'POST', body: JSON.stringify(bodyObj || {}) });
+      // “有些后端不带 ok”，但只要给了 url 就算成功
+      const gotUrl = resp && (resp.url || (resp.data && resp.data.url) || (resp.portal && resp.portal.url));
+      if (gotUrl) return { ok: true, url: gotUrl, resp };
+      // 401/403 直接返回（避免重复打）
+      if (resp.__http && (resp.__http.status === 401 || resp.__http.status === 403)) return { ok: false, resp };
+      // 其他情况继续试下一个 endpoint
     }
-    return fallback;
-  }
-
-  function tsToLocal(ts) {
-    if (typeof ts === 'number') return new Date(ts * 1000).toLocaleString();
-    return ts || '-';
+    return { ok: false, resp: null };
   }
 
   // -----------------------------
-  // find buttons by text
+  // Step A: patch missing button IDs by text
   // -----------------------------
-  function findButtonByTextIncludes(needles) {
+  function patchButtonIds() {
     const btns = Array.from(document.querySelectorAll('button'));
-    for (const b of btns) {
-      const t = lower(b.textContent);
-      if (!t) continue;
-      if (needles.some(n => t.includes(n))) return b;
+    if (!btns.length) return;
+
+    const want = [
+      {
+        id: 'btnBillingPortal',
+        any: ['open billing portal', 'billing portal', '账单管理', '账单', 'billing'],
+      },
+      {
+        id: 'btnSubscribe',
+        any: ['subscribe', '订阅', '购买', '开通'],
+      },
+      {
+        id: 'btnRefreshSub',
+        any: ['refresh status', 'refresh', '刷新状态', '刷新'],
+      },
+    ];
+
+    for (const rule of want) {
+      if ($(rule.id)) continue; // already exists
+      const hit = btns.find(b => {
+        const t = normText(b.textContent);
+        return rule.any.some(k => t.includes(normText(k)));
+      });
+      if (hit) hit.id = rule.id;
     }
-    return null;
-  }
-
-  function getButtons() {
-    const portalBtn = findButtonByTextIncludes([
-      'open billing portal', 'billing portal', '账单管理'
-    ]);
-
-    const subscribeBtn = findButtonByTextIncludes([
-      'subscribe', '订阅'
-    ]);
-
-    const refreshBtn = findButtonByTextIncludes([
-      'refresh status', '刷新状态', 'refresh'
-    ]);
-
-    return { portalBtn, subscribeBtn, refreshBtn };
   }
 
   // -----------------------------
-  // render panel (fallback UI)
+  // Step B: load + render status (兼容你两套字段)
   // -----------------------------
-  function ensurePanel() {
-    let panel = document.getElementById('om_autoPanel');
-    if (panel) return panel;
+  async function loadAllAndRender() {
+    // 你 routes 里有 /api/me、/api/me/entitlements、/api/subscription/status
+    const me = await fetchJSON('/api/me');
+    const entResp = await fetchJSON('/api/me/entitlements');
+    const subResp = await fetchJSON('/api/subscription/status');
 
-    panel = document.createElement('div');
-    panel.id = 'om_autoPanel';
-    panel.style.cssText = [
-      'position:relative',
-      'margin:12px 0',
-      'padding:12px 14px',
-      'border:1px solid rgba(255,255,255,0.12)',
-      'border-radius:12px',
-      'background:rgba(0,0,0,0.25)',
-      'font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif',
-      'font-size:13px',
-      'line-height:1.35'
-    ].join(';');
-
-    panel.innerHTML = `
-      <div style="font-weight:700; font-size:14px; margin-bottom:8px;">Order / Subscription Status</div>
-      <div style="display:grid; grid-template-columns: 140px 1fr; gap:6px 10px;">
-        <div style="opacity:.8;">User Email</div><div id="om_auto_email">-</div>
-        <div style="opacity:.8;">Entitlement Plan</div><div id="om_auto_plan">-</div>
-        <div style="opacity:.8;">Stripe Customer</div><div id="om_auto_cus">-</div>
-        <div style="opacity:.8;">Stripe Subscription</div><div id="om_auto_sub">-</div>
-        <div style="opacity:.8;">Stripe Status</div><div id="om_auto_status">-</div>
-        <div style="opacity:.8;">Period End</div><div id="om_auto_cpe">-</div>
-        <div style="opacity:.8;">Trial End</div><div id="om_auto_trial">-</div>
-        <div style="opacity:.8;">Cancel At Period End</div><div id="om_auto_cancel">-</div>
-      </div>
-      <div id="om_auto_hint" style="margin-top:10px; opacity:.75;"></div>
-    `;
-
-    // insert near top of main content
-    const target =
-      document.querySelector('main') ||
-      document.querySelector('#main') ||
-      document.body;
-
-    if (target.firstChild) target.insertBefore(panel, target.firstChild);
-    else target.appendChild(panel);
-
-    return panel;
-  }
-
-  function setPanelText(id, v) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = (v == null || v === '') ? '-' : String(v);
-  }
-
-  // -----------------------------
-  // data load + render
-  // -----------------------------
-  async function loadAndRender() {
-    const panel = ensurePanel();
-
-    const [me, entResp, subResp] = await Promise.all([
-      jget('/api/me'),
-      jget('/api/me/entitlements'),
-      jget('/api/subscription/status')
-    ]);
-
-    // me
+    // ---- me email ----
     const email = pick(me, ['email', 'user_email'], pick(me.user || {}, ['email'], '-'));
-    setPanelText('om_auto_email', email);
+    setTextAny(['om_userEmail', 'subUserEmail', 'userEmail', 'accountEmail'], email);
 
-    // entitlement
+    // ---- entitlements ----
     const ent = entResp.entitlement || entResp.data || entResp || {};
     const plan = pick(ent, ['plan', 'tier', 'product'], '-');
+    const active = !!pick(ent, ['active', 'is_active', 'entitled'], null);
     const customerId = pick(ent, ['stripe_customer_id', 'customer_id'], '-');
     const subscriptionId = pick(ent, ['stripe_subscription_id', 'subscription_id'], '-');
 
-    setPanelText('om_auto_plan', plan);
-    setPanelText('om_auto_cus', customerId);
-    setPanelText('om_auto_sub', subscriptionId);
+    // 兼容两套 DOM id
+    setTextAny(['om_plan', 'subLocalPlan', 'currentPlan'], plan);
+    setTextAny(['om_customerId', 'subStripeCustomer'], customerId);
+    setTextAny(['om_subscriptionId', 'subStripeSub'], subscriptionId);
+    if (active !== null) setTextAny(['subLocalActive'], active ? 'ACTIVE' : 'DEMO');
 
-    // subscription
+    // ---- subscription status ----
     const s = subResp.subscription || subResp.data || subResp || {};
     const status = pick(s, ['status', 'subscription_status'], 'UNKNOWN');
     const cpe = pick(s, ['current_period_end', 'period_end'], null);
     const trialEnd = pick(s, ['trial_end'], null);
     const cancelAtPeriodEnd = !!pick(s, ['cancel_at_period_end'], false);
 
-    setPanelText('om_auto_status', status);
-    setPanelText('om_auto_cpe', tsToLocal(cpe));
-    setPanelText('om_auto_trial', tsToLocal(trialEnd));
-    setPanelText('om_auto_cancel', cancelAtPeriodEnd ? 'YES' : 'NO');
+    const tsToLocal = (ts) => (typeof ts === 'number') ? new Date(ts * 1000).toLocaleString() : (ts || '-');
 
-    // buttons: make sure clickable
-    const { portalBtn, subscribeBtn, refreshBtn } = getButtons();
-    if (portalBtn) enableBtn(portalBtn, true);
-    if (subscribeBtn) enableBtn(subscribeBtn, true);
-    if (refreshBtn) enableBtn(refreshBtn, true);
+    setTextAny(['om_subStatus', 'subStripeStatus', 'subscriptionStatus'], status);
+    setTextAny(['om_periodEnd', 'subCurrentPeriodEnd', 'currentPeriodEnd'], tsToLocal(cpe));
+    setTextAny(['om_trialEnd', 'subTrialEnd', 'trialEnd'], tsToLocal(trialEnd));
+    setTextAny(['subCancelAtPeriodEnd'], cancelAtPeriodEnd ? 'YES' : 'NO');
 
-    // hint
-    const hintEl = document.getElementById('om_auto_hint');
-    if (hintEl) {
-      const h = [];
-      if (me && me.__http && !me.__http.ok) h.push(`me: HTTP ${me.__http.status}`);
-      if (entResp && entResp.__http && !entResp.__http.ok) h.push(`entitlements: HTTP ${entResp.__http.status}`);
-      if (subResp && subResp.__http && !subResp.__http.ok) h.push(`subscription: HTTP ${subResp.__http.status}`);
-      hintEl.textContent = h.length ? `API hints: ${h.join(' | ')}` : '';
-    }
+    // ---- buttons enable ----
+    // Portal：宁可先放开（后端会 401/403），避免“看起来死了”
+    enableBtnAny(['btnBillingPortal'], true);
+    // Subscribe：永远可点（跳 checkout）
+    enableBtnAny(['btnSubscribe'], true);
+    // Refresh：可选
+    enableBtnAny(['btnRefreshSub'], true);
   }
 
   // -----------------------------
-  // bind actions
+  // Step C: bind actions
   // -----------------------------
   function bindActions() {
-    const { portalBtn, refreshBtn } = getButtons();
-
-    if (portalBtn && !portalBtn.__om_bound) {
-      portalBtn.__om_bound = true;
+    // Billing Portal
+    const portalBtn = $('btnBillingPortal');
+    if (portalBtn) {
       portalBtn.onclick = async () => {
-        enableBtn(portalBtn, false);
+        enableBtnAny(['btnBillingPortal'], false);
         try {
-          const resp = await jpost('/api/billing/portal', { return_url: window.location.href });
-          const url = resp.url || (resp.data && resp.data.url) || (resp.portal && resp.portal.url);
+          // 你的 routes 里同时出现了 /api/billing/portal 和 /billing/portal
+          const res = await tryPOST(
+            ['/api/billing/portal', '/billing/portal'],
+            { return_url: window.location.href }
+          );
 
-          if (url) {
-            window.location.href = url;
+          if (res.ok && res.url) {
+            window.location.href = res.url;
             return;
           }
 
-          if (resp.__http && (resp.__http.status === 401 || resp.__http.status === 403)) {
+          const st = res.resp && res.resp.__http ? res.resp.__http.status : null;
+          if (st === 401 || st === 403) {
             alert('Please sign in again, then retry Billing Portal.');
             return;
           }
 
-          alert('Billing portal error: ' + (resp.error || resp.detail || resp.raw || 'unknown'));
+          const detail = (res.resp && (res.resp.error || res.resp.detail || res.resp.raw)) || 'unknown';
+          alert('Billing portal error: ' + detail);
         } finally {
-          enableBtn(portalBtn, true);
+          enableBtnAny(['btnBillingPortal'], true);
         }
       };
     }
 
-    if (refreshBtn && !refreshBtn.__om_bound) {
-      refreshBtn.__om_bound = true;
-      refreshBtn.onclick = async () => {
-        enableBtn(refreshBtn, false);
+    // Subscribe（走你现有后端 checkout / create-checkout-session）
+    const subBtn = $('btnSubscribe');
+    if (subBtn) {
+      subBtn.onclick = async () => {
+        enableBtnAny(['btnSubscribe'], false);
         try {
-          // optional sync first
-          await jget('/api/subscription/refresh');
-          await loadAndRender();
+          // 你页面上每个 plan 的按钮应该已有逻辑；
+          // 这里做“兜底”：如果按钮上带 data-price-id，我们就直接拉 Stripe Checkout。
+          const priceId = subBtn.getAttribute('data-price-id') || '';
+
+          // 优先新接口 /billing/create-checkout-session（你刚贴出来的就是它）
+          // 兼容旧接口 /billing/checkout
+          const resp1 = await fetchJSON('/billing/create-checkout-session', {
+            method: 'POST',
+            body: JSON.stringify({ price_id: priceId || undefined })
+          });
+          const url1 = resp1.url || (resp1.data && resp1.data.url);
+          if (url1) { window.location.href = url1; return; }
+
+          const resp2 = await fetchJSON('/billing/checkout', {
+            method: 'POST',
+            body: JSON.stringify({ price_id: priceId || undefined })
+          });
+          const url2 = resp2.url || (resp2.data && resp2.data.url);
+          if (url2) { window.location.href = url2; return; }
+
+          alert('Checkout not ready: backend did not return {url}. Please check /billing/create-checkout-session or /billing/checkout response.');
         } finally {
-          enableBtn(refreshBtn, true);
+          enableBtnAny(['btnSubscribe'], true);
+        }
+      };
+    }
+
+    // Refresh (optional)
+    const refreshBtn = $('btnRefreshSub');
+    if (refreshBtn) {
+      refreshBtn.onclick = async () => {
+        enableBtnAny(['btnRefreshSub'], false);
+        try {
+          await fetchJSON('/api/subscription/refresh'); // routes 里是 GET
+          await loadAllAndRender();
+        } finally {
+          enableBtnAny(['btnRefreshSub'], true);
         }
       };
     }
   }
 
   // -----------------------------
-  // boot
+  // bootstrap
   // -----------------------------
   window.addEventListener('DOMContentLoaded', () => {
-    try {
-      bindActions();
-      loadAndRender().catch(() => {});
-    } catch (_) {}
+    patchButtonIds();     // ✅ 关键：先补 id
+    bindActions();        // ✅ 再绑定
+    loadAllAndRender().catch(() => {});
   });
 })();
