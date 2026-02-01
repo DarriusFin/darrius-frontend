@@ -56,9 +56,9 @@
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
       --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
 
-      /* ✅ Logo unified sizing (≈2x feel). Change once for both pages if you want. */
-      --logoSize: 72px;
-      --logoRadius: 20px;
+      /* ✅ 你要调大/调小 Logo，就改这两行 */
+      --logoBase: 36px;
+      --logoScale: 2.4; /* ✅ 2.4倍 */
     }
 
     *{ box-sizing:border-box; }
@@ -96,30 +96,27 @@
       align-items:center;
       gap:14px;
       min-width:420px;
-      min-height: 56px;
     }
 
-    /* ✅ Real logo image, NO rotating halo */
+    /* ✅ Logo：统一为图片容器 + 变量控制大小；去掉旋转光晕 */
     .logoBox{
-      width: var(--logoSize);
-      height: var(--logoSize);
-      border-radius: var(--logoRadius);
+      width: calc(var(--logoBase) * var(--logoScale));
+      height: calc(var(--logoBase) * var(--logoScale));
+      border-radius: 18px;
       overflow:hidden;
       border:1px solid rgba(255,255,255,.12);
       box-shadow: 0 14px 30px rgba(0,0,0,.30);
-      flex:0 0 auto;
       background: rgba(0,0,0,.12);
+      flex:0 0 auto;
       display:flex;
       align-items:center;
       justify-content:center;
-      position:relative;
     }
     .logoBox img{
-      width: 100%;
-      height: 100%;
+      width:100%;
+      height:100%;
+      object-fit:cover;
       display:block;
-      object-fit: cover;
-      border-radius: var(--logoRadius);
     }
 
     #brandText{ line-height:1.08; }
@@ -293,11 +290,7 @@
     .kv b{ color: var(--text); font-weight:900; }
 
     /* ===== Gauge ===== */
-    .gaugeWrap{
-      display:flex;
-      gap:12px;
-      align-items:center;
-    }
+    .gaugeWrap{ display:flex; gap:12px; align-items:center; }
     .gauge{
       width:160px;height:160px;border-radius:50%;
       background:
@@ -312,7 +305,21 @@
       flex:0 0 auto;
       overflow:hidden;
     }
-
+    @keyframes spin{ to{ transform: rotate(360deg);} }
+    .gauge::before{
+      content:"";
+      position:absolute; inset:-38%;
+      background: conic-gradient(from 180deg,
+        rgba(43,226,166,0),
+        rgba(43,226,166,.35),
+        rgba(76,194,255,.35),
+        rgba(255,90,90,.28),
+        rgba(43,226,166,0));
+      animation: spin 9s linear infinite;
+      filter: blur(1.2px);
+      opacity:.75;
+      pointer-events:none;
+    }
     .gauge::after{
       content:"";
       position:absolute; inset:14px;
@@ -337,16 +344,8 @@
       flex-direction:column;
       text-align:center;
     }
-    .gaugeCenter .num{
-      font-size:36px;
-      font-weight:950;
-      letter-spacing:.6px;
-    }
-    .gaugeCenter .lbl{
-      margin-top:2px;
-      font-size:12px;
-      color: var(--muted);
-    }
+    .gaugeCenter .num{ font-size:36px; font-weight:950; letter-spacing:.6px; }
+    .gaugeCenter .lbl{ margin-top:2px; font-size:12px; color: var(--muted); }
 
     /* ===== Signal box ===== */
     .signalBox{
@@ -382,7 +381,6 @@
 
     /* ===== Center Chart ===== */
     #chartPanel .panelBody{ padding:0; }
-
     #chartPanel .panelBody{
       display:flex;
       flex-direction:column;
@@ -390,7 +388,6 @@
       min-height:0;
       overflow:hidden;
     }
-
     #chartTop{
       padding:10px 14px;
       display:flex;
@@ -421,7 +418,6 @@
       text-overflow:ellipsis;
       white-space:nowrap;
     }
-
     #tfQuick{
       display:flex;
       gap:8px;
@@ -447,24 +443,9 @@
       box-shadow: 0 0 0 4px rgba(76,194,255,.10);
       background: rgba(76,194,255,.10);
     }
-
-    #chartWrap{
-      position:relative;
-      width:100%;
-      flex: 1 1 auto;
-      min-height: 0;
-    }
-    #chart{
-      position:absolute; inset:0;
-      width:100%;
-      height:100%;
-    }
-
-    #sigOverlay{
-      position:absolute; inset:0;
-      pointer-events:none;
-      z-index:20;
-    }
+    #chartWrap{ position:relative; width:100%; flex: 1 1 auto; min-height: 0; }
+    #chart{ position:absolute; inset:0; width:100%; height:100%; }
+    #sigOverlay{ position:absolute; inset:0; pointer-events:none; z-index:20; }
 
     #mutantPanel{
       width:100%;
@@ -517,10 +498,7 @@
       background-repeat:no-repeat;
       padding-right:34px;
     }
-    select option{
-      background:#0B0F17;
-      color:var(--text);
-    }
+    select option{ background:#0B0F17; color:var(--text); }
     input::placeholder{ color: rgba(162,176,194,.80); }
     input:focus, select:focus{
       border-color: rgba(76,194,255,.50);
@@ -566,16 +544,10 @@
       margin-top:10px;
     }
 
-    .note{
-      font-size:12px;
-      color: var(--muted);
-      line-height:1.45;
-    }
+    .note{ font-size:12px; color: var(--muted); line-height:1.45; }
     .note b{ color: var(--text); }
-
     .hidden{ display:none !important; }
 
-    /* ✅ right Manage button background same as Start */
     #manageBtn{
       border: 0 !important;
       color:#081119 !important;
@@ -590,20 +562,17 @@
       padding: 2px 8px;
       border-radius: 10px;
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 600;
       letter-spacing: .3px;
     }
-    .accessBadge.ACTIVE { background: rgba(46, 204, 113, .16); color: #2ecc71; }
+    .accessBadge.ACTIVE { background: rgba(46, 204, 113, .15); color: #2ecc71; }
     .accessBadge.TRIAL  { background: rgba(241, 196, 15, .18); color: #f1c40f; }
     .accessBadge.EXPIRED{ background: rgba(231, 76, 60, .18); color: #e74c3c; }
     .accessBadge.UNKNOWN{ background: rgba(149, 165, 166, .18); color: #95a5a6; }
 
     @media (max-width: 1180px){
       body{ overflow:auto; }
-      #main{
-        height:auto;
-        grid-template-columns: 1fr;
-      }
+      #main{ height:auto; grid-template-columns: 1fr; }
       #chartWrap{ height: 560px; }
       #brand{ min-width:0; }
       #topRight{ min-width:0; }
@@ -617,7 +586,7 @@
   <!-- Header -->
   <div id="topbar">
     <div id="brand">
-      <div class="logoBox" aria-label="darrius.ai logo">
+      <div class="logoBox" aria-hidden="true">
         <img id="logoImg" alt="darrius.ai logo"/>
       </div>
       <div id="brandText">
@@ -752,7 +721,6 @@
 
         <div id="mutantPanel">
           <div id="mutantTitle">Darrius Mutant</div>
-          <!-- canvas by js/darrius.mutant.js -->
         </div>
       </div>
     </div>
@@ -883,7 +851,7 @@
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
-    // ✅ load logo (same logic as account.html)
+    // ✅ load logo (fallback list)
     (function(){
       const img = document.getElementById('logoImg');
       if (!img) return;
@@ -902,6 +870,31 @@
     })();
   </script>
 
+  <!-- ✅ ID duplicate / binding diagnosis (safe) -->
+  <script>
+    (function(){
+      function findDuplicateIds(){
+        const nodes = Array.from(document.querySelectorAll("[id]"));
+        const map = new Map();
+        for (const n of nodes){
+          const id = n.id;
+          if (!id) continue;
+          if (!map.has(id)) map.set(id, []);
+          map.get(id).push(n);
+        }
+        const dupes = [];
+        for (const [id, arr] of map.entries()){
+          if (arr.length > 1) dupes.push({ id, count: arr.length });
+        }
+        return dupes;
+      }
+      const dupes = findDuplicateIds();
+      window.__DARRIUS_ID_DUPES__ = dupes;
+      if (dupes.length) console.warn("[ID] Duplicate IDs found:", dupes);
+      else console.log("[ID] No duplicate IDs.");
+    })();
+  </script>
+
   <!-- =========================
        SCRIPTS (ORDER IS CRITICAL)
        不动订阅/支付：subscription.js + boot.js 保持原
@@ -910,10 +903,8 @@
   <script src="js/market.pulse.js?v=20260122"></script>
   <script src="js/darrius.mutant.js?v=20260122"></script>
   <script src="js/subscription.js?v=20260122"></script>
-
   <script src="js/referral.client.js?v=20260129"></script>
   <script src="js/referral.checkout.js?v=20260129"></script>
-
   <script src="js/boot.js?v=20260122"></script>
 
   <!-- ✅ Affiliate card click -->
@@ -923,29 +914,17 @@
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
       else fn();
     }
-
     ready(() => {
       const card = document.getElementById('affiliateCard');
-      const btn  = document.getElementById('affiliateBtn');
       if (!card) return;
-
-      function go(){
-        window.location.href = '/affiliate.html';
-      }
-
       card.style.cursor = 'pointer';
-      if (!card.__AFF_BOUND__){
-        card.__AFF_BOUND__ = true;
-        card.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          go();
-        }, true);
-      }
-      if (btn && !btn.__AFF_BTN_BOUND__){
-        btn.__AFF_BTN_BOUND__ = true;
-        btn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); go(); }, true);
-      }
+      if (card.__AFF_BOUND__) return;
+      card.__AFF_BOUND__ = true;
+      card.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = '/affiliate.html';
+      }, true);
     });
   })();
   </script>
