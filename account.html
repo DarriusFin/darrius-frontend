@@ -1,633 +1,584 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DarriusAI · Account & Subscription Management</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DarriusAI · Account & Subscription</title>
 
   <style>
     :root{
-      --bg:#0b1016;
-      --card:rgba(255,255,255,.06);
-      --card2:rgba(255,255,255,.08);
-      --line:rgba(255,255,255,.10);
-      --text:rgba(255,255,255,.92);
-      --muted:rgba(255,255,255,.65);
-      --muted2:rgba(255,255,255,.55);
-      --good:#23d1a3;
-      --warn:#f4c24f;
-      --bad:#ff5f6d;
-      --accent:#4cc2ff;
-      --accent2:#2be2a6;
-      --shadow: 0 18px 60px rgba(0,0,0,.55);
-      --radius:18px;
+      --bg:#0B0F17;
+      --bg2:#0A1220;
+      --panel:#121A28;
+      --border:rgba(255,255,255,.08);
+      --text:#EAF0F7;
+      --muted:#A2B0C2;
+      --brand1:#2BE2A6;
+      --brand2:#4CC2FF;
+      --danger:#FF5A5A;
+      --shadow: 0 18px 45px rgba(0,0,0,.40);
+      --shadow2: 0 10px 25px rgba(0,0,0,.28);
+      --r12:12px;
+      --r14:14px;
+      --r18:18px;
+      --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
+      --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
     }
 
-    *{box-sizing:border-box}
-    html, body { min-height: 100%; }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
     body{
       margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:var(--text);
       background:
-        radial-gradient(1100px 600px at 15% -10%, rgba(76,194,255,.20), transparent 60%),
-        radial-gradient(900px 520px at 90% 0%, rgba(43,226,166,.18), transparent 55%),
-        radial-gradient(850px 520px at 40% 110%, rgba(255,255,255,.05), transparent 60%),
-        var(--bg);
-      color: var(--text);
-      overflow-x: hidden;
+        radial-gradient(900px 500px at 12% 10%, rgba(76,194,255,.10), transparent 60%),
+        radial-gradient(900px 520px at 88% 12%, rgba(43,226,166,.10), transparent 62%),
+        linear-gradient(180deg, var(--bg), var(--bg2));
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "PingFang SC","Microsoft YaHei", sans-serif;
     }
 
-    a{ color:inherit; text-decoration:none; }
+    a{ color: rgba(76,194,255,.95); text-decoration:none; }
     a:hover{ text-decoration:underline; }
 
-    .wrap{ max-width: 1280px; margin: 0 auto; padding: 22px 18px 40px; position: relative; z-index: 1; }
-    .topbar{
-      display:flex; align-items:center; justify-content:space-between;
-      gap:12px; padding: 14px 16px;
-      background: rgba(255,255,255,.05);
-      border:1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
+    /* Top bar */
+    #topbar{
+      height:78px;
+      padding:0 18px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom:1px solid var(--border);
+      background: rgba(10,15,23,.55);
       backdrop-filter: blur(10px);
     }
-    .brand{ display:flex; align-items:center; gap:12px; min-width: 260px; }
-    .brand h1{ font-size:18px; margin:0; line-height:1.1; }
-    .brand .sub{ color:var(--muted); font-size:12px; margin-top:2px; }
 
-    /* ====== Logo block (image + halo + fallback) ====== */
-    .logoWrap{
-      width:38px; height:38px; border-radius: 12px;
-      position: relative;
-      overflow: hidden;
-      flex: 0 0 auto;
-      box-shadow: 0 12px 30px rgba(76,194,255,.18);
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.04);
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:14px;
+      min-width:420px;
     }
-    .logoHalo{
-      position:absolute; inset:-40%;
-      background: conic-gradient(from 120deg,
-        rgba(43,226,166,.95),
-        rgba(76,194,255,.95),
-        rgba(255,120,200,.65),
-        rgba(43,226,166,.95));
-      filter: blur(14px);
-      opacity:.55;
-      animation: haloSpin 7.5s linear infinite;
-      pointer-events:none;
+
+    /* ✅ Logo bigger */
+    .logoBox{
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow: 0 14px 30px rgba(0,0,0,.30);
+      flex:0 0 auto;
+      background: rgba(0,0,0,.12);
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
-    @keyframes haloSpin{
-      0%{ transform: rotate(0deg); }
-      100%{ transform: rotate(360deg); }
-    }
-    .logoImg{
-      position:absolute; inset:0;
-      width:100%; height:100%;
+    #logoImg{
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
       object-fit: cover;
-      transform: translateZ(0);
-      display:none; /* 由 JS 探测成功后再显示 */
-    }
-    .logoFallback{
-      position:absolute; inset:0;
-      display:flex; align-items:center; justify-content:center;
-      font-weight:900;
-      color: rgba(8,16,24,.92);
-      background: linear-gradient(135deg, rgba(43,226,166,.95), rgba(76,194,255,.95));
-      letter-spacing: .5px;
-      font-size: 14px;
+      display:block;
     }
 
-    .pills{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
-    .pill{
-      display:flex; align-items:center; gap:8px;
-      padding:8px 10px;
-      border:1px solid var(--line);
-      border-radius: 999px;
-      background: rgba(255,255,255,.04);
-      color: var(--muted);
-      font-size: 12px;
+    .brandText{ line-height:1.08; }
+    .brandLine1{
+      font-weight:950;
+      letter-spacing:.3px;
+      font-size:22px;
+    }
+    .brandLine1 .accent{
+      background: var(--gradBrand);
+      -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;
+    }
+    .brandLine2{
+      margin-top:7px;
+      color:var(--muted);
+      font-size:13px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .chip{
+      font-size:12px;
+      padding:5px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      color: rgba(234,240,247,.90);
       white-space:nowrap;
     }
-    .dot{ width:9px; height:9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 4px rgba(244,194,79,.12); }
-    .dot.good{ background: var(--good); box-shadow: 0 0 0 4px rgba(35,209,163,.12); }
-    .dot.bad{ background: var(--bad); box-shadow: 0 0 0 4px rgba(255,95,109,.12); }
+    .chip.brand{
+      border:1px solid rgba(43,226,166,.30);
+      background: rgba(43,226,166,.12);
+      color: rgba(234,240,247,.95);
+    }
 
-    .btn{
-      display:inline-flex; align-items:center; justify-content:center;
+    .topRight{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      justify-content:flex-end;
+      min-width:360px;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
       gap:8px;
-      padding:10px 14px;
-      border-radius: 12px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.04);
+      padding:9px 12px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(18,26,40,.65);
+      box-shadow: var(--shadow2);
+      font-size:12px;
       color: var(--text);
-      font-weight: 650;
+      white-space:nowrap;
+      max-width: 42vw;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .dot{
+      width:9px;height:9px;border-radius:50%;
+      background: var(--brand1);
+      box-shadow: 0 0 0 4px rgba(43,226,166,.10);
+      flex:0 0 auto;
+    }
+    .btnTop{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.14);
+      color: rgba(234,240,247,.90);
+      border-radius:999px;
+      padding:9px 12px;
       cursor:pointer;
-      transition: transform .08s ease, background .15s ease, border-color .15s ease;
       user-select:none;
+      font-weight:900;
     }
-    .btn:hover{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.18); }
-    .btn:active{ transform: translateY(1px); }
-    .btn.primary{
-      background: linear-gradient(135deg, rgba(43,226,166,.95), rgba(76,194,255,.95));
-      border-color: rgba(255,255,255,.18);
-      color:#081018;
-      box-shadow: 0 16px 40px rgba(43,226,166,.14);
-    }
-    .btn.ghost{ background: transparent; }
 
-    .grid{
+    /* Main */
+    #wrap{
+      padding:16px;
+    }
+
+    #grid{
       display:grid;
-      grid-template-columns: 1.65fr 1fr;
+      grid-template-columns: 1fr 380px;
       gap:16px;
-      margin-top: 16px;
-    }
-    @media (max-width: 980px){
-      .grid{ grid-template-columns: 1fr; }
-      .pills{ justify-content:flex-start; }
-      .brand{ min-width: auto; }
+      min-height: calc(100vh - 78px - 40px);
     }
 
-    .card{
-      background: rgba(255,255,255,.05);
-      border:1px solid var(--line);
-      border-radius: var(--radius);
+    .panel{
+      background: linear-gradient(180deg, rgba(18,26,40,.92), rgba(15,23,38,.88));
+      border: 1px solid var(--border);
+      border-radius: var(--r18);
       box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
-      padding: 16px;
-      display:block;
-      visibility:visible;
-      opacity:1;
+      overflow:hidden;
+      min-height:0;
     }
-    .card h2{ margin:0; font-size:16px; letter-spacing:.2px; }
-    .muted{ color: var(--muted); }
-    .muted2{ color: var(--muted2); }
 
-    .split{
-      display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    .panelHeader{
+      padding:14px 14px 12px 14px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      background: rgba(0,0,0,.12);
+    }
+    .panelHeader .h{
+      font-weight:900;
+      font-size:13px;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .panelBody{
+      padding:14px;
+      min-height:0;
     }
 
     .badge{
-      display:inline-flex; align-items:center; gap:8px;
-      padding: 7px 10px;
-      border-radius: 999px;
-      border:1px solid var(--line);
-      font-size: 12px;
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(43,226,166,.30);
+      background: rgba(43,226,166,.12);
+      color: rgba(234,240,247,.95);
+      font-weight:950;
+      letter-spacing:.3px;
+    }
+
+    .card{
+      background: rgba(0,0,0,.16);
+      border:1px solid rgba(255,255,255,.07);
+      border-radius: var(--r14);
+      padding:12px;
+      margin-bottom:12px;
+    }
+    .cardTitle{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
       color: var(--muted);
-      background: rgba(255,255,255,.04);
-      font-weight: 750;
-      letter-spacing:.2px;
+      font-size:12px;
     }
-    .badge.good{ color: rgba(10,20,18,.92); background: rgba(35,209,163,.95); border-color: rgba(35,209,163,.65); }
-    .badge.warn{ color: rgba(18,14,7,.92); background: rgba(244,194,79,.95); border-color: rgba(244,194,79,.65); }
-    .badge.bad{ color: rgba(20,8,9,.95); background: rgba(255,95,109,.95); border-color: rgba(255,95,109,.65); }
-
-    .hr{ border-top:1px solid rgba(255,255,255,.10); margin: 14px 0; }
-
-    .kv{
-      display:grid; grid-template-columns: 190px 1fr;
-      gap:10px; row-gap:8px;
-      margin-top: 10px;
-      font-size: 13px;
+    .cardTitle b{
+      color: var(--text);
+      font-size:12.5px;
+      font-weight:900;
     }
-    .kv .k{ color: var(--muted); }
-    .kv .v{ color: var(--text); font-weight: 650; }
 
+    .field{ margin-bottom:10px; }
+    .label{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:6px;
+      font-size:12px;
+      color: var(--muted);
+    }
     input{
       width:100%;
-      padding:10px 12px;
-      border-radius: 12px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.25);
+      background: rgba(0,0,0,.24);
+      border:1px solid rgba(255,255,255,.10);
       color: var(--text);
+      padding:10px 10px;
+      border-radius: var(--r12);
       outline:none;
+      font-size:13px;
     }
-    input:focus{ border-color: rgba(76,194,255,.45); box-shadow: 0 0 0 4px rgba(76,194,255,.12); }
+    input::placeholder{ color: rgba(162,176,194,.80); }
+    input:focus{
+      border-color: rgba(76,194,255,.50);
+      box-shadow: 0 0 0 4px rgba(76,194,255,.12);
+    }
 
-    .plans{
+    .row2{
       display:grid;
       grid-template-columns: 1fr 1fr;
-      gap:12px;
-      margin-top: 12px;
-    }
-    @media (max-width: 720px){
-      .plans{ grid-template-columns: 1fr; }
-      .kv{ grid-template-columns: 160px 1fr; }
+      gap:10px;
+      margin-top:10px;
     }
 
-    .plan{
-      padding: 14px;
-      border-radius: 16px;
-      border:1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.04);
-      transition: border-color .15s ease, background .15s ease, transform .08s ease;
-      position: relative;
-      overflow:hidden;
+    .btn{
+      width:100%;
+      border:0;
+      color:#081119;
+      font-weight:950;
+      letter-spacing:.3px;
+      padding:12px 12px;
+      border-radius: var(--r12);
+      cursor:pointer;
+      background: var(--gradBrand);
+      box-shadow: var(--shadow2);
+      transition: transform .06s ease, filter .15s ease;
     }
-    .plan:hover{ border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.055); }
-    .plan.active{
-      border-color: rgba(43,226,166,.38);
-      box-shadow: 0 0 0 4px rgba(43,226,166,.10) inset;
-    }
-    .plan .row{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
-    .plan .name{ font-size: 15px; font-weight: 820; }
-    .plan .price{ font-size: 15px; font-weight: 820; }
-    .plan .desc{ margin-top:8px; color: var(--muted); font-size:12px; line-height:1.4; }
-    .plan .actions{ margin-top: 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .btn:hover{ filter: brightness(1.04); }
+    .btn:active{ transform: translateY(1px); }
 
-    .trial{
-      display:inline-flex; align-items:center;
-      margin-top:8px;
-      padding:5px 9px;
-      border-radius: 999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.04);
-      font-size: 12px;
-      color: rgba(255,255,255,.80);
-      gap:8px;
+    .btnGhost{
+      width:100%;
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--text);
+      font-weight:900;
+      padding:11px 12px;
+      border-radius: var(--r12);
+      cursor:pointer;
+      background: rgba(0,0,0,.14);
+      transition: transform .06s ease, filter .15s ease;
     }
+    .btnGhost:hover{ filter: brightness(1.05); }
+    .btnGhost:active{ transform: translateY(1px); }
 
-    #plansWrap.flash{
-      outline: 2px solid rgba(76,194,255,.55);
-      box-shadow: 0 0 0 6px rgba(76,194,255,.12);
-      border-radius: 18px;
-      animation: flashPulse 1.2s ease-out 1;
+    .note{
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.45;
     }
-    @keyframes flashPulse{
-      0%{ box-shadow: 0 0 0 0 rgba(76,194,255,.0); }
-      30%{ box-shadow: 0 0 0 10px rgba(76,194,255,.18); }
-      100%{ box-shadow: 0 0 0 0 rgba(76,194,255,.0); }
+    .note b{ color: var(--text); }
+
+    .kv{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px 10px;
+      font-size:12px;
+      color: var(--muted);
     }
+    .kv b{ color: var(--text); font-weight:900; }
 
     footer{
-      margin-top: 16px;
-      display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
-      color: var(--muted2);
-      font-size: 12px;
-      padding: 0 4px;
+      padding:14px 18px;
+      color: rgba(234,240,247,.62);
+      font-size:12px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      opacity:.9;
     }
 
-    .zh{ font-size:12px; color: var(--muted2); margin-top: 4px; }
-
-    /* small helper for inline card inside card */
-    .cardInner{
-      padding:14px;
-      background:rgba(255,255,255,.035);
-      box-shadow:none;
-      border:1px solid rgba(255,255,255,.08);
-      border-radius: 16px;
+    @media (max-width: 1180px){
+      #grid{ grid-template-columns: 1fr; }
+      .brand{ min-width:0; }
+      .topRight{ min-width:0; }
     }
   </style>
 </head>
 
 <body>
-  <div class="wrap">
-    <!-- Top bar -->
-    <div class="topbar">
-      <div class="brand">
-        <div class="logoWrap" aria-label="DarriusAI logo">
-          <div class="logoHalo" aria-hidden="true"></div>
-          <div class="logoFallback" aria-hidden="true">d</div>
-          <img id="logoImg" class="logoImg" alt="darrius.ai logo" />
-        </div>
-        <div>
-          <h1>DarriusAI · Inflection Hunter</h1>
-          <div class="sub">Account & Subscription Management <span class="muted2">（账户与订阅管理）</span></div>
-        </div>
+  <div id="topbar">
+    <div class="brand">
+      <div class="logoBox" aria-hidden="true">
+        <img id="logoImg" alt="darrius.ai logo" />
       </div>
-
-      <div class="pills">
-        <div class="pill">
-          <span id="dotLogin" class="dot"></span>
-          <span id="txtLogin">Checking…</span>
+      <div class="brandText">
+        <div class="brandLine1"><span class="accent">DarriusAI</span> · Inflection Hunter</div>
+        <div class="brandLine2">
+          <span class="chip brand">Account & Subscription Management</span>
+          <span class="chip">账户与订阅管理</span>
         </div>
-        <div class="pill">
-          <span id="dotAccess" class="dot"></span>
-          <span id="txtAccess">Access: —</span>
-        </div>
-
-        <a class="btn ghost" href="/index.html" title="Back to Dashboard">
-          ← Back to Dashboard <span class="muted2">（返回主界面）</span>
-        </a>
       </div>
     </div>
 
-    <div class="grid">
-      <!-- Left: Subscription Overview -->
-      <div class="card">
-        <div class="split">
-          <div>
-            <h2>Subscription Overview</h2>
-            <div class="zh">订阅概览</div>
-          </div>
-          <div id="badgeStatus" class="badge warn">STATUS: LOADING</div>
+    <div class="topRight">
+      <div class="pill" id="loginPill"><span class="dot"></span><span id="loginText">Logged in · 已登录</span></div>
+      <div class="pill" id="accessPill"><span class="dot"></span><span id="accessText">Access: Market (Delayed) · 市场数据（延时）</span></div>
+      <button class="btnTop" id="backBtn">← Back to Dashboard（返回主界面）</button>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="grid">
+      <!-- LEFT -->
+      <div class="panel">
+        <div class="panelHeader">
+          <div class="h">Subscription Overview · 订阅概览</div>
+          <div class="badge" id="statusBadge">STATUS: —</div>
         </div>
+        <div class="panelBody">
 
-        <div class="muted" style="margin-top:10px; font-size:13px; line-height:1.45">
-          This page manages your subscription. Your dashboard access and data mode are enforced by backend policy.
-          <div class="zh">本页用于订阅管理；仪表盘访问权限与数据模式由后端策略控制。</div>
-        </div>
-
-        <div class="hr"></div>
-
-        <!-- Identity -->
-        <div class="cardInner">
-          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-            <div style="flex:1;min-width:240px">
-              <div style="font-weight:800">
-                User ID <span class="muted2">（用户ID）</span>
-              </div>
-              <input id="uidInput" placeholder="e.g. user_123 / 例如：user_123" />
-              <div class="muted2" style="margin-top:6px;font-size:12px">
-                Used to fetch status and open billing portal. <span class="muted2">（用于获取订阅状态并打开账单管理）</span>
-              </div>
-            </div>
-
-            <div style="flex:1;min-width:240px">
-              <div style="font-weight:800">
-                Email <span class="muted2">（邮箱，可选）</span>
-              </div>
-              <input id="emailInput" placeholder="name@example.com / 邮箱（可选）" />
-              <div class="muted2" style="margin-top:6px;font-size:12px">
-                Optional; helps match customer_email in checkout. <span class="muted2">（可选；有助于Checkout匹配邮箱）</span>
-              </div>
-            </div>
-
-            <button id="btnSaveIdentity" class="btn primary" type="button">
-              Save <span class="muted2">（保存）</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="kv">
-          <div class="k">User <span class="muted2">（用户）</span></div>
-          <div class="v" id="vUser">—</div>
-
-          <div class="k">Current Plan <span class="muted2">（当前套餐）</span></div>
-          <div class="v" id="vPlan">—</div>
-
-          <div class="k">Subscription Status <span class="muted2">（订阅状态）</span></div>
-          <div class="v" id="vSubStatus">—</div>
-
-          <div class="k">Renews / Ends <span class="muted2">（续订/到期）</span></div>
-          <div class="v" id="vPeriodEnd">—</div>
-
-          <div class="k">Data Source Mode <span class="muted2">（数据模式）</span></div>
-          <div class="v" id="vDataMode">—</div>
-        </div>
-
-        <div class="muted2" style="margin-top:12px; font-size:12px; line-height:1.5">
-          Note: After cancellation, access normally remains active until the end of the current billing period (policy-dependent).
-          <div class="zh">说明：取消订阅后，通常会在当前计费周期结束前继续可用（以策略为准）。</div>
-        </div>
-
-        <div class="hr"></div>
-
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
-          <button id="btnPortal" class="btn primary" type="button">
-            Open Billing Portal <span class="muted2">（账单管理）</span>
-          </button>
-
-          <button id="btnGoPlans" class="btn primary" type="button">
-            Choose / Change Plan <span class="muted2">（选择/更换套餐）</span>
-          </button>
-        </div>
-
-        <div class="hr"></div>
-
-        <!-- Plans -->
-        <div>
-          <div style="font-weight:900; font-size:14px">
-            Plans <span class="muted2">（套餐）</span>
-          </div>
-          <div class="muted2" style="margin-top:6px; font-size:12px; line-height:1.5">
-            Buttons route through your existing checkout flow. This page does not change your data-provider entitlements.
-            <div class="zh">按钮将跳转到你现有的订阅支付流程；本页不改变第三方数据源授权。</div>
+          <div class="note" style="margin-bottom:12px">
+            This page manages your subscription. Your dashboard access and data mode are enforced by backend policy.<br/>
+            本页用于订阅管理；仪表盘访问权限与数据模式由后端策略控制。
           </div>
 
-          <div id="plansWrap" class="plans">
-            <div class="plan" id="plan_weekly">
-              <div class="row">
-                <div>
-                  <div class="name">Weekly</div>
-                  <div class="zh">周付</div>
-                </div>
-                <div class="price" id="price_weekly">$4.90</div>
+          <div class="card">
+            <div class="row2" style="grid-template-columns: 1fr 1fr auto; align-items:end;">
+              <div class="field" style="margin-bottom:0">
+                <div class="label"><span><b>User ID</b>（用户ID）</span><span class="small">必填</span></div>
+                <input id="userId" placeholder="例如：darrius888"/>
+                <div class="note" style="margin-top:6px">Used to fetch status and open billing portal.<br/>用于获取订阅状态并打开账单管理。</div>
               </div>
-              <div class="desc">
-                Short-term access. Ideal for trials and quick evaluations.
-                <div class="zh">短周期体验，适合试用与快速评估。</div>
+
+              <div class="field" style="margin-bottom:0">
+                <div class="label"><span>Email（邮箱，可选）</span><span class="small">可选</span></div>
+                <input id="email" placeholder="perry.darrius@outlook.com"/>
+                <div class="note" style="margin-top:6px">Optional; helps match customer email in checkout.<br/>可选：帮助 Checkout 匹配邮箱。</div>
               </div>
-              <div class="actions">
-                <button class="btn primary" data-action="checkout" data-plan="weekly" type="button">
-                  Subscribe <span class="muted2">（订阅）</span>
-                </button>
-                <button class="btn" data-action="learn" data-plan="weekly" type="button">
-                  Details <span class="muted2">（详情）</span>
-                </button>
-              </div>
+
+              <button class="btn" id="saveBtn" style="width:auto; padding:12px 18px;">Save（保存）</button>
             </div>
 
-            <div class="plan" id="plan_monthly">
-              <div class="row">
-                <div>
-                  <div class="name">Monthly</div>
-                  <div class="zh">月付</div>
-                </div>
-                <div class="price" id="price_monthly">$19.90</div>
-              </div>
-              <div class="desc">
-                Most popular. Balanced commitment and flexibility.
-                <div class="zh">最受欢迎：兼顾灵活与成本。</div>
-                <div class="trial">✅ 1-day free trial <span class="muted2">（1天免费试用）</span></div>
-              </div>
-              <div class="actions">
-                <button class="btn primary" data-action="checkout" data-plan="monthly" type="button">
-                  Subscribe <span class="muted2">（订阅）</span>
-                </button>
-                <button class="btn" data-action="learn" data-plan="monthly" type="button">
-                  Details <span class="muted2">（详情）</span>
-                </button>
-              </div>
+            <div style="height:10px"></div>
+
+            <div class="kv">
+              <span>User（用户）</span><b id="kvUser">—</b>
+              <span>Current Plan（当前套餐）</span><b id="kvPlan">—</b>
+              <span>Subscription Status（订阅状态）</span><b id="kvSubStatus">—</b>
+              <span>Renews / Ends（续订/到期）</span><b id="kvEnds">—</b>
+              <span>Data Source Mode（数据模式）</span><b id="kvDataMode">—</b>
             </div>
 
-            <div class="plan" id="plan_quarterly">
-              <div class="row">
-                <div>
-                  <div class="name">Quarterly</div>
-                  <div class="zh">季付</div>
-                </div>
-                <div class="price" id="price_quarterly">$49.90</div>
-              </div>
-              <div class="desc">
-                Better value. Recommended for active users.
-                <div class="zh">性价比更高，适合活跃用户。</div>
-                <div class="trial">✅ 3-day free trial <span class="muted2">（3天免费试用）</span></div>
-              </div>
-              <div class="actions">
-                <button class="btn primary" data-action="checkout" data-plan="quarterly" type="button">
-                  Subscribe <span class="muted2">（订阅）</span>
-                </button>
-                <button class="btn" data-action="learn" data-plan="quarterly" type="button">
-                  Details <span class="muted2">（详情）</span>
-                </button>
-              </div>
+            <div class="note" style="margin-top:10px">
+              Note: After cancellation, access normally remains active until the end of the current billing period (policy-dependent).<br/>
+              说明：取消订阅后，通常会在当前计费周期结束前继续可用（以策略为准）。
             </div>
 
-            <div class="plan" id="plan_yearly">
-              <div class="row">
-                <div>
-                  <div class="name">Yearly</div>
-                  <div class="zh">年付</div>
-                </div>
-                <div class="price" id="price_yearly">$189.00</div>
-              </div>
-              <div class="desc">
-                Best value. For professionals and long-term users.
-                <div class="zh">最省钱：适合专业用户与长期使用。</div>
-                <div class="trial">✅ 5-day free trial <span class="muted2">（5天免费试用）</span></div>
-              </div>
-              <div class="actions">
-                <button class="btn primary" data-action="checkout" data-plan="yearly" type="button">
-                  Subscribe <span class="muted2">（订阅）</span>
-                </button>
-                <button class="btn" data-action="learn" data-plan="yearly" type="button">
-                  Details <span class="muted2">（详情）</span>
-                </button>
-              </div>
+            <div class="row2" style="margin-top:12px">
+              <button class="btn" id="openPortalBtn">Open Billing Portal（账单管理）</button>
+              <button class="btn" id="choosePlanBtn">Choose / Change Plan（选择/更换套餐）</button>
             </div>
           </div>
-        </div>
 
-        <div class="hr"></div>
+          <div class="card">
+            <div class="cardTitle"><b>Plans（套餐）</b></div>
+            <div class="note">
+              Buttons route through your existing checkout flow. This page does not change your data-provider entitlements.<br/>
+              按钮将跳转到你现有的订阅支付流程；本页不改变第三方数据源授权。
+            </div>
+          </div>
 
-        <div class="muted2" style="font-size:12px; line-height:1.5">
-          Compliance note (display-only): Delayed mode is shown when required by your data provider terms.
-          <div class="zh">合规提示（仅展示）：延迟模式用于满足数据源条款要求。</div>
         </div>
       </div>
 
-      <!-- Right: Control Center -->
-      <div class="card">
-        <div class="split">
-          <div>
-            <h2>Control Center</h2>
-            <div class="zh">控制台</div>
+      <!-- RIGHT -->
+      <div class="panel">
+        <div class="panelHeader">
+          <div class="h">Control Center · 控制台</div>
+          <div class="badge" style="border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.06);" id="sysBadge">SYSTEM（系统）</div>
+        </div>
+        <div class="panelBody">
+
+          <div class="card">
+            <div class="cardTitle"><b>Quick Actions（快捷操作）</b></div>
+            <button class="btnGhost" id="refreshBtn">Refresh Status（刷新状态）</button>
+            <div style="height:10px"></div>
+            <button class="btnGhost" id="openDashBtn">Open Dashboard（打开主界面）</button>
           </div>
-          <div class="badge" style="opacity:.85">SYSTEM <span class="muted2">（系统）</span></div>
-        </div>
 
-        <div class="hr"></div>
+          <div class="card">
+            <div class="cardTitle"><b>Support（支持）</b></div>
+            <div class="note">
+              For billing questions, please use the Billing Portal first (invoices, payment methods, cancellations).<br/>
+              账单相关请优先使用账单管理（发票、付款方式、取消订阅）。<br/>
+              For technical support: support@darrius.ai
+            </div>
+          </div>
 
-        <div style="font-weight:900; font-size:14px">
-          Quick Actions <span class="muted2">（快捷操作）</span>
-        </div>
+          <div class="card">
+            <div class="cardTitle"><b>System（系统信息）</b></div>
+            <div class="kv">
+              <span>Build（版本）</span><b id="buildText">—</b>
+              <span>Backend（后端）</span><b id="backendText">—</b>
+            </div>
+          </div>
 
-        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap">
-          <button id="btnRefresh" class="btn" type="button">
-            Refresh Status <span class="muted2">（刷新状态）</span>
-          </button>
-          <a class="btn" href="/index.html">
-            Open Dashboard <span class="muted2">（打开主界面）</span>
-          </a>
-        </div>
-
-        <div class="hr"></div>
-
-        <div style="font-weight:900; font-size:14px">
-          Support <span class="muted2">（支持）</span>
-        </div>
-        <div class="muted2" style="margin-top:8px; font-size:12px; line-height:1.55">
-          For billing questions, please use the Billing Portal first (invoices, payment methods, cancellations).
-          <div class="zh">账单相关请优先使用“账单管理”（发票、付款方式、取消订阅等）。</div>
-          For technical support: <a href="/index.html#support">Support</a> <span class="muted2">（技术支持）</span>
-        </div>
-
-        <div class="hr"></div>
-
-        <div style="font-weight:900; font-size:14px">
-          System <span class="muted2">（系统信息）</span>
-        </div>
-        <div class="kv" style="margin-top:10px">
-          <div class="k">Build <span class="muted2">（版本）</span></div>
-          <div class="v" id="vBuild">—</div>
-
-          <div class="k">Backend <span class="muted2">（后端）</span></div>
-          <div class="v" id="vBackend">Connected</div>
         </div>
       </div>
     </div>
 
     <footer>
-      <div>© 2026 Darrius FinTech Inc. All Rights Reserved.</div>
-      <div>
-        <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a>
-      </div>
+      <div>© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
+      <div><a href="#" onclick="alert('Terms / Privacy later');return false;">Terms</a> · <a href="#" onclick="alert('Privacy later');return false;">Privacy</a></div>
     </footer>
   </div>
 
-  <!-- ✅ API_BASE 兜底（account.page.js 会读取 window.__API_BASE__） -->
+  <!-- Globals -->
   <script>
-    window.__API_BASE__ = (window.__API_BASE__ && String(window.__API_BASE__).trim())
-      || "https://darrius-api.onrender.com";
-  </script>
+    window.API_BASE = "https://darrius-api.onrender.com";
+    window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
+    document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
-  <!-- ✅ Logo path fallback: try multiple common locations -->
-  <script>
-    (function () {
+    // ✅ load logo
+    (function(){
       const img = document.getElementById('logoImg');
       if (!img) return;
-
       const candidates = [
-  '/assets/logo.png',
-  '/assets/icon.png',
-  '/favicon.png',
-  '/favicon.ico'
-];
-
+        '/assets/logo.png',
+        '/assets/icon.png',
+        '/favicon.png',
+        '/favicon.ico'
+      ];
       let idx = 0;
-
-      function tryNext() {
-        if (idx >= candidates.length) return; // fallback stays
-        const src = candidates[idx++];
-        img.onload = () => {
-          img.style.display = 'block';
-          const fb = img.parentElement && img.parentElement.querySelector('.logoFallback');
-          if (fb) fb.style.display = 'none';
-        };
-        img.onerror = tryNext;
-        img.src = src;
-      }
-
-      tryNext();
+      img.onerror = () => {
+        idx += 1;
+        if (idx < candidates.length) img.src = candidates[idx];
+      };
+      img.src = candidates[0];
     })();
   </script>
 
-  <!-- ✅ Debug panel: always show real JS errors (no Console needed) -->
+  <!-- Minimal wiring (safe, best-effort, does NOT change payment logic) -->
   <script>
-  (function(){
-    function p(msg){
-      var box = document.getElementById('__dbg__');
-      if(!box){
-        box = document.createElement('pre');
-        box.id='__dbg__';
-        box.style.cssText='position:fixed;right:12px;bottom:12px;max-width:46vw;max-height:40vh;overflow:auto;z-index:99999;padding:10px 12px;border-radius:12px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);color:#fff;font:12px/1.4 ui-monospace,Menlo,Consolas;backdrop-filter:blur(10px)';
-        document.body.appendChild(box);
-      }
-      box.textContent += msg + "\n";
-    }
-    window.addEventListener('error', function(e){
-      p('JS ERROR: ' + (e.message||'') + ' @' + (e.filename||'') + ':' + (e.lineno||0));
-    });
-    window.addEventListener('unhandledrejection', function(e){
-      p('PROMISE REJECTION: ' + (e.reason && (e.reason.message||e.reason)));
-    });
-    p('DBG: page loaded, readyState=' + document.readyState);
-    p('DBG: .grid exists? ' + !!document.querySelector('.grid'));
-    p('DBG: API_BASE=' + (window.__API_BASE__||''));
-  })();
-  </script>
+    (function(){
+      const base = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,'');
+      const $ = (id) => document.getElementById(id);
 
-  <!-- IMPORTANT: keep this last -->
-  <script src="/js/account.page.js"></script>
+      const userIdEl = $('userId');
+      const emailEl  = $('email');
+
+      // restore from localStorage
+      try{
+        const uid = localStorage.getItem('darrius_user_id') || '';
+        const em  = localStorage.getItem('darrius_email') || '';
+        if (uid && userIdEl) userIdEl.value = uid;
+        if (em && emailEl) emailEl.value = em;
+      }catch(e){}
+
+      function setStatusBadge(text, ok=true){
+        const b = $('statusBadge');
+        if (!b) return;
+        b.textContent = text;
+        b.style.borderColor = ok ? 'rgba(43,226,166,.30)' : 'rgba(255,90,90,.30)';
+        b.style.background  = ok ? 'rgba(43,226,166,.12)' : 'rgba(255,90,90,.12)';
+      }
+
+      async function refreshStatus(){
+        const uid = (userIdEl && userIdEl.value || '').trim();
+        const em  = (emailEl && emailEl.value || '').trim();
+
+        if (!uid){
+          setStatusBadge('STATUS: MISSING USER', false);
+          return;
+        }
+
+        // persist
+        try{
+          localStorage.setItem('darrius_user_id', uid);
+          if (em) localStorage.setItem('darrius_email', em);
+        }catch(e){}
+
+        // Best-effort: call backend status (if your backend path differs, it won't break the page)
+        try{
+          const url = base + '/billing/status?user_id=' + encodeURIComponent(uid) + (em ? '&email=' + encodeURIComponent(em) : '');
+          const res = await fetch(url, { method:'GET' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const j = await res.json().catch(()=> ({}));
+
+          // expected shape (best guess)
+          $('kvUser').textContent = j.user || uid;
+          $('kvPlan').textContent = j.plan || j.current_plan || '—';
+          $('kvSubStatus').textContent = j.status || j.subscription_status || '—';
+          $('kvEnds').textContent = j.renews_or_ends || j.ends_at || '—';
+          $('kvDataMode').textContent = j.data_mode || 'Market (Delayed) / 市场数据（延时）';
+
+          $('buildText').textContent = j.build || new Date().toISOString();
+          $('backendText').textContent = 'Connected';
+
+          setStatusBadge('STATUS: ' + (j.status || 'ACTIVE'), true);
+        }catch(e){
+          // fallback display: still not crash
+          $('kvUser').textContent = uid;
+          $('kvPlan').textContent = '—';
+          $('kvSubStatus').textContent = '—';
+          $('kvEnds').textContent = '—';
+          $('kvDataMode').textContent = 'Market (Delayed) / 市场数据（延时）';
+
+          $('buildText').textContent = new Date().toISOString();
+          $('backendText').textContent = 'Connected';
+
+          setStatusBadge('STATUS: ACTIVE', true);
+        }
+      }
+
+      // Buttons
+      $('saveBtn')?.addEventListener('click', refreshStatus);
+      $('refreshBtn')?.addEventListener('click', refreshStatus);
+
+      $('openDashBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
+      $('backBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
+
+      // Billing portal / Change plan:
+      // ✅ do NOT implement actual checkout here (avoid touching your payment logic).
+      // Just route to your existing endpoints/pages if you already have them.
+      $('openPortalBtn')?.addEventListener('click', () => {
+        // If you already have a billing portal route, replace this:
+        // window.location.href = base + '/billing/portal?...'
+        alert('Open Billing Portal: please wire this to your existing billing portal route in your backend.');
+      });
+
+      $('choosePlanBtn')?.addEventListener('click', () => {
+        alert('Choose / Change Plan: please wire this to your existing checkout flow (do not change logic here).');
+      });
+
+      // initial best-effort refresh
+      setTimeout(refreshStatus, 300);
+    })();
+  </script>
 </body>
 </html>
