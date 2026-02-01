@@ -9,46 +9,24 @@
     :root{
       --bg:#0B0F17;
       --bg2:#0A1220;
-
-      --panel: rgba(18,26,40,.92);
-      --panel2: rgba(15,23,38,.88);
-
+      --panel:#121A28;
       --border:rgba(255,255,255,.08);
-      --border2:rgba(255,255,255,.10);
-
       --text:#EAF0F7;
       --muted:#A2B0C2;
-
       --brand1:#2BE2A6;
       --brand2:#4CC2FF;
       --danger:#FF5A5A;
-      --warn:#FFB86C;
-
       --shadow: 0 18px 45px rgba(0,0,0,.40);
       --shadow2: 0 10px 25px rgba(0,0,0,.28);
-
       --r12:12px;
       --r14:14px;
       --r18:18px;
-
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
-      --gradHeader: linear-gradient(90deg, rgba(43,226,166,.20) 0%, rgba(76,194,255,.16) 100%);
-      --gradHeader2: linear-gradient(180deg, rgba(76,194,255,.10) 0%, rgba(255,255,255,0.02) 100%);
+      --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
 
-      /* ✅ Logo 2.4x（你要2.0就改这里） */
-      --logoScale: 3.3;
-      --logoBase: 40px;
-      --logoSize: calc(var(--logoBase) * var(--logoScale));
-      --logoRadius: calc(12px * var(--logoScale));
-
-      /* ✅ 短按钮宽度（防止背景拉满一整行） */
-      --shortBtnW: 320px;
-
-      /* ✅ 页面最大宽度（解决你说的“左边太宽”） */
-      --pageMax: 1280px;
-
-      /* ✅ 右侧栏宽度更窄、更合理 */
-      --rightCol: 340px;
+      /* ✅ Logo 大小统一在这里改（你要 2.4 倍就调大；要 2 倍就调小） */
+      --logoSize: 84px;
+      --logoRadius: 20px;
     }
 
     *{ box-sizing:border-box; }
@@ -57,17 +35,18 @@
       margin:0;
       color:var(--text);
       background:
-        radial-gradient(900px 520px at 12% 10%, rgba(76,194,255,.10), transparent 60%),
+        radial-gradient(900px 500px at 12% 10%, rgba(76,194,255,.10), transparent 60%),
         radial-gradient(900px 520px at 88% 12%, rgba(43,226,166,.10), transparent 62%),
         linear-gradient(180deg, var(--bg), var(--bg2));
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "PingFang SC","Microsoft YaHei", sans-serif;
     }
+
     a{ color: rgba(76,194,255,.95); text-decoration:none; }
     a:hover{ text-decoration:underline; }
 
-    /* ===== Topbar ===== */
+    /* Top bar */
     #topbar{
-      height:78px;
+      height:86px;
       padding:0 18px;
       display:flex;
       align-items:center;
@@ -84,37 +63,26 @@
       min-width:420px;
     }
 
-    /* ✅ Logo：放大 + 无旋转光晕 */
     .logoBox{
       width: var(--logoSize);
       height: var(--logoSize);
       border-radius: var(--logoRadius);
       overflow:hidden;
-      border:1px solid rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.14);
       box-shadow: 0 14px 30px rgba(0,0,0,.30);
       flex:0 0 auto;
       background: rgba(0,0,0,.12);
       display:flex;
       align-items:center;
       justify-content:center;
-      position: relative;
-    }
-    .logoBox::before{
-      content:"";
-      position:absolute; inset:-6px;
-      background: linear-gradient(135deg, rgba(76,194,255,.30), rgba(43,226,166,.22), rgba(255,255,255,.06));
-      filter: blur(12px);
-      opacity:.35;
-      pointer-events:none;
     }
     #logoImg{
-      width: var(--logoSize);
-      height: var(--logoSize);
+      width:100%;
+      height:100%;
       border-radius: var(--logoRadius);
       object-fit: cover;
       display:block;
-      position: relative;
-      z-index: 2;
+      filter: brightness(1.06) contrast(1.04);
     }
 
     .brandText{ line-height:1.08; }
@@ -181,6 +149,11 @@
       box-shadow: 0 0 0 4px rgba(43,226,166,.10);
       flex:0 0 auto;
     }
+    .dot.bad{
+      background: var(--danger);
+      box-shadow: 0 0 0 4px rgba(255,90,90,.10);
+    }
+
     .btnTop{
       border:1px solid rgba(255,255,255,.10);
       background: rgba(0,0,0,.14);
@@ -192,26 +165,19 @@
       font-weight:900;
     }
 
-    /* ===== Page wrap ===== */
-    #wrap{
-      padding:16px;
-      display:flex;
-      justify-content:center;   /* ✅ 居中 */
-    }
-    #container{
-      width: 100%;
-      max-width: var(--pageMax);  /* ✅ 限制最大宽度 */
-    }
+    /* Main */
+    #wrap{ padding:16px; }
 
+    /* ✅ 左右结构：主内容 + 右侧控制台 */
     #grid{
       display:grid;
-      grid-template-columns: minmax(0,1fr) var(--rightCol); /* ✅ 左自适应，右固定更窄 */
+      grid-template-columns: 1fr 380px;
       gap:16px;
-      min-height: calc(100vh - 78px - 40px);
+      min-height: calc(100vh - 86px - 40px);
     }
 
     .panel{
-      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      background: linear-gradient(180deg, rgba(18,26,40,.92), rgba(15,23,38,.88));
       border: 1px solid var(--border);
       border-radius: var(--r18);
       box-shadow: var(--shadow);
@@ -236,26 +202,20 @@
       align-items:center;
       gap:10px;
     }
-
-    .panelBody{ padding:14px; min-height:0; }
+    .panelBody{
+      padding:14px;
+      min-height:0;
+    }
 
     .badge{
       font-size:12px;
       padding:6px 10px;
       border-radius:999px;
-      border:1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.06);
+      border:1px solid rgba(43,226,166,.30);
+      background: rgba(43,226,166,.12);
       color: rgba(234,240,247,.95);
       font-weight:950;
       letter-spacing:.3px;
-    }
-    .badge.ok{
-      border-color: rgba(43,226,166,.30);
-      background: rgba(43,226,166,.12);
-    }
-    .badge.bad{
-      border-color: rgba(255,90,90,.30);
-      background: rgba(255,90,90,.12);
     }
 
     .card{
@@ -265,36 +225,20 @@
       padding:12px;
       margin-bottom:12px;
     }
-
-    /* ✅ 通用“栏目标题条”（你图里黄色框缺的就是这个） */
-    .sectionHeader{
+    .cardTitle{
       display:flex;
       align-items:center;
       justify-content:space-between;
       gap:10px;
-      padding:10px 12px;
-      border-radius: 12px;
-      border:1px solid rgba(255,255,255,.08);
-      background: var(--gradHeader);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
       margin-bottom:10px;
-    }
-    .sectionHeader b{
-      font-weight:950;
-      font-size:12.5px;
-      letter-spacing:.2px;
-    }
-    .sectionHeader .small{
-      font-size:12px;
-      color: rgba(234,240,247,.78);
-    }
-
-    .note{
-      font-size:12px;
       color: var(--muted);
-      line-height:1.45;
+      font-size:12px;
     }
-    .note b{ color: var(--text); }
+    .cardTitle b{
+      color: var(--text);
+      font-size:12.5px;
+      font-weight:900;
+    }
 
     .field{ margin-bottom:10px; }
     .label{
@@ -306,6 +250,7 @@
       font-size:12px;
       color: var(--muted);
     }
+
     input{
       width:100%;
       background: rgba(0,0,0,.24);
@@ -322,6 +267,72 @@
       box-shadow: 0 0 0 4px rgba(76,194,255,.12);
     }
 
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+
+    /* ✅ 不再“拉满整条”：用 inline-flex */
+    .btnInline{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      border:0;
+      color:#081119;
+      font-weight:950;
+      letter-spacing:.3px;
+      padding:11px 16px;
+      border-radius: var(--r12);
+      cursor:pointer;
+      background: var(--gradBrand);
+      box-shadow: var(--shadow2);
+      transition: transform .06s ease, filter .15s ease;
+      width: fit-content;
+      min-width: 210px; /* ✅ 与 Subscribe 按钮视觉长度接近 */
+      max-width: 100%;
+      white-space:nowrap;
+    }
+    .btnInline:hover{ filter: brightness(1.04); }
+    .btnInline:active{ transform: translateY(1px); }
+
+    .btnGhostInline{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--text);
+      font-weight:900;
+      padding:10px 16px;
+      border-radius: var(--r12);
+      cursor:pointer;
+      background: rgba(0,0,0,.14);
+      transition: transform .06s ease, filter .15s ease;
+      width: fit-content;
+      min-width: 210px;
+      max-width:100%;
+      white-space:nowrap;
+    }
+    .btnGhostInline:hover{ filter: brightness(1.05); }
+    .btnGhostInline:active{ transform: translateY(1px); }
+
+    .btnGhostInline[disabled],
+    .btnInline[disabled]{
+      opacity:.55;
+      cursor:not-allowed;
+      pointer-events:none;
+    }
+
+    .note{
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.45;
+    }
+    .note b{ color: var(--text); }
+
     .kv{
       display:grid;
       grid-template-columns: 1fr auto;
@@ -331,51 +342,13 @@
     }
     .kv b{ color: var(--text); font-weight:900; }
 
-    .btn{
-      border:0;
-      color:#081119;
-      font-weight:950;
-      letter-spacing:.3px;
-      padding:12px 12px;
-      border-radius: var(--r12);
-      cursor:pointer;
-      background: var(--gradBrand);
-      box-shadow: var(--shadow2);
-      transition: transform .06s ease, filter .15s ease;
-    }
-    .btn:hover{ filter: brightness(1.04); }
-    .btn:active{ transform: translateY(1px); }
-
-    .btnGhost{
-      border:1px solid rgba(255,255,255,.10);
-      color: var(--text);
-      font-weight:900;
-      padding:11px 12px;
-      border-radius: var(--r12);
-      cursor:pointer;
-      background: rgba(0,0,0,.14);
-      transition: transform .06s ease, filter .15s ease;
-    }
-    .btnGhost:hover{ filter: brightness(1.05); }
-    .btnGhost:active{ transform: translateY(1px); }
-
-    .btnShort{
-      width: var(--shortBtnW);
-      max-width: 100%;
+    .divider{
+      height:1px;
+      background: rgba(255,255,255,.06);
+      margin:12px 0;
     }
 
-    .btnRow{
-      display:flex;
-      gap:12px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-
-    /* ✅ Actions 两个按钮：和你“订阅卡片按钮长度”一致风格，不拉满 */
-    .actionBtns .btn{ width: 260px; max-width:100%; }
-    .actionBtns{ display:flex; gap:12px; flex-wrap:wrap; }
-
-    /* ===== Plans grid ===== */
+    /* Plans grid */
     .plansGrid{
       display:grid;
       grid-template-columns: 1fr 1fr;
@@ -383,59 +356,64 @@
       margin-top:10px;
     }
     .planCard{
-      background: rgba(0,0,0,.16);
+      background: rgba(0,0,0,.18);
       border:1px solid rgba(255,255,255,.07);
-      border-radius: var(--r14);
-      padding:12px;
-      min-height: 132px;
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
+      border-radius: 16px;
+      padding:14px;
+      box-shadow: 0 10px 22px rgba(0,0,0,.22);
     }
     .planTop{
       display:flex;
       align-items:flex-start;
       justify-content:space-between;
       gap:10px;
+      margin-bottom:10px;
     }
-    .planName{ font-weight:950; }
-    .planPrice{ font-weight:950; color: rgba(234,240,247,.92); }
-    .planDesc{ margin-top:6px; color: var(--muted); font-size:12px; line-height:1.4; }
-    .pillMini{
+    .planName{
+      font-weight:950;
+      letter-spacing:.2px;
+      font-size:14px;
+    }
+    .planPrice{
+      font-weight:950;
+      font-size:14px;
+      color: rgba(234,240,247,.92);
+      white-space:nowrap;
+    }
+    .planDesc{
+      font-size:12px;
+      color: rgba(162,176,194,.92);
+      line-height:1.45;
+      margin-bottom:10px;
+    }
+    .trialChip{
       display:inline-flex;
       align-items:center;
-      gap:6px;
+      gap:7px;
       font-size:11px;
-      padding:4px 9px;
+      padding:4px 10px;
       border-radius:999px;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.05);
-      color: rgba(234,240,247,.86);
-      margin-top:8px;
-      width: fit-content;
-    }
-    .pillMini.ok{
-      border-color: rgba(43,226,166,.26);
+      border:1px solid rgba(43,226,166,.30);
       background: rgba(43,226,166,.10);
+      color: rgba(234,240,247,.92);
+      margin-bottom:10px;
+      white-space:nowrap;
     }
+    .trialDot{
+      width:8px;height:8px;border-radius:50%;
+      background: var(--brand1);
+      box-shadow: 0 0 0 4px rgba(43,226,166,.10);
+    }
+
     .planActions{
       display:flex;
       gap:10px;
-      margin-top:10px;
-      align-items:center;
-      justify-content:flex-start; /* ✅ 不要左右拉开太大 */
       flex-wrap:wrap;
+      margin-top:8px;
     }
-    .planActions .btn, .planActions .btnGhost{
-      width: 170px;
-      max-width:100%;
-    }
-
-    .mutRed{ color: rgba(255,90,90,.92); }
-    .mutOk{ color: rgba(43,226,166,.92); }
 
     footer{
-      padding:14px 4px 0 4px;
+      padding:14px 18px;
       color: rgba(234,240,247,.62);
       font-size:12px;
       display:flex;
@@ -445,13 +423,25 @@
       opacity:.9;
     }
 
+    .miniCheck{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+      color: rgba(234,240,247,.88);
+      user-select:none;
+    }
+    .miniCheck input{
+      width:auto;
+      margin:0;
+      transform: translateY(1px);
+    }
+
     @media (max-width: 1180px){
       #grid{ grid-template-columns: 1fr; }
       .brand{ min-width:0; }
       .topRight{ min-width:0; }
       .plansGrid{ grid-template-columns: 1fr; }
-      :root{ --shortBtnW: 100%; --rightCol: 100%; }
-      .actionBtns .btn{ width: 100%; }
     }
   </style>
 </head>
@@ -459,7 +449,7 @@
 <body>
   <div id="topbar">
     <div class="brand">
-      <div class="logoBox">
+      <div class="logoBox" aria-hidden="true">
         <img id="logoImg" alt="darrius.ai logo" />
       </div>
       <div class="brandText">
@@ -472,186 +462,187 @@
     </div>
 
     <div class="topRight">
-      <div class="pill"><span class="dot"></span><span id="loginText">Logged in · 已登录</span></div>
-      <div class="pill"><span class="dot"></span><span id="accessText">Access: DELAYED · 市场数据（延时）</span></div>
+      <div class="pill" id="loginPill"><span class="dot" id="loginDot"></span><span id="loginText">Logged in · 已登录</span></div>
+      <div class="pill" id="accessPill"><span class="dot" id="accessDot"></span><span id="accessText">Access: DELAYED · 市场数据（延时）</span></div>
       <button class="btnTop" id="backBtn">← Back to Dashboard（返回主界面）</button>
     </div>
   </div>
 
   <div id="wrap">
-    <div id="container">
-      <div id="grid">
-        <!-- LEFT -->
-        <div class="panel">
-          <div class="panelHeader">
-            <div class="h">Subscription Overview · 订阅概览</div>
-            <div class="badge" id="statusBadge">STATUS: —</div>
+    <div id="grid">
+      <!-- LEFT -->
+      <div class="panel">
+        <div class="panelHeader">
+          <div class="h">Subscription Overview · 订阅概览</div>
+          <div class="badge" id="statusBadge">STATUS: —</div>
+        </div>
+
+        <div class="panelBody">
+
+          <div class="note" style="margin-bottom:12px">
+            This page manages your subscription. Your dashboard access and data mode are enforced by backend policy.<br/>
+            本页用于订阅管理；仪表盘访问权限与数据模式由后端策略控制。
           </div>
 
-          <div class="panelBody">
+          <!-- Identity -->
+          <div class="card">
+            <div class="cardTitle"><b>Identity · 身份信息</b><span class="note" id="backendHint">—</span></div>
 
-            <div class="note" style="margin-bottom:12px">
-              This page manages your subscription. Access and data mode are enforced by backend policy.<br/>
-              本页用于订阅管理；访问权限与数据模式由后端策略控制。
-            </div>
-
-            <!-- Identity -->
-            <div class="card">
-              <div class="sectionHeader">
-                <b>Identity · 身份信息</b>
-                <span class="small" id="backendHint">—</span>
-              </div>
-
-              <div class="field">
+            <div class="row2" style="grid-template-columns: 1fr 1fr; align-items:end;">
+              <div class="field" style="margin-bottom:0">
                 <div class="label"><span><b>User ID</b>（用户ID）</span><span class="small">必填</span></div>
                 <input id="userId" placeholder="例如：darrius888"/>
                 <div class="note" style="margin-top:6px">Used to fetch status and open billing portal.<br/>用于获取订阅状态并打开账单管理。</div>
               </div>
 
-              <div class="field">
+              <div class="field" style="margin-bottom:0">
                 <div class="label"><span>Email（邮箱，可选）</span><span class="small">可选</span></div>
-                <input id="email" placeholder="用于收据 / checkout 匹配（不参与状态查询）"/>
-                <div class="note" style="margin-top:6px">Optional; for checkout/receipt only.<br/>可选：只用于 Checkout/收据兜底，不参与状态查询。</div>
-              </div>
-
-              <div class="btnRow" style="margin-top:10px">
-                <button class="btn btnShort" id="saveBtn">Save（保存/刷新）</button>
-                <button class="btnGhost btnShort" id="refreshBtn">Refresh Status（刷新状态）</button>
-              </div>
-
-              <div class="note" style="margin-top:10px">
-                <b>说明：</b>如果你发现“填 email 反而 Unknown”，通常是 email 与 Stripe Customer 绑定不一致导致。这里我们默认用 user_id 查询状态，避免误判。
+                <input id="email" placeholder="perry.darrius@outlook.com"/>
+                <div class="note" style="margin-top:6px">Optional; only used if you enable Stripe matching below.<br/>可选：仅在你启用“用邮箱匹配 Stripe”时才会参与状态查询。</div>
               </div>
             </div>
 
-            <!-- Status -->
-            <div class="card">
-              <div class="sectionHeader">
-                <b>Status · 状态信息</b>
-                <span class="small" id="statusMini">—</span>
-              </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:12px;">
+              <label class="miniCheck">
+                <input type="checkbox" id="useEmailMatch">
+                Use email for Stripe match（用邮箱匹配 Stripe）
+              </label>
 
-              <div class="kv">
-                <span>User（用户）</span><b id="kvUser">—</b>
-                <span>Current Plan（当前套餐）</span><b id="kvPlan">—</b>
-                <span>Subscription Status（订阅状态）</span><b id="kvSubStatus">—</b>
-                <span>Renews / Ends（续订/到期）</span><b id="kvEnds">—</b>
-                <span>Data Source Mode（数据模式）</span><b id="kvDataMode">—</b>
-              </div>
-
-              <div class="note" style="margin-top:10px">
-                Note: After cancellation, access normally remains active until the end of the current billing period (policy-dependent).<br/>
-                说明：取消订阅后，通常会在当前计费周期结束前继续可用（以策略为准）。
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="btnInline" id="saveBtn">Save（保存/刷新）</button>
+                <button class="btnGhostInline" id="refreshBtn">Refresh Status（刷新状态）</button>
               </div>
             </div>
 
-            <!-- Actions -->
-            <div class="card">
-              <div class="sectionHeader">
-                <b>Actions · 操作</b>
-                <span class="small">Route-only</span>
-              </div>
-
-              <div class="actionBtns">
-                <button class="btn" id="openPortalBtn">Open Billing Portal（账单管理）</button>
-                <button class="btn" id="choosePlanBtn">Choose / Change Plan（选择/更换套餐）</button>
-              </div>
-
-              <div class="note" style="margin-top:10px">
-                These buttons route through your existing billing flow (do not change your payment logic).<br/>
-                这些按钮只做跳转/调用，不改动你现有订阅支付逻辑。
-              </div>
+            <div class="note" style="margin-top:10px">
+              说明：你遇到“只填 ID 是 Active，但填 Email 变 Unknown/DEMO”的根因，通常是后端在“email -> stripe customer”匹配时找到了错误对象或找不到对象，导致状态被覆盖为 Unknown。<br/>
+              ✅ 本页已默认只用 <b>user_id</b> 查询；只有你勾选上面的复选框才会把 email 传给后端。
             </div>
-
-            <!-- ✅ Plans：这里就是你黄色框的地方，必须有“蓝色标题条” -->
-            <div class="card" id="plansCard">
-              <div class="sectionHeader">
-                <b>Plans（套餐）</b>
-                <span class="small" id="plansHint">loading…</span>
-              </div>
-
-              <div class="note">
-                We render plan cards by calling your existing <b>/billing/prices</b> endpoint.<br/>
-                我们通过你现有 <b>/billing/prices</b> 接口渲染套餐卡片（不改订阅逻辑）。<br/>
-                <b>Fallback:</b> If backend is unavailable, we still show 4 plans locally (never empty).<br/>
-                <b>兜底：</b>后端断开也会显示4个计划（永不为空）。
-              </div>
-
-              <div class="plansGrid" id="plansGrid"></div>
-
-              <div class="note" style="margin-top:10px">
-                Compliance note (display-only): Delayed mode is shown when required by your data provider terms.<br/>
-                合规提示（仅展示）：当数据提供方要求时，会显示 Delayed。
-              </div>
-            </div>
-
           </div>
+
+          <!-- Status -->
+          <div class="card">
+            <div class="cardTitle">
+              <b>Status · 状态信息</b>
+              <span class="note" id="updatedAt">—</span>
+            </div>
+
+            <div class="kv" id="statusKV">
+              <span>User（用户）</span><b id="kvUser">—</b>
+              <span>Current Plan（当前套餐）</span><b id="kvPlan">—</b>
+              <span>Subscription Status（订阅状态）</span><b id="kvSubStatus">—</b>
+              <span>Renews / Ends（续订/到期）</span><b id="kvEnds">—</b>
+              <span>Data Source Mode（数据模式）</span><b id="kvDataMode">—</b>
+            </div>
+
+            <div class="note" style="margin-top:10px">
+              Note: After cancellation, access normally remains active until the end of the current billing period (policy-dependent).<br/>
+              说明：取消订阅后，通常会在当前计费周期结束前继续可用（以策略为准）。
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="card">
+            <div class="cardTitle">
+              <b>Actions · 操作</b>
+              <span class="note">Route-only</span>
+            </div>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btnInline" id="openPortalBtn">Open Billing Portal（账单管理）</button>
+              <button class="btnInline" id="choosePlanBtn">Choose / Change Plan（选择/更换套餐）</button>
+            </div>
+
+            <div class="note" style="margin-top:10px">
+              These buttons route through your existing billing flow (do not change your payment logic).<br/>
+              这些按钮只做跳转调用，不改动你现有的订阅支付逻辑。
+            </div>
+          </div>
+
+          <!-- Plans -->
+          <div class="card">
+            <div class="cardTitle">
+              <b>Plans（套餐）</b>
+              <span class="note" id="plansSource">—</span>
+            </div>
+
+            <div class="note">
+              We render plan cards by calling your existing <b>/billing/prices</b> endpoint.<br/>
+              通过后端 <b>/billing/prices</b> 获取计划；若后端不可用，仍会用本地 4 计划兜底（永不为空）。
+            </div>
+
+            <div class="plansGrid" id="plansGrid"></div>
+
+            <div class="note" style="margin-top:12px">
+              Compliance note (display-only): Delayed mode is shown when required by your data provider terms.<br/>
+              合规提示（仅展示）：当数据授权要求时，会显示 Delayed。
+            </div>
+          </div>
+
         </div>
-
-        <!-- RIGHT -->
-        <div class="panel">
-          <div class="panelHeader">
-            <div class="h">Control Center · 控制台</div>
-            <div class="badge" id="sysBadge">SYSTEM（系统）</div>
-          </div>
-
-          <div class="panelBody">
-            <div class="card">
-              <div class="sectionHeader">
-                <b>Quick Actions（快捷操作）</b>
-                <span class="small">—</span>
-              </div>
-              <button class="btnGhost" id="openDashBtn" style="width:100%">Open Dashboard（打开主界面）</button>
-            </div>
-
-            <div class="card">
-              <div class="sectionHeader">
-                <b>Support（支持）</b>
-                <span class="small">support@darrius.ai</span>
-              </div>
-              <div class="note">
-                For billing questions, use Billing Portal first (invoices, payment methods, cancellations).<br/>
-                账单相关请优先使用账单管理（发票、付款方式、取消订阅）。
-              </div>
-            </div>
-
-            <div class="card">
-              <div class="sectionHeader">
-                <b>System（系统信息）</b>
-                <span class="small" id="buildText">—</span>
-              </div>
-
-              <div class="kv">
-                <span>Backend（后端）</span><b id="backendText">—</b>
-                <span>Plans Source（计划来源）</span><b id="planSource">—</b>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
 
-      <footer>
-        <div>© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
-        <div><a href="#" onclick="alert('Terms / Privacy later');return false;">Terms</a> · <a href="#" onclick="alert('Privacy later');return false;">Privacy</a></div>
-      </footer>
+      <!-- RIGHT -->
+      <div class="panel">
+        <div class="panelHeader">
+          <div class="h">Control Center · 控制台</div>
+          <div class="badge" style="border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.06);" id="sysBadge">SYSTEM（系统）</div>
+        </div>
+        <div class="panelBody">
+
+          <div class="card">
+            <div class="cardTitle"><b>Quick Actions（快捷操作）</b></div>
+            <button class="btnGhostInline" id="openDashBtn">Open Dashboard（打开主界面）</button>
+          </div>
+
+          <div class="card">
+            <div class="cardTitle"><b>Support（支持）</b></div>
+            <div class="note">
+              For billing questions, use Billing Portal first (invoices, payment methods, cancellations).<br/>
+              账单相关请优先使用账单管理（发票、付款方式、取消订阅）。<br/>
+              For technical support: support@darrius.ai
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="cardTitle"><b>System（系统信息）</b></div>
+            <div class="kv">
+              <span>Build（版本）</span><b id="buildText">—</b>
+              <span>Backend（后端）</span><b id="backendText">—</b>
+              <span>Plans Source（计划来源）</span><b id="plansText">—</b>
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
+
+    <footer>
+      <div>© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
+      <div><a href="#" onclick="alert('Terms / Privacy later');return false;">Terms</a> · <a href="#" onclick="alert('Privacy later');return false;">Privacy</a></div>
+    </footer>
   </div>
 
   <script>
-    // ===== Globals =====
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
-
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
-    // Load logo (best effort)
+    // ✅ load logo
     (function(){
       const img = document.getElementById('logoImg');
       if (!img) return;
-      const candidates = ['/assets/logo.png','/assets/icon.png','/favicon.png','/favicon.ico'];
+      const candidates = [
+        '/assets/logo.png',
+        '/assets/icon.png',
+        '/favicon.png',
+        '/favicon.ico'
+      ];
       let idx = 0;
-      img.onerror = () => { idx += 1; if (idx < candidates.length) img.src = candidates[idx]; };
+      img.onerror = () => {
+        idx += 1;
+        if (idx < candidates.length) img.src = candidates[idx];
+      };
       img.src = candidates[0];
     })();
   </script>
@@ -663,212 +654,343 @@
 
       const userIdEl = $('userId');
       const emailEl  = $('email');
+      const useEmailEl = $('useEmailMatch');
 
-      // ===== 4-plan fallback (永不为空) =====
-      const FALLBACK_PLANS = [
-        { key:'weekly',    name:'Weekly · 周付',    price:'$4.90',  desc:'Short-term access. Ideal for trials and quick evaluations. 短期体验，适合快速评估。', trial:'—',  price_id:'price_weekly' },
-        { key:'monthly',   name:'Monthly · 月付',   price:'$19.90', desc:'Most popular. Balanced commitment and flexibility. 最受欢迎，兼顾灵活与稳定。', trial:'1-day free trial（1天免费试用）', price_id:'price_monthly' },
-        { key:'quarterly', name:'Quarterly · 季付', price:'$49.90', desc:'Better value. Recommended for active users. 性价比更高，适合活跃用户。', trial:'3-day free trial（3天免费试用）', price_id:'price_quarterly' },
-        { key:'yearly',    name:'Yearly · 年付',    price:'$189.00',desc:'Best value. For professionals and long-term users. 最佳价值，适合专业与长期用户。', trial:'5-day free trial（5天免费试用）', price_id:'price_yearly' }
-      ];
+      const LS = {
+        uid: 'darrius_user_id',
+        em:  'darrius_email',
+        useEmail: 'darrius_use_email_match',
+        lastStatus: 'darrius_last_status_cache',
+      };
 
-      // Restore from localStorage
-      try{
-        const uid = localStorage.getItem('darrius_user_id') || '';
-        const em  = localStorage.getItem('darrius_email') || '';
-        if (uid && userIdEl) userIdEl.value = uid;
-        if (em && emailEl) emailEl.value = em;
-      }catch(e){}
-
-      function setBadge(ok, text){
+      function setBadge(text, ok=true){
         const b = $('statusBadge');
+        if (!b) return;
         b.textContent = text;
-        b.className = 'badge ' + (ok ? 'ok' : 'bad');
+        b.style.borderColor = ok ? 'rgba(43,226,166,.30)' : 'rgba(255,90,90,.30)';
+        b.style.background  = ok ? 'rgba(43,226,166,.12)' : 'rgba(255,90,90,.12)';
       }
 
-      function setBackendState(connected, msg){
+      function setBackendConnected(connected){
         $('backendText').textContent = connected ? 'Connected' : 'Disconnected';
-        $('backendText').className = connected ? 'mutOk' : 'mutRed';
-        $('backendHint').textContent = msg || (connected ? 'Backend connected' : 'Backend disconnected');
+        $('backendHint').textContent = connected ? 'Backend connected' : 'Backend disconnected';
+        const dot = $('accessDot');
+        if (dot){
+          dot.classList.toggle('bad', !connected);
+        }
       }
 
-      function fillKV(j, uid){
-        $('kvUser').textContent = (j.user || j.user_id || uid || '—');
-        $('kvPlan').textContent = (j.plan || j.current_plan || j.price_nickname || '—');
-        $('kvSubStatus').textContent = (j.status || j.subscription_status || '—');
+      function fillStatusKV(j, fallbackUid){
+        $('kvUser').textContent = (j.user || j.user_id || fallbackUid || '—');
+        $('kvPlan').textContent = (j.plan || j.current_plan || j.plan_name || '—');
+        $('kvSubStatus').textContent = (j.status || j.subscription_status || j.sub_status || '—');
         $('kvEnds').textContent = (j.renews_or_ends || j.ends_at || j.current_period_end || '—');
-        $('kvDataMode').textContent = (j.data_mode || j.mode || 'DELAYED');
-        $('statusMini').textContent = 'Updated: ' + new Date().toLocaleString();
+        $('kvDataMode').textContent = (j.data_mode || j.dataSourceMode || 'DELAYED');
       }
 
-      // ✅ Status query: only user_id (avoid email causes Unknown)
+      function nowStamp(){
+        const d = new Date();
+        const pad = (n)=> String(n).padStart(2,'0');
+        return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      }
+
+      function restore(){
+        try{
+          const uid = localStorage.getItem(LS.uid) || '';
+          const em  = localStorage.getItem(LS.em) || '';
+          const ue  = localStorage.getItem(LS.useEmail) === '1';
+
+          if (uid && userIdEl) userIdEl.value = uid;
+          if (em && emailEl) emailEl.value = em;
+          if (useEmailEl) useEmailEl.checked = ue;
+
+          const cache = localStorage.getItem(LS.lastStatus);
+          if (cache){
+            const j = JSON.parse(cache);
+            fillStatusKV(j, uid);
+            $('updatedAt').textContent = 'Updated: ' + (j.__updated_at || nowStamp());
+            setBadge('STATUS: ' + (j.status || j.subscription_status || 'CACHED'), true);
+          }
+        }catch(e){}
+      }
+
+      async function safeJson(res){
+        try{ return await res.json(); }catch(e){ return {}; }
+      }
+
       async function refreshStatus(){
-        const uid = (userIdEl?.value || '').trim();
-        const em  = (emailEl?.value || '').trim();
+        const uid = (userIdEl && userIdEl.value || '').trim();
+        const em  = (emailEl && emailEl.value || '').trim();
+        const useEmail = !!(useEmailEl && useEmailEl.checked);
 
         if (!uid){
-          setBadge(false, 'STATUS: MISSING USER');
-          setBackendState(false, 'Missing user_id');
+          setBadge('STATUS: MISSING USER', false);
           return;
         }
+
         try{
-          localStorage.setItem('darrius_user_id', uid);
-          if (em) localStorage.setItem('darrius_email', em);
+          localStorage.setItem(LS.uid, uid);
+          if (em) localStorage.setItem(LS.em, em);
+          localStorage.setItem(LS.useEmail, useEmail ? '1' : '0');
         }catch(e){}
 
+        // ✅ 默认只用 user_id；只有你勾选 useEmail 才传 email
+        const qs = new URLSearchParams();
+        qs.set('user_id', uid);
+        if (useEmail && em) qs.set('email', em);
+
         try{
-          const url = base + '/billing/status?user_id=' + encodeURIComponent(uid);
+          const url = base + '/billing/status?' + qs.toString();
           const res = await fetch(url, { method:'GET' });
           if (!res.ok) throw new Error('HTTP ' + res.status);
-          const j = await res.json().catch(()=> ({}));
+          const j = await safeJson(res);
 
-          fillKV(j, uid);
-          setBackendState(true, 'Backend connected');
-          setBadge(true, 'STATUS: ' + (j.status || 'ACTIVE'));
+          setBackendConnected(true);
+
+          // 统一字段
+          const normalized = Object.assign({}, j);
+          normalized.__updated_at = nowStamp();
+
+          fillStatusKV(normalized, uid);
+          $('updatedAt').textContent = 'Updated: ' + normalized.__updated_at;
+
+          const statusText = (normalized.status || normalized.subscription_status || 'ACTIVE');
+          setBadge('STATUS: ' + statusText, true);
+
+          // cache
+          try{ localStorage.setItem(LS.lastStatus, JSON.stringify(normalized)); }catch(e){}
         }catch(e){
-          fillKV({}, uid);
-          setBackendState(false, 'Backend disconnected');
-          setBadge(false, 'STATUS: UNKNOWN');
+          setBackendConnected(false);
+
+          // fallback: 尝试从缓存恢复，否则显示基本信息
+          try{
+            const cache = localStorage.getItem(LS.lastStatus);
+            if (cache){
+              const j = JSON.parse(cache);
+              fillStatusKV(j, uid);
+              $('updatedAt').textContent = 'Updated: ' + (j.__updated_at || nowStamp());
+              setBadge('STATUS: ' + (j.status || 'CACHED'), true);
+            } else {
+              fillStatusKV({ data_mode:'DELAYED' }, uid);
+              $('updatedAt').textContent = 'Updated: ' + nowStamp();
+              setBadge('STATUS: UNKNOWN', false);
+            }
+          }catch(_){
+            fillStatusKV({ data_mode:'DELAYED' }, uid);
+            $('updatedAt').textContent = 'Updated: ' + nowStamp();
+            setBadge('STATUS: UNKNOWN', false);
+          }
         }
+      }
+
+      // -------- Plans --------
+      const FALLBACK_PLANS = [
+        {
+          key:'weekly',
+          name:'Weekly · 周付',
+          priceText:'$4.90',
+          desc:'Short-term access. Ideal for trials and quick evaluations. 短期体验，适合试用与快速评估。',
+          trial:'—',
+          price_id:'price_weekly'
+        },
+        {
+          key:'monthly',
+          name:'Monthly · 月付',
+          priceText:'$19.90',
+          desc:'Most popular. Balanced commitment and flexibility. 最受欢迎，兼顾灵活与稳定。',
+          trial:'1-day free trial（1天免费试用）',
+          price_id:'price_monthly'
+        },
+        {
+          key:'quarterly',
+          name:'Quarterly · 季付',
+          priceText:'$49.90',
+          desc:'Better value. Recommended for active users. 性价比更高，适合活跃用户。',
+          trial:'3-day free trial（3天免费试用）',
+          price_id:'price_quarterly'
+        },
+        {
+          key:'yearly',
+          name:'Yearly · 年付',
+          priceText:'$189.00',
+          desc:'Best value. For professionals and long-term users. 最佳价值，适合专业与长期用户。',
+          trial:'5-day free trial（5天免费试用）',
+          price_id:'price_yearly'
+        },
+      ];
+
+      function planCardHTML(p){
+        const trial = p.trial && p.trial !== '—'
+          ? `<div class="trialChip"><span class="trialDot"></span><span>${escapeHtml(p.trial)}</span></div>`
+          : '';
+
+        return `
+          <div class="planCard" data-plan="${escapeHtml(p.key)}">
+            <div class="planTop">
+              <div>
+                <div class="planName">${escapeHtml(p.name)}</div>
+              </div>
+              <div class="planPrice">${escapeHtml(p.priceText || '')}</div>
+            </div>
+            <div class="planDesc">${escapeHtml(p.desc || '')}</div>
+            ${trial}
+            <div class="planActions">
+              <button class="btnInline" data-action="subscribe" data-price-id="${escapeHtml(p.price_id || '')}">Subscribe（订阅）</button>
+              <button class="btnGhostInline" data-action="details">Details（详情）</button>
+            </div>
+          </div>
+        `;
       }
 
       function escapeHtml(s){
-        return String(s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        return String(s || '').replace(/[&<>"']/g, (c) => ({
+          '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[c]));
       }
 
-      function renderPlans(plans, sourceLabel){
+      function renderPlans(list, sourceLabel){
         const grid = $('plansGrid');
-        grid.innerHTML = '';
-        $('plansHint').textContent = sourceLabel;
-        $('planSource').textContent = sourceLabel;
+        if (!grid) return;
+        grid.innerHTML = (list || []).map(planCardHTML).join('');
+        $('plansSource').textContent = sourceLabel || '—';
+        $('plansText').textContent = sourceLabel || '—';
 
-        plans.forEach(p => {
-          const card = document.createElement('div');
-          card.className = 'planCard';
-
-          const trialHtml = p.trial && p.trial !== '—'
-            ? `<div class="pillMini ok"><span class="dot" style="width:7px;height:7px;box-shadow:none"></span>${escapeHtml(p.trial)}</div>`
-            : '';
-
-          card.innerHTML = `
-            <div>
-              <div class="planTop">
-                <div>
-                  <div class="planName">${escapeHtml(p.name)}</div>
-                  <div class="planDesc">${escapeHtml(p.desc || '')}</div>
-                  ${trialHtml}
-                </div>
-                <div class="planPrice">${escapeHtml(p.price || '—')}</div>
-              </div>
-            </div>
-            <div class="planActions">
-              <button class="btn" data-price="${escapeHtml(p.price_id || '')}">Subscribe（订阅）</button>
-              <button class="btnGhost" data-details="${escapeHtml(p.key || '')}">Details（详情）</button>
-            </div>
-          `;
-
-          grid.appendChild(card);
+        // bind
+        grid.querySelectorAll('button[data-action="subscribe"]').forEach(btn=>{
+          btn.addEventListener('click', async (e)=>{
+            e.preventDefault();
+            const priceId = btn.getAttribute('data-price-id') || '';
+            await startCheckout(priceId);
+          });
         });
 
-        // Bind
-        grid.querySelectorAll('button.btn[data-price]').forEach(btn => {
-          btn.addEventListener('click', () => startCheckout(btn.getAttribute('data-price')));
-        });
-        grid.querySelectorAll('button.btnGhost[data-details]').forEach(btn => {
-          btn.addEventListener('click', () => alert('Details: ' + btn.getAttribute('data-details')));
+        grid.querySelectorAll('button[data-action="details"]').forEach(btn=>{
+          btn.addEventListener('click', (e)=>{
+            e.preventDefault();
+            alert('Details: you can link this to a modal / pricing detail page later.');
+          });
         });
       }
 
-      // Load plans from backend; if fail -> fallback
       async function loadPlans(){
-        $('plansHint').textContent = 'loading…';
+        // 优先 backend /billing/prices
         try{
           const res = await fetch(base + '/billing/prices', { method:'GET' });
           if (!res.ok) throw new Error('HTTP ' + res.status);
-          const j = await res.json().catch(()=> ({}));
-          const prices = Array.isArray(j.prices) ? j.prices : (Array.isArray(j) ? j : []);
+          const j = await safeJson(res);
 
-          if (!prices.length) throw new Error('empty prices');
+          // 兼容多种返回：[{id,nickname,unit_amount,trial_days}] 或 {prices:[...]}
+          const arr = Array.isArray(j) ? j : (Array.isArray(j.prices) ? j.prices : []);
+          if (!arr.length) throw new Error('empty');
 
-          // Normalize to our plan card schema
-          const normalized = prices.map(p => {
-            const name = p.nickname || p.name || p.lookup_key || 'Plan';
-            const unit = (p.unit_amount != null) ? ('$' + (p.unit_amount/100).toFixed(2)) : (p.price || '—');
-            const interval = (p.recurring && p.recurring.interval) ? p.recurring.interval : (p.interval || '');
-            const title = interval ? `${name}` : `${name}`;
-            const desc  = p.description || '';
-            const priceId = p.id || p.price_id || '';
+          const mapped = arr.map((x)=>{
+            const amount = (x.unit_amount != null) ? (Number(x.unit_amount)/100).toFixed(2) : '';
+            const trialDays = x.trial_days || x.trial || x.trial_period_days || 0;
+            const trial = trialDays ? `${trialDays}-day free trial（${trialDays}天免费试用）` : '—';
             return {
-              key: (p.lookup_key || priceId || name || '').toString(),
-              name: title,
-              price: unit + (interval ? (' · ' + interval) : ''),
-              desc,
-              trial: (p.trial_days ? (p.trial_days + '-day free trial') : '—'),
-              price_id: priceId
+              key: String(x.lookup_key || x.nickname || x.id || '').toLowerCase() || 'plan',
+              name: (x.nickname || x.name || 'Plan') + (x.interval ? ` · ${x.interval}` : ''),
+              priceText: amount ? `$${amount}` : (x.priceText || ''),
+              desc: x.description || '',
+              trial,
+              price_id: x.id || x.price_id || ''
             };
           });
 
-          $('planSource').textContent = 'backend';
-          renderPlans(normalized, 'backend');
+          renderPlans(mapped.slice(0, 4), 'backend /billing/prices');
+          setBackendConnected(true);
         }catch(e){
-          // fallback always show 4 plans
-          $('planSource').textContent = 'fallback';
           renderPlans(FALLBACK_PLANS, 'fallback (backend unavailable)');
+          // 不强制断线，仅标识计划来源
         }
       }
 
-      async function startCheckout(priceId){
-        const uid = (userIdEl?.value || '').trim();
-        const em  = (emailEl?.value || '').trim();
-        if (!uid){ alert('Please input User ID first.'); return; }
-        if (!priceId){ alert('Missing price id.'); return; }
+      // -------- Billing actions (real wiring, best-effort) --------
+      async function openBillingPortal(){
+        const uid = (userIdEl && userIdEl.value || '').trim();
+        const em  = (emailEl && emailEl.value || '').trim();
 
-        // route-only: /billing/checkout (your backend)
-        try{
-          const res = await fetch(base + '/billing/checkout', {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ user_id: uid, email: em || null, price_id: priceId })
-          });
-          const j = await res.json().catch(()=> ({}));
-          if (j && j.url){ window.location.href = j.url; return; }
-          alert('Checkout not ready: backend did not return {url}.');
-        }catch(e){
-          alert('Checkout failed. Please check backend /billing/checkout.');
+        if (!uid){
+          alert('Please input User ID first.');
+          return;
         }
-      }
 
-      // Portal (optional)
-      $('openPortalBtn')?.addEventListener('click', async () => {
-        const uid = (userIdEl?.value || '').trim();
-        if (!uid){ alert('Please input User ID first.'); return; }
         try{
           const res = await fetch(base + '/billing/portal', {
             method:'POST',
             headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ user_id: uid })
+            body: JSON.stringify({ user_id: uid, email: em || undefined })
           });
-          const j = await res.json().catch(()=> ({}));
-          if (j && j.url){ window.location.href = j.url; return; }
-          alert('Billing Portal not wired. If you have a portal route, return {url}.');
+
+          const j = await safeJson(res);
+          const url = j.url || j.portal_url || j.redirect_url;
+
+          if (res.ok && url){
+            window.location.href = url;
+            return;
+          }
+          alert('Billing Portal not available: backend did not return [url].');
         }catch(e){
           alert('Billing Portal not available. Please wire /billing/portal in backend.');
         }
-      });
+      }
 
-      $('choosePlanBtn')?.addEventListener('click', () => {
-        $('plansCard')?.scrollIntoView({ behavior:'smooth', block:'start' });
-      });
+      async function startCheckout(priceId){
+        const uid = (userIdEl && userIdEl.value || '').trim();
+        const em  = (emailEl && emailEl.value || '').trim();
+
+        if (!uid){
+          alert('Please input User ID first.');
+          return;
+        }
+
+        // 你后端可能用 /billing/checkout 或 /create-checkout-session；这里做双路 fallback
+        const payload = { user_id: uid, email: em || undefined, price_id: priceId || undefined };
+        const endpoints = ['/billing/checkout', '/create-checkout-session'];
+
+        for (const ep of endpoints){
+          try{
+            const res = await fetch(base + ep, {
+              method:'POST',
+              headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const j = await safeJson(res);
+            const url = j.url || j.checkout_url || j.redirect_url;
+
+            if (res.ok && url){
+              window.location.href = url;
+              return;
+            }
+          }catch(e){}
+        }
+
+        alert('Checkout not ready: backend did not return [url].');
+      }
+
+      function scrollToPlans(){
+        const grid = $('plansGrid');
+        if (!grid) return;
+        grid.scrollIntoView({ behavior:'smooth', block:'start' });
+      }
+
+      // Buttons
+      $('saveBtn')?.addEventListener('click', refreshStatus);
+      $('refreshBtn')?.addEventListener('click', refreshStatus);
 
       $('openDashBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
       $('backBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
 
-      $('saveBtn')?.addEventListener('click', () => { refreshStatus(); loadPlans(); });
-      $('refreshBtn')?.addEventListener('click', () => { refreshStatus(); loadPlans(); });
+      $('openPortalBtn')?.addEventListener('click', openBillingPortal);
+      $('choosePlanBtn')?.addEventListener('click', scrollToPlans);
 
-      // Boot
-      $('buildText').textContent = new Date().toISOString();
-      setTimeout(() => { refreshStatus(); loadPlans(); }, 120);
+      // init
+      restore();
+      loadPlans();
+      setTimeout(refreshStatus, 220);
+
+      // expose for debug
+      window.__DARRIUS_ACCOUNT__ = { refreshStatus, loadPlans };
     })();
   </script>
 </body>
