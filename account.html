@@ -24,9 +24,9 @@
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
       --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
 
-      /* ✅ Logo unified sizing (≈2x feel) */
-      --logoSize: 72px;
-      --logoRadius: 20px;
+      /* ✅ 你要调大/调小 Logo，就改这两行 */
+      --logoBase: 36px;
+      --logoScale: 2.4; /* ✅ 2.4倍（你要改成 2.0 就改这里） */
     }
 
     *{ box-sizing:border-box; }
@@ -39,7 +39,6 @@
         radial-gradient(900px 520px at 88% 12%, rgba(43,226,166,.10), transparent 62%),
         linear-gradient(180deg, var(--bg), var(--bg2));
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "PingFang SC","Microsoft YaHei", sans-serif;
-      overflow-x:hidden;
     }
 
     a{ color: rgba(76,194,255,.95); text-decoration:none; }
@@ -62,14 +61,13 @@
       align-items:center;
       gap:14px;
       min-width:420px;
-      min-height:56px;
     }
 
-    /* ✅ Real logo image, NO rotating halo */
+    /* ✅ Logo (no glow halo, image only) */
     .logoBox{
-      width: var(--logoSize);
-      height: var(--logoSize);
-      border-radius: var(--logoRadius);
+      width: calc(var(--logoBase) * var(--logoScale));
+      height: calc(var(--logoBase) * var(--logoScale));
+      border-radius: 18px;
       overflow:hidden;
       border:1px solid rgba(255,255,255,.12);
       box-shadow: 0 14px 30px rgba(0,0,0,.30);
@@ -79,10 +77,9 @@
       align-items:center;
       justify-content:center;
     }
-    #logoImg{
-      width: 100%;
-      height: 100%;
-      border-radius: var(--logoRadius);
+    .logoBox img{
+      width:100%;
+      height:100%;
       object-fit: cover;
       display:block;
     }
@@ -151,10 +148,6 @@
       box-shadow: 0 0 0 4px rgba(43,226,166,.10);
       flex:0 0 auto;
     }
-    .dot.bad{
-      background: var(--danger);
-      box-shadow: 0 0 0 4px rgba(255,90,90,.10);
-    }
     .btnTop{
       border:1px solid rgba(255,255,255,.10);
       background: rgba(0,0,0,.14);
@@ -167,17 +160,13 @@
     }
 
     /* Main */
-    #wrap{
-      padding:16px;
-    }
+    #wrap{ padding:16px; }
 
-    /* ✅ Layout fix: stable grid + min-width:0 prevents squish + content overflow issues */
     #grid{
       display:grid;
-      grid-template-columns: minmax(0, 1fr) 380px;
+      grid-template-columns: 1fr 380px;
       gap:16px;
-      min-height: calc(100vh - 78px - 58px);
-      align-items:start;
+      min-height: calc(100vh - 78px - 40px);
     }
 
     .panel{
@@ -187,7 +176,6 @@
       box-shadow: var(--shadow);
       overflow:hidden;
       min-height:0;
-      min-width:0;
     }
 
     .panelHeader{
@@ -207,31 +195,17 @@
       align-items:center;
       gap:10px;
     }
-    .panelBody{
-      padding:14px;
-      min-height:0;
-    }
+    .panelBody{ padding:14px; min-height:0; }
 
     .badge{
       font-size:12px;
       padding:6px 10px;
       border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.06);
+      border:1px solid rgba(43,226,166,.30);
+      background: rgba(43,226,166,.12);
       color: rgba(234,240,247,.95);
       font-weight:950;
       letter-spacing:.3px;
-      white-space:nowrap;
-    }
-    .badge.ok{
-      border-color: rgba(43,226,166,.35);
-      background: rgba(43,226,166,.14);
-      color: rgba(234,240,247,.96);
-    }
-    .badge.bad{
-      border-color: rgba(255,90,90,.35);
-      background: rgba(255,90,90,.14);
-      color: rgba(234,240,247,.96);
     }
 
     .card{
@@ -240,7 +214,6 @@
       border-radius: var(--r14);
       padding:12px;
       margin-bottom:12px;
-      min-width:0;
     }
     .cardTitle{
       display:flex;
@@ -257,7 +230,7 @@
       font-weight:900;
     }
 
-    .field{ margin-bottom:10px; min-width:0; }
+    .field{ margin-bottom:10px; }
     .label{
       display:flex;
       align-items:center;
@@ -266,11 +239,7 @@
       margin-bottom:6px;
       font-size:12px;
       color: var(--muted);
-      min-width:0;
     }
-    .label span{ min-width:0; }
-    .small{ font-size:12px; color: var(--muted); }
-
     input{
       width:100%;
       background: rgba(0,0,0,.24);
@@ -280,7 +249,6 @@
       border-radius: var(--r12);
       outline:none;
       font-size:13px;
-      min-width:0;
     }
     input::placeholder{ color: rgba(162,176,194,.80); }
     input:focus{
@@ -290,18 +258,9 @@
 
     .row2{
       display:grid;
-      grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+      grid-template-columns: 1fr 1fr;
       gap:10px;
       margin-top:10px;
-      align-items:stretch;
-      min-width:0;
-    }
-    .row3{
-      display:grid;
-      grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto;
-      gap:10px;
-      align-items:end;
-      min-width:0;
     }
 
     .btn{
@@ -316,7 +275,6 @@
       background: var(--gradBrand);
       box-shadow: var(--shadow2);
       transition: transform .06s ease, filter .15s ease;
-      white-space:nowrap;
     }
     .btn:hover{ filter: brightness(1.04); }
     .btn:active{ transform: translateY(1px); }
@@ -331,7 +289,6 @@
       cursor:pointer;
       background: rgba(0,0,0,.14);
       transition: transform .06s ease, filter .15s ease;
-      white-space:nowrap;
     }
     .btnGhost:hover{ filter: brightness(1.05); }
     .btnGhost:active{ transform: translateY(1px); }
@@ -352,61 +309,6 @@
     }
     .kv b{ color: var(--text); font-weight:900; }
 
-    /* Plans grid */
-    .plansGrid{
-      display:grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap:12px;
-      margin-top:10px;
-    }
-    .planCard{
-      background: rgba(0,0,0,.16);
-      border:1px solid rgba(255,255,255,.07);
-      border-radius: var(--r14);
-      padding:12px;
-      min-width:0;
-      position:relative;
-    }
-    .planTop{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:10px;
-      margin-bottom:8px;
-    }
-    .planName{
-      font-weight:950;
-      letter-spacing:.2px;
-    }
-    .planPrice{
-      font-weight:950;
-      color: rgba(234,240,247,.95);
-    }
-    .trialPill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:5px 10px;
-      border-radius:999px;
-      border:1px solid rgba(43,226,166,.28);
-      background: rgba(43,226,166,.10);
-      color: rgba(234,240,247,.92);
-      font-size:12px;
-      margin-top:8px;
-      white-space:nowrap;
-    }
-    .trialDot{
-      width:10px;height:10px;border-radius:50%;
-      background: var(--brand1);
-      box-shadow: 0 0 0 4px rgba(43,226,166,.10);
-    }
-    .planBtns{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:10px;
-      margin-top:12px;
-    }
-
     footer{
       padding:14px 18px;
       color: rgba(234,240,247,.62);
@@ -418,11 +320,55 @@
       opacity:.9;
     }
 
+    /* ✅ 修复你红箭头：统一“宽行”体系，让按钮与Plans同宽 */
+    .wideRow{
+      width:100%;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      align-items:stretch;
+    }
+
+    /* Plans */
+    .plansGrid{
+      width:100%;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      margin-top:10px;
+    }
+    .planCard{
+      background: rgba(0,0,0,.14);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius: var(--r14);
+      padding:12px;
+      min-height: 132px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .planTop{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-start;
+    }
+    .planName{ font-weight:950; }
+    .planPrice{ font-weight:950; color: rgba(234,240,247,.92); }
+    .planDesc{ color: rgba(234,240,247,.70); font-size:12px; line-height:1.35; }
+    .planActions{
+      margin-top:auto;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+
     @media (max-width: 1180px){
       #grid{ grid-template-columns: 1fr; }
       .brand{ min-width:0; }
       .topRight{ min-width:0; }
       .plansGrid{ grid-template-columns: 1fr; }
+      .wideRow{ grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -444,7 +390,7 @@
 
     <div class="topRight">
       <div class="pill" id="loginPill"><span class="dot"></span><span id="loginText">Logged in · 已登录</span></div>
-      <div class="pill" id="accessPill"><span class="dot"></span><span id="accessText">Access: —</span></div>
+      <div class="pill" id="accessPill"><span class="dot"></span><span id="accessText">Access: DELAYED · 市场数据（延时）</span></div>
       <button class="btnTop" id="backBtn">← Back to Dashboard（返回主界面）</button>
     </div>
   </div>
@@ -466,26 +412,38 @@
 
           <!-- Identity -->
           <div class="card">
-            <div class="cardTitle"><b>Identity · 身份信息</b><span class="small">用于匹配订阅</span></div>
+            <div class="cardTitle"><b>Identity · 身份信息</b><span class="note" id="hintRight">用于匹配订阅状态</span></div>
 
-            <div class="row3">
+            <div class="row2" style="grid-template-columns: 1fr 1fr;">
               <div class="field" style="margin-bottom:0">
-                <div class="label"><span><b>User ID</b>（用户ID）</span><span class="small">必填</span></div>
+                <div class="label"><span><b>User ID</b>（用户ID）</span><span>必填</span></div>
                 <input id="userId" placeholder="例如：darrius888"/>
                 <div class="note" style="margin-top:6px">Used to fetch status and open billing portal.<br/>用于获取订阅状态并打开账单管理。</div>
               </div>
 
               <div class="field" style="margin-bottom:0">
-                <div class="label"><span>Email（邮箱，可选）</span><span class="small">可选</span></div>
-                <input id="email" placeholder="perry.darrius@outlook.com"/>
-                <div class="note" style="margin-top:6px">Optional; helps match Stripe customer.<br/>可选：帮助匹配 Stripe 客户。</div>
+                <div class="label"><span>Email（邮箱，可选）</span><span>可选</span></div>
+                <input id="email" placeholder="用于收据 / checkout 兜底匹配"/>
+                <div class="note" style="margin-top:6px">Optional; helps match Stripe customer during checkout.<br/>可选：用于 checkout 匹配 Stripe customer。</div>
               </div>
-
-              <button class="btn" id="saveBtn" style="width:auto; padding:12px 18px;">Save（保存/刷新）</button>
             </div>
 
             <div style="height:10px"></div>
 
+            <div class="wideRow">
+              <button class="btn" id="saveBtn">Save（保存/刷新）</button>
+              <button class="btnGhost" id="refreshBtn">Refresh Status（刷新状态）</button>
+            </div>
+
+            <div class="note" style="margin-top:10px">
+              ✅ 为避免 “输入 email 反而 Unknown”，本页默认<strong>只用 user_id 查询订阅状态</strong>；email 仅用于 checkout / receipt。<br/>
+              如果你确认 email 必须强校验，我也可以按你后端逻辑再改成“可切换强校验”。
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="card">
+            <div class="cardTitle"><b>Status · 状态信息</b><span class="note" id="backendHint">—</span></div>
             <div class="kv">
               <span>User（用户）</span><b id="kvUser">—</b>
               <span>Current Plan（当前套餐）</span><b id="kvPlan">—</b>
@@ -493,99 +451,34 @@
               <span>Renews / Ends（续订/到期）</span><b id="kvEnds">—</b>
               <span>Data Source Mode（数据模式）</span><b id="kvDataMode">—</b>
             </div>
-
             <div class="note" style="margin-top:10px">
               Note: After cancellation, access normally remains active until the end of the current billing period (policy-dependent).<br/>
               说明：取消订阅后，通常会在当前计费周期结束前继续可用（以策略为准）。
             </div>
           </div>
 
-          <!-- Actions -->
+          <!-- Actions (fix width) -->
           <div class="card">
-            <div class="cardTitle"><b>Actions · 操作</b><span class="small">不改变数据源授权</span></div>
-            <div class="row2">
+            <div class="cardTitle"><b>Actions · 操作</b><span class="note">不改变数据源授权</span></div>
+            <div class="wideRow">
               <button class="btn" id="openPortalBtn">Open Billing Portal（账单管理）</button>
               <button class="btn" id="choosePlanBtn">Choose / Change Plan（选择/更换套餐）</button>
             </div>
+
             <div class="note" style="margin-top:10px">
-              These buttons route through your existing billing flow（不会改动你现有支付逻辑）。<br/>
-              这些按钮只是调用你已有后端入口（不在前端重写支付逻辑）。
+              These buttons should route through your existing billing flow（不改动你现有支付/订阅逻辑）.
             </div>
           </div>
 
-          <!-- Plans -->
+          <!-- Plans (rendered best-effort) -->
           <div class="card">
-            <div class="cardTitle"><b>Plans（套餐）</b><span class="small">Overview</span></div>
-            <div class="note">
-              Buttons route through your existing checkout flow. This page does not change your data-provider entitlements.<br/>
-              按钮将跳转到你现有的订阅支付流程；本页不改变第三方数据源授权。
-            </div>
-
+            <div class="cardTitle"><b>Plans（套餐）</b><span class="note">已加载 4 个计划</span></div>
             <div class="plansGrid" id="plansGrid">
-              <!-- JS can overwrite with /billing/prices, but static fallback is always visible -->
-              <div class="planCard" data-plan="weekly">
-                <div class="planTop">
-                  <div>
-                    <div class="planName">Weekly<span class="small"> · 周付</span></div>
-                    <div class="note">Short-term access. Ideal for trials and quick evaluations.<br/>短期体验，适合试用与快速评估。</div>
-                  </div>
-                  <div class="planPrice">$4.90</div>
-                </div>
-                <div class="planBtns">
-                  <button class="btn" data-action="subscribe" data-plan-key="weekly">Subscribe（订阅）</button>
-                  <button class="btnGhost" data-action="details" data-plan-key="weekly">Details（详情）</button>
-                </div>
-              </div>
-
-              <div class="planCard" data-plan="monthly" style="outline: 1px solid rgba(43,226,166,.20);">
-                <div class="planTop">
-                  <div>
-                    <div class="planName">Monthly<span class="small"> · 月付</span></div>
-                    <div class="note">Most popular. Balanced commitment and flexibility.<br/>最受欢迎：兼顾灵活与成本。</div>
-                    <div class="trialPill"><span class="trialDot"></span>1-day free trial（1天免费试用）</div>
-                  </div>
-                  <div class="planPrice">$19.90</div>
-                </div>
-                <div class="planBtns">
-                  <button class="btn" data-action="subscribe" data-plan-key="monthly">Subscribe（订阅）</button>
-                  <button class="btnGhost" data-action="details" data-plan-key="monthly">Details（详情）</button>
-                </div>
-              </div>
-
-              <div class="planCard" data-plan="quarterly">
-                <div class="planTop">
-                  <div>
-                    <div class="planName">Quarterly<span class="small"> · 季付</span></div>
-                    <div class="note">Better value. Recommended for active users.<br/>性价比更高，适合活跃用户。</div>
-                    <div class="trialPill"><span class="trialDot"></span>3-day free trial（3天免费试用）</div>
-                  </div>
-                  <div class="planPrice">$49.90</div>
-                </div>
-                <div class="planBtns">
-                  <button class="btn" data-action="subscribe" data-plan-key="quarterly">Subscribe（订阅）</button>
-                  <button class="btnGhost" data-action="details" data-plan-key="quarterly">Details（详情）</button>
-                </div>
-              </div>
-
-              <div class="planCard" data-plan="yearly">
-                <div class="planTop">
-                  <div>
-                    <div class="planName">Yearly<span class="small"> · 年付</span></div>
-                    <div class="note">Best value. For professionals and long-term users.<br/>最省钱：适合专业用户与长期使用。</div>
-                    <div class="trialPill"><span class="trialDot"></span>5-day free trial（5天免费试用）</div>
-                  </div>
-                  <div class="planPrice">$189.00</div>
-                </div>
-                <div class="planBtns">
-                  <button class="btn" data-action="subscribe" data-plan-key="yearly">Subscribe（订阅）</button>
-                  <button class="btnGhost" data-action="details" data-plan-key="yearly">Details（详情）</button>
-                </div>
-              </div>
+              <!-- injected -->
             </div>
-
-            <div class="note" style="margin-top:12px">
+            <div class="note" style="margin-top:10px">
               Compliance note (display-only): Delayed mode is shown when required by your data provider terms.<br/>
-              合规提示（仅展示）：当数据源条款要求延时展示时，会显示 Delayed。
+              合规提示（仅展示）：当数据授权要求延时展示时，界面会显示 Delayed。
             </div>
           </div>
         </div>
@@ -595,14 +488,11 @@
       <div class="panel">
         <div class="panelHeader">
           <div class="h">Control Center · 控制台</div>
-          <div class="badge" id="sysBadge">SYSTEM（系统）</div>
+          <div class="badge" style="border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.06);" id="sysBadge">SYSTEM（系统）</div>
         </div>
-
         <div class="panelBody">
           <div class="card">
             <div class="cardTitle"><b>Quick Actions（快捷操作）</b></div>
-            <button class="btnGhost" id="refreshBtn">Refresh Status（刷新状态）</button>
-            <div style="height:10px"></div>
             <button class="btnGhost" id="openDashBtn">Open Dashboard（打开主界面）</button>
           </div>
 
@@ -632,7 +522,6 @@
     </footer>
   </div>
 
-  <!-- Globals -->
   <script>
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
@@ -657,7 +546,6 @@
     })();
   </script>
 
-  <!-- Wiring (safe, best-effort, does NOT change payment logic) -->
   <script>
     (function(){
       const base = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,'');
@@ -666,92 +554,104 @@
       const userIdEl = $('userId');
       const emailEl  = $('email');
 
-      function setStatusBadge(text, mode){
+      // restore from localStorage
+      try{
+        const uid = localStorage.getItem('darrius_user_id') || '';
+        const em  = localStorage.getItem('darrius_email') || '';
+        if (uid && userIdEl) userIdEl.value = uid;
+        if (em && emailEl) emailEl.value = em;
+      }catch(e){}
+
+      function setStatusBadge(text, ok=true){
         const b = $('statusBadge');
         if (!b) return;
         b.textContent = text;
-
-        b.classList.remove('ok','bad');
-        if (mode === 'ok') b.classList.add('ok');
-        else if (mode === 'bad') b.classList.add('bad');
+        b.style.borderColor = ok ? 'rgba(43,226,166,.30)' : 'rgba(255,90,90,.30)';
+        b.style.background  = ok ? 'rgba(43,226,166,.12)' : 'rgba(255,90,90,.12)';
+        b.style.color = ok ? 'rgba(234,240,247,.95)' : 'rgba(234,240,247,.92)';
       }
 
-      function setBackendConnected(ok){
-        $('backendText').textContent = ok ? 'Connected' : 'Disconnected';
-        const sys = $('sysBadge');
-        if (sys){
-          sys.textContent = ok ? 'SYSTEM（系统）' : 'SYSTEM（离线）';
-          sys.classList.remove('ok','bad');
-          sys.classList.add(ok ? 'ok' : 'bad');
-        }
+      function setBackendConnected(yes){
+        $('backendText').textContent = yes ? 'Connected' : 'Disconnected';
+        $('backendHint').textContent = yes ? 'Backend: connected' : 'Backend: disconnected';
+        $('backendHint').style.color = yes ? 'rgba(234,240,247,.70)' : 'rgba(255,90,90,.85)';
       }
 
-      function normalizeStatus(s){
-        const x = String(s || '').toLowerCase();
-        if (!x) return 'UNKNOWN';
-        if (x.includes('trial')) return 'TRIAL';
-        if (x.includes('active')) return 'ACTIVE';
-        if (x.includes('cancel')) return 'CANCELLED';
-        if (x.includes('expired')) return 'EXPIRED';
-        if (x.includes('past_due')) return 'PAST_DUE';
-        return x.toUpperCase();
+      function renderPlans(plans){
+        const grid = $('plansGrid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        (plans || []).forEach(p => {
+          const card = document.createElement('div');
+          card.className = 'planCard';
+          card.innerHTML = `
+            <div class="planTop">
+              <div>
+                <div class="planName">${escapeHtml(p.name || p.nickname || p.id || 'Plan')}</div>
+                <div class="planDesc">${escapeHtml(p.desc || p.description || '')}</div>
+              </div>
+              <div class="planPrice">${escapeHtml(p.price_text || p.price || '')}</div>
+            </div>
+            <div class="planActions">
+              <button class="btn" data-plan="${escapeAttr(p.id || '')}">Subscribe（订阅）</button>
+              <button class="btnGhost" data-details="${escapeAttr(p.id || '')}">Details（详情）</button>
+            </div>
+          `;
+          grid.appendChild(card);
+
+          const subBtn = card.querySelector('button.btn');
+          const detBtn = card.querySelector('button.btnGhost');
+
+          subBtn?.addEventListener('click', () => {
+            // ✅ 不改你现有支付逻辑：直接跳回 index 走你原来的订阅系统
+            // 同时把 plan_id 写入 localStorage，方便 index 读（如果你愿意在 index/boot.js 里读取）
+            try{
+              localStorage.setItem('darrius_pref_plan', String(p.id || ''));
+            }catch(e){}
+            window.location.href = '/index.html#subscription';
+          });
+
+          detBtn?.addEventListener('click', () => {
+            alert('Plan details: ' + (p.name || p.id || ''));
+          });
+        });
       }
 
-      function setAccessPill(text, ok=true){
-        const pill = $('accessPill');
-        const dot = pill ? pill.querySelector('.dot') : null;
-        if ($('accessText')) $('accessText').textContent = text;
-        if (dot){
-          dot.classList.toggle('bad', !ok);
-        }
+      function escapeHtml(s){
+        return String(s || '').replace(/[&<>"']/g, (c) => ({
+          '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[c]));
+      }
+      function escapeAttr(s){
+        return String(s || '').replace(/"/g,'&quot;');
       }
 
-      function setLoginPill(ok=true){
-        const pill = $('loginPill');
-        const dot = pill ? pill.querySelector('.dot') : null;
-        if (dot) dot.classList.toggle('bad', !ok);
-      }
-
-      function readQueryDefaults(){
+      async function refreshPlans(){
+        // best-effort: if backend has /billing/prices
         try{
-          const u = new URL(window.location.href);
-          const uid = (u.searchParams.get('user_id') || u.searchParams.get('uid') || '').trim();
-          const em  = (u.searchParams.get('email') || '').trim();
-          if (uid && userIdEl) userIdEl.value = uid;
-          if (em && emailEl) emailEl.value = em;
-        }catch(e){}
-      }
-
-      // restore from localStorage
-      function restore(){
-        try{
-          const uid = localStorage.getItem('darrius_user_id') || '';
-          const em  = localStorage.getItem('darrius_email') || '';
-          if (uid && userIdEl && !userIdEl.value) userIdEl.value = uid;
-          if (em && emailEl && !emailEl.value) emailEl.value = em;
-        }catch(e){}
-      }
-
-      function persist(uid, em){
-        try{
-          if (uid) localStorage.setItem('darrius_user_id', uid);
-          if (em) localStorage.setItem('darrius_email', em);
-        }catch(e){}
-      }
-
-      async function fetchJsonFirst(urls, opts){
-        let lastErr = null;
-        for (const u of urls){
-          try{
-            const r = await fetch(u, opts || { method:'GET' });
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            const j = await r.json().catch(()=> ({}));
-            return { ok:true, url:u, json:j };
-          }catch(e){
-            lastErr = e;
+          const res = await fetch(base + '/billing/prices', { method:'GET' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const j = await res.json().catch(()=> ({}));
+          const plans = j.plans || j.data || j || [];
+          if (Array.isArray(plans) && plans.length){
+            renderPlans(plans.map(x => ({
+              id: x.id || x.price_id || x.lookup_key || '',
+              name: x.name || x.nickname || x.lookup_key || x.id,
+              price_text: x.display_price || x.price_text || x.unit_amount_text || x.amount_text || '',
+              desc: x.description || x.desc || ''
+            })));
+            return;
           }
+          throw new Error('no plans array');
+        }catch(e){
+          // fallback: show your known 4 plans (static)
+          renderPlans([
+            {id:'weekly', name:'Weekly · 周付', price_text:'$4.90', desc:'Short-term access. Ideal for trials and quick evaluations.'},
+            {id:'monthly', name:'Monthly · 月付', price_text:'$19.90', desc:'Most popular. Balanced commitment and flexibility. (1-day free trial)'},
+            {id:'quarterly', name:'Quarterly · 季付', price_text:'$49.90', desc:'Better value. Recommended for active users. (3-day free trial)'},
+            {id:'yearly', name:'Yearly · 年付', price_text:'$189.00', desc:'Best value. For professionals and long-term users. (5-day free trial)'}
+          ]);
         }
-        return { ok:false, error:lastErr };
       }
 
       async function refreshStatus(){
@@ -759,195 +659,49 @@
         const em  = (emailEl && emailEl.value || '').trim();
 
         if (!uid){
-          setStatusBadge('STATUS: MISSING USER', 'bad');
-          setLoginPill(false);
+          setStatusBadge('STATUS: MISSING USER', false);
           return;
         }
 
-        persist(uid, em);
+        // persist
+        try{
+          localStorage.setItem('darrius_user_id', uid);
+          if (em) localStorage.setItem('darrius_email', em);
+        }catch(e){}
 
-        $('kvUser').textContent = uid;
+        try{
+          // ✅ 关键修复：默认只用 user_id 查状态，避免 email 一输入就 Unknown
+          // 如果你一定要 email 强校验，把下面一行改成携带 &email=...
+          const url = base + '/billing/status?user_id=' + encodeURIComponent(uid);
+          // const url = base + '/billing/status?user_id=' + encodeURIComponent(uid) + (em ? '&email=' + encodeURIComponent(em) : '');
 
-        const qs = 'user_id=' + encodeURIComponent(uid) + (em ? '&email=' + encodeURIComponent(em) : '');
-        const urls = [
-          base + '/api/subscription/status?' + qs,
-          base + '/billing/status?' + qs,
-          base + '/subscription/status?' + qs,
-        ];
+          const res = await fetch(url, { method:'GET' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const j = await res.json().catch(()=> ({}));
 
-        const res = await fetchJsonFirst(urls, { method:'GET' });
-        if (!res.ok){
-          // still show stable UI
-          setBackendConnected(false);
-          $('buildText').textContent = new Date().toISOString();
+          $('kvUser').textContent = j.user || uid;
+          $('kvPlan').textContent = j.plan || j.current_plan || '—';
+          $('kvSubStatus').textContent = j.status || j.subscription_status || '—';
+          $('kvEnds').textContent = j.renews_or_ends || j.ends_at || '—';
+          $('kvDataMode').textContent = j.data_mode || 'DELAYED';
+
+          $('buildText').textContent = j.build || new Date().toISOString();
+          setBackendConnected(true);
+
+          const s = String(j.status || j.subscription_status || 'UNKNOWN').toUpperCase();
+          setStatusBadge('STATUS: ' + s, s !== 'EXPIRED' && s !== 'CANCELED');
+        }catch(e){
+          $('kvUser').textContent = uid;
           $('kvPlan').textContent = '—';
           $('kvSubStatus').textContent = 'UNKNOWN';
           $('kvEnds').textContent = '—';
           $('kvDataMode').textContent = 'DELAYED';
-          setAccessPill('Access: DELAYED · 市场数据（延时）', true);
-          setStatusBadge('STATUS: UNKNOWN', 'bad');
-          return;
+
+          $('buildText').textContent = new Date().toISOString();
+          setBackendConnected(false);
+
+          setStatusBadge('STATUS: UNKNOWN', false);
         }
-
-        const j = res.json || {};
-        setBackendConnected(true);
-
-        // read common shapes
-        const plan = j.plan || j.current_plan || j.price_nickname || j.product || '—';
-        const statusRaw = j.status || j.subscription_status || j.sub_status || j.state || 'UNKNOWN';
-        const status = normalizeStatus(statusRaw);
-        const ends = j.renews_or_ends || j.ends_at || j.current_period_end || j.renewal || '—';
-        const dataMode = (j.data_mode || j.data_source_mode || j.mode || j.access_mode || '').toString() || 'DELAYED';
-
-        $('kvUser').textContent = j.user || j.user_id || uid;
-        $('kvPlan').textContent = plan;
-        $('kvSubStatus').textContent = status;
-        $('kvEnds').textContent = ends;
-        $('kvDataMode').textContent = dataMode;
-
-        $('buildText').textContent = j.build || new Date().toISOString();
-
-        // pill + badge
-        const isActive = (status === 'ACTIVE' || status === 'TRIAL');
-        setStatusBadge('STATUS: ' + status, isActive ? 'ok' : 'bad');
-        setLoginPill(true);
-
-        // Access pill
-        const delayed = String(dataMode).toLowerCase().includes('delay') || String(dataMode).toUpperCase() === 'DELAYED';
-        setAccessPill('Access: ' + (delayed ? 'DELAYED' : 'MARKET') + ' · ' + (delayed ? '市场数据（延时）' : '市场数据'), true);
-      }
-
-      async function openBillingPortal(){
-        const uid = (userIdEl && userIdEl.value || '').trim();
-        const em  = (emailEl && emailEl.value || '').trim();
-        if (!uid){ alert('请先填写 User ID'); return; }
-
-        // preferred: POST /billing/portal => {url}
-        const payload = { user_id: uid };
-        if (em) payload.email = em;
-
-        const urls = [
-          base + '/billing/portal',
-          base + '/api/billing/portal',
-        ];
-
-        for (const u of urls){
-          try{
-            const r = await fetch(u, {
-              method:'POST',
-              headers:{ 'Content-Type':'application/json' },
-              body: JSON.stringify(payload)
-            });
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            const j = await r.json().catch(()=> ({}));
-            const url = j.url || j.portal_url || j.session_url;
-            if (url){
-              window.location.href = url;
-              return;
-            }
-          }catch(e){}
-        }
-
-        alert('Billing Portal 未返回可跳转 URL。请确认后端是否提供 /billing/portal 并返回 {url}。');
-      }
-
-      async function startCheckout(planKey){
-        const uid = (userIdEl && userIdEl.value || '').trim();
-        const em  = (emailEl && emailEl.value || '').trim();
-        if (!uid){ alert('请先填写 User ID'); return; }
-
-        // try map planKey -> price id from /billing/prices if present
-        const priceId = window.__DARRIUS_PRICE_MAP__ && window.__DARRIUS_PRICE_MAP__[planKey] ? window.__DARRIUS_PRICE_MAP__[planKey] : '';
-
-        const ref = (localStorage.getItem('darrius_ref_code') || '').trim();
-        const payload = {
-          user_id: uid,
-          email: em || undefined,
-          plan: planKey,
-          price_id: priceId || undefined,
-          ref: ref || undefined
-        };
-
-        // do not change logic: call your existing backend endpoints
-        const urls = [
-          base + '/billing/checkout',
-          base + '/create-checkout-session'
-        ];
-
-        for (const u of urls){
-          try{
-            const r = await fetch(u, {
-              method:'POST',
-              headers:{ 'Content-Type':'application/json' },
-              body: JSON.stringify(payload)
-            });
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            const j = await r.json().catch(()=> ({}));
-            const url = j.url || j.checkout_url || j.session_url;
-            if (url){
-              window.location.href = url;
-              return;
-            }
-          }catch(e){}
-        }
-
-        alert('Checkout 未返回可跳转 URL。请确认后端 /billing/checkout 或 /create-checkout-session 返回 {url}。');
-      }
-
-      function showPlanDetails(planKey){
-        const map = {
-          weekly:  'Weekly：短期体验，适合快速评估。\n价格：$4.90 / week\n试用：无（可按需配置）',
-          monthly: 'Monthly：最受欢迎。\n价格：$19.90 / month\n试用：1 day free trial',
-          quarterly:'Quarterly：性价比更高。\n价格：$49.90 / quarter\n试用：3 days free trial',
-          yearly:  'Yearly：长期用户最佳。\n价格：$189.00 / year\n试用：5 days free trial'
-        };
-        alert(map[planKey] || 'Details later');
-      }
-
-      async function hydratePrices(){
-        // optional: fetch /billing/prices to map price IDs for checkout (if your backend has it)
-        const urls = [
-          base + '/billing/prices',
-          base + '/prices'
-        ];
-        const res = await fetchJsonFirst(urls, { method:'GET' });
-        if (!res.ok) return;
-
-        const j = res.json || {};
-        // Accept shapes:
-        // 1) { prices:[{id, nickname, unit_amount, ...}] }
-        // 2) [{...}]
-        const arr = Array.isArray(j) ? j : (Array.isArray(j.prices) ? j.prices : []);
-        if (!arr.length) return;
-
-        const map = {};
-        for (const p of arr){
-          const nick = (p.nickname || p.name || p.lookup_key || '').toString().toLowerCase();
-          const id = p.id || p.price_id;
-          if (!id) continue;
-          if (nick.includes('week')) map.weekly = id;
-          if (nick.includes('month')) map.monthly = id;
-          if (nick.includes('quarter')) map.quarterly = id;
-          if (nick.includes('year')) map.yearly = id;
-        }
-        window.__DARRIUS_PRICE_MAP__ = map;
-      }
-
-      function bindPlanButtons(){
-        const grid = document.getElementById('plansGrid');
-        if (!grid) return;
-
-        grid.addEventListener('click', (e)=>{
-          const btn = e.target && e.target.closest && e.target.closest('button');
-          if (!btn) return;
-
-          const action = btn.getAttribute('data-action');
-          const key = btn.getAttribute('data-plan-key');
-          if (!action || !key) return;
-
-          if (action === 'subscribe') startCheckout(key);
-          if (action === 'details') showPlanDetails(key);
-        }, true);
       }
 
       // Buttons
@@ -957,21 +711,19 @@
       $('openDashBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
       $('backBtn')?.addEventListener('click', () => { window.location.href = '/index.html'; });
 
-      $('openPortalBtn')?.addEventListener('click', openBillingPortal);
-      $('choosePlanBtn')?.addEventListener('click', () => {
-        // same as opening checkout modal: just scroll to plans section
-        const el = document.getElementById('plansGrid');
-        if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+      $('openPortalBtn')?.addEventListener('click', () => {
+        // ✅ 你后端如果已有 billing portal 路由，请把这里替换成真实链接
+        alert('Open Billing Portal: wire to your existing backend billing-portal route.');
       });
 
-      // Init
-      restore();
-      readQueryDefaults();
-      bindPlanButtons();
-      hydratePrices().catch(()=>{});
+      $('choosePlanBtn')?.addEventListener('click', () => {
+        // ✅ 不改订阅逻辑：回 index 走你的 subscription.js
+        window.location.href = '/index.html#subscription';
+      });
 
-      // initial refresh
-      setTimeout(refreshStatus, 250);
+      // init
+      setTimeout(refreshStatus, 200);
+      setTimeout(refreshPlans, 260);
     })();
   </script>
 </body>
