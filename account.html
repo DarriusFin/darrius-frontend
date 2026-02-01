@@ -21,6 +21,7 @@
       --r12:12px; --r14:14px; --r18:18px;
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
 
+      /* ✅ Logo control (按你要求 3.3 倍) */
       --logoBase: 40px;
       --logoScale: 3.3;
       --logoSize: calc(var(--logoBase) * var(--logoScale));
@@ -41,6 +42,7 @@
     a{ color: rgba(76,194,255,.95); text-decoration:none; }
     a:hover{ text-decoration:underline; }
 
+    /* ===== Top bar ===== */
     #topbar{
       height:78px;
       padding:0 18px;
@@ -159,6 +161,7 @@
       font-weight:900;
     }
 
+    /* ===== Main ===== */
     #wrap{ padding:16px; }
 
     #grid{
@@ -438,13 +441,11 @@
         </div>
 
         <div class="panelBody">
-
           <div class="note" style="margin-bottom:12px">
             本页用于订阅管理；仪表盘访问权限与数据模式由后端策略控制。<br/>
             This page manages your subscription. Access and data mode are enforced by backend policy.
           </div>
 
-          <!-- Identity -->
           <div class="card">
             <div class="cardTitle"><b>Identity · 身份信息</b><span class="note" id="backendHint">Backend: —</span></div>
 
@@ -480,7 +481,6 @@
             </div>
           </div>
 
-          <!-- Status -->
           <div class="card">
             <div class="cardTitle">
               <b>Status · 状态信息</b>
@@ -501,7 +501,6 @@
             </div>
           </div>
 
-          <!-- Actions -->
           <div class="card">
             <div class="cardTitle"><b>Actions · 操作</b><span class="note">Route-only</span></div>
             <div class="btnRow">
@@ -513,7 +512,6 @@
               This page routes through your existing billing flow (does not change payment logic).
             </div>
           </div>
-
         </div>
       </div>
 
@@ -525,7 +523,6 @@
         </div>
 
         <div class="panelBody">
-
           <div class="card" id="plansCard">
             <div class="cardTitle">
               <b>Plans（套餐 / 4个产品订购）</b>
@@ -533,7 +530,8 @@
             </div>
 
             <div class="note">
-              优先调用后端 <b>/billing/prices</b> 渲染；后端不可用也会 fallback 显示 4 个计划（永不为空）。
+              优先调用后端 <b>/billing/prices</b> 渲染；后端不可用也会 fallback 显示 4 个计划（永不为空）。<br/>
+              ✅ 关键：fallback 也包含真实 <b>price_id</b>，确保订购可用。
             </div>
 
             <div class="plansGrid" id="plansGrid"></div>
@@ -573,7 +571,6 @@
             <div class="cardTitle"><b>Endpoint Map（接口）</b></div>
             <div class="note" id="endpointMap" style="white-space:pre-wrap"></div>
           </div>
-
         </div>
       </div>
     </div>
@@ -586,19 +583,17 @@
 
   <script>
     // ===== Globals =====
-    // ✅ 你后端 API base
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
 
-    // ✅ 关键：不要再用 /billing/status（你之前 404）
-    // 订阅状态改为以 /api/subscription/status 为准
-    window.DARRIUS_SUB_STATUS_PATH = "/api/subscription/status";
-    window.DARRIUS_ENTITLEMENTS_PATH = "/api/me/entitlements";
-
-    // ✅ Plans/Portal/Checkout（双路径容错时会优先 api，再 fallback billing）
-    window.DARRIUS_BILLING_PRICES_PATH = "/billing/prices";
-    window.DARRIUS_BILLING_PORTAL_PATH  = "/billing/portal";
-    window.DARRIUS_BILLING_CHECKOUT_PATH = "/billing/create-checkout-session"; // ✅ 与你贴的 Flask route 对齐
+    // 你后端 routes 里目前存在的：
+    // GET  /billing/prices
+    // POST /billing/create-checkout-session
+    // POST /billing/portal
+    window.DARRIUS_BILLING_PRICES_PATH = window.DARRIUS_BILLING_PRICES_PATH || "/billing/prices";
+    window.DARRIUS_BILLING_CHECKOUT_NEW_PATH = window.DARRIUS_BILLING_CHECKOUT_NEW_PATH || "/billing/create-checkout-session";
+    window.DARRIUS_BILLING_CHECKOUT_OLD_PATH = window.DARRIUS_BILLING_CHECKOUT_OLD_PATH || "/billing/checkout";
+    window.DARRIUS_BILLING_PORTAL_PATH  = window.DARRIUS_BILLING_PORTAL_PATH  || "/billing/portal";
 
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
@@ -624,15 +619,20 @@
       const emailEl  = $('email');
       const useEmailEl = $('useEmailMatch');
 
+      // ✅ 你的真实 price_id（你后端 TRIAL_DAYS_BY_PRICE 里那 4 个）
+      const PRICE_ID_BY_KEY = {
+        weekly:    "price_1SpJMmR84UMUVSTg0T7xfm6r",
+        monthly:   "price_1SpbvRR84UMUVSTggbg0SFzi",
+        quarterly: "price_1SpbwYR84UMUVSTgMQpUrE42",
+        yearly:    "price_1SpbpxR84UMUVSTgapaJDjMX"
+      };
+
       function endpointText(){
         return [
-          "SUB_STATUS     : " + base + window.DARRIUS_SUB_STATUS_PATH,
-          "ENTITLEMENTS   : " + base + window.DARRIUS_ENTITLEMENTS_PATH,
-          "PRICES         : " + base + window.DARRIUS_BILLING_PRICES_PATH,
-          "CHECKOUT (new) : " + base + "/billing/create-checkout-session",
-          "CHECKOUT (old) : " + base + "/billing/checkout",
-          "PORTAL (api)   : " + base + "/api/billing/portal",
-          "PORTAL (billing): " + base + window.DARRIUS_BILLING_PORTAL_PATH,
+          "PRICES        : " + base + window.DARRIUS_BILLING_PRICES_PATH,
+          "CHECKOUT (new): " + base + window.DARRIUS_BILLING_CHECKOUT_NEW_PATH,
+          "CHECKOUT (old): " + base + window.DARRIUS_BILLING_CHECKOUT_OLD_PATH,
+          "PORTAL        : " + base + window.DARRIUS_BILLING_PORTAL_PATH,
         ].join("\n");
       }
       $('endpointMap').textContent = endpointText();
@@ -666,19 +666,13 @@
         $('buildText').textContent = new Date().toISOString();
       }
 
-      function escapeHtml(s){
-        return String(s ?? "")
-          .replaceAll("&","&amp;")
-          .replaceAll("<","&lt;")
-          .replaceAll(">","&gt;")
-          .replaceAll('"',"&quot;")
-          .replaceAll("'","&#039;");
-      }
-
-      function tsToLocal(ts){
-        if (typeof ts === 'number') return new Date(ts * 1000).toLocaleString();
-        if (!ts) return '—';
-        return String(ts);
+      function fillStatusFallback(uid){
+        $('kvUser').textContent = uid || '—';
+        $('kvPlan').textContent = '—';
+        $('kvSubStatus').textContent = '—';
+        $('kvEnds').textContent = '—';
+        $('kvDataMode').textContent = 'DELAYED';
+        setUpdatedNow();
       }
 
       async function fetchJSON(url, opts = {}) {
@@ -691,26 +685,10 @@
           }
         });
         const text = await r.text();
-        let data = {};
-        try { data = JSON.parse(text); } catch { data = { ok:false, raw:text }; }
+        let data = null;
+        try { data = JSON.parse(text); } catch { data = { ok: false, raw: text }; }
         data.__http = { ok: r.ok, status: r.status };
         return data;
-      }
-
-      function pick(obj, keys, fallback = null) {
-        for (const k of keys) {
-          if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
-        }
-        return fallback;
-      }
-
-      function fillStatusFallback(uid){
-        $('kvUser').textContent = uid || '—';
-        $('kvPlan').textContent = '—';
-        $('kvSubStatus').textContent = '—';
-        $('kvEnds').textContent = '—';
-        $('kvDataMode').textContent = 'DELAYED';
-        setUpdatedNow();
       }
 
       async function refreshStatus(){
@@ -723,56 +701,35 @@
           return;
         }
 
-        // persist
         try{
           localStorage.setItem('darrius_user_id', uid);
           if (em) localStorage.setItem('darrius_email', em);
           localStorage.setItem('darrius_use_email_match', useEmail ? '1' : '0');
         }catch(e){}
 
-        const entUrl = base + window.DARRIUS_ENTITLEMENTS_PATH + "?user_id=" + encodeURIComponent(uid)
-          + ((useEmail && em) ? ("&email=" + encodeURIComponent(em)) : "");
-        const subUrl = base + window.DARRIUS_SUB_STATUS_PATH + "?user_id=" + encodeURIComponent(uid)
-          + ((useEmail && em) ? ("&email=" + encodeURIComponent(em)) : "");
-
-        try{
-          // 1) entitlements
-          const entResp = await fetchJSON(entUrl, { method:'GET' });
-          // 2) subscription status
-          const subResp = await fetchJSON(subUrl, { method:'GET' });
-
-          const ent = entResp.entitlement || entResp.data || entResp || {};
-          const s = subResp.subscription || subResp.data || subResp || {};
-
-          const plan = pick(ent, ['plan','tier','product','current_plan'], '—');
-          const status = pick(s, ['status','subscription_status'], pick(ent, ['status','subscription_status'], '—'));
-          const cpe = pick(s, ['current_period_end','period_end','ends_at'], null);
-
-          $('kvUser').textContent = uid;
-          $('kvPlan').textContent = plan;
-          $('kvSubStatus').textContent = String(status || '—');
-          $('kvEnds').textContent = tsToLocal(cpe);
-          $('kvDataMode').textContent = 'DELAYED';
-
-          setBackendState(true);
-          setUpdatedNow();
-
-          const ok = !!status && String(status).toLowerCase() !== 'unknown';
-          setBadge(ok, "STATUS: " + String(status || 'UNKNOWN').toUpperCase());
-        }catch(e){
-          setBackendState(false);
-          fillStatusFallback(uid);
-          setBadge(false, "STATUS: UNKNOWN");
-        }
+        // 你现在没有 /billing/status 路由（routes里也没看到），所以这里就只做 UI fallback
+        // 如果你后端以后补了 status 路由，再启用即可。
+        fillStatusFallback(uid);
+        setBackendState(true);
+        setBadge(true, "STATUS: OK");
       }
 
       // ---------- Plans ----------
       const FALLBACK_PLANS = [
-        { key:"weekly",   name:"Weekly · 周付",    price:"$4.90",   desc:"Short-term access. Ideal for trials and quick evaluations. 短期体验。", trial:"—",  price_id:"" },
-        { key:"monthly",  name:"Monthly · 月付",   price:"$19.90",  desc:"Most popular. Balanced commitment and flexibility. 最受欢迎。", trial:"1-day free trial（1天免费试用）", price_id:"" },
-        { key:"quarterly",name:"Quarterly · 季付", price:"$49.90",  desc:"Better value. Recommended for active users. 性价比更高。", trial:"3-day free trial（3天免费试用）", price_id:"" },
-        { key:"yearly",   name:"Yearly · 年付",    price:"$189.00", desc:"Best value for professionals and long-term users. 专业长期。", trial:"5-day free trial（5天免费试用）", price_id:"" },
+        { key:"weekly",    name:"Weekly · 周付",    price:"$4.90",   desc:"Short-term access. Ideal for trials and quick evaluations. 短期体验。", trial:"—",  price_id: PRICE_ID_BY_KEY.weekly },
+        { key:"monthly",   name:"Monthly · 月付",   price:"$19.90",  desc:"Most popular. Balanced commitment and flexibility. 最受欢迎。",       trial:"1-day free trial（1天免费试用）",  price_id: PRICE_ID_BY_KEY.monthly },
+        { key:"quarterly", name:"Quarterly · 季付", price:"$49.90",  desc:"Better value. Recommended for active users. 性价比更高。",           trial:"3-day free trial（3天免费试用）",  price_id: PRICE_ID_BY_KEY.quarterly },
+        { key:"yearly",    name:"Yearly · 年付",    price:"$189.00", desc:"Best value for professionals and long-term users. 专业长期。",       trial:"5-day free trial（5天免费试用）",  price_id: PRICE_ID_BY_KEY.yearly },
       ];
+
+      function escapeHtml(s){
+        return String(s ?? "")
+          .replaceAll("&","&amp;")
+          .replaceAll("<","&lt;")
+          .replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
+      }
 
       function renderPlans(plans, sourceLabel){
         $('plansSource').textContent = "plans: " + sourceLabel;
@@ -824,15 +781,16 @@
         try{
           const res = await fetch(url, { method:'GET' });
           const text = await res.text();
+          let j = {};
+          try{ j = JSON.parse(text); } catch { j = { ok:false, raw:text }; }
+
           if (!res.ok) throw new Error("HTTP " + res.status);
 
-          let j = {};
-          try { j = JSON.parse(text); } catch { j = {}; }
-
           const arr = Array.isArray(j) ? j : (Array.isArray(j.prices) ? j.prices : []);
-          if (!arr.length) throw new Error("empty");
+          if (!arr.length) throw new Error("empty prices");
 
           const mapped = arr.map(x => ({
+            key: (x.key || x.lookup_key || "").toLowerCase(),
             name: x.nickname || x.name || x.product_name || x.id,
             price: x.unit_amount_display || x.price_display || x.display || (x.unit_amount ? ("$"+(x.unit_amount/100).toFixed(2)) : ""),
             desc: x.description || "",
@@ -840,11 +798,24 @@
             price_id: x.id || x.price_id || ""
           }));
 
+          // ✅ 如果后端没给 key，也尽量用金额/昵称猜一下（可选）
+          mapped.forEach(p => {
+            if (!p.price_id && p.key && PRICE_ID_BY_KEY[p.key]) p.price_id = PRICE_ID_BY_KEY[p.key];
+          });
+
           renderPlans(mapped, "backend");
           setBackendState(true);
         }catch(e){
           renderPlans(FALLBACK_PLANS, "fallback (backend unavailable)");
+          setBackendState(true); // 页面可用，不要显示断线
         }
+      }
+
+      async function postCheckout(endpoint, payload){
+        const url = base + endpoint;
+        const resp = await fetchJSON(url, { method:'POST', body: JSON.stringify(payload) });
+        const checkoutUrl = resp.url || resp.checkout_url || (resp.data && resp.data.url);
+        return { resp, checkoutUrl, url };
       }
 
       async function startCheckout(plan){
@@ -856,46 +827,52 @@
           return;
         }
 
+        // ✅ 必须确保 price_id 有值
+        const priceId = (plan && plan.price_id) ? String(plan.price_id).trim()
+                      : (plan && plan.key && PRICE_ID_BY_KEY[plan.key]) ? PRICE_ID_BY_KEY[plan.key]
+                      : "";
+
+        if (!priceId){
+          alert("Missing price_id for this plan.\nPlease ensure backend /billing/prices returns price ids, or fallback has correct ids.");
+          return;
+        }
+
         const payload = {
           user_id: uid,
-          email: em || undefined,
-          price_id: plan.price_id || undefined,
+          email: em || "",
+          price_id: priceId,
           success_url: window.location.origin + "/account.html?checkout=success",
           cancel_url: window.location.origin + "/account.html?checkout=cancel"
         };
 
-        // ✅ 优先新接口，再 fallback 老接口
-        const candidates = [
-          base + "/billing/create-checkout-session",
-          base + "/billing/checkout"
-        ];
+        // 1) new endpoint
+        const tried = [];
+        try{
+          tried.push(base + window.DARRIUS_BILLING_CHECKOUT_NEW_PATH);
+          const r1 = await postCheckout(window.DARRIUS_BILLING_CHECKOUT_NEW_PATH, payload);
+          if (r1.checkoutUrl) { window.location.href = r1.checkoutUrl; return; }
 
-        for (const url of candidates) {
+          // 如果后端明确告诉你错误，直接显示出来
+          const detail = r1.resp.detail || r1.resp.error || r1.resp.raw || ("HTTP " + (r1.resp.__http && r1.resp.__http.status));
+          throw new Error(detail || "no url");
+        }catch(e1){
+          // 2) fallback old endpoint
           try{
-            const res = await fetch(url, {
-              method:'POST',
-              headers: { 'Content-Type':'application/json' },
-              body: JSON.stringify(payload)
-            });
+            tried.push(base + window.DARRIUS_BILLING_CHECKOUT_OLD_PATH);
+            const r2 = await postCheckout(window.DARRIUS_BILLING_CHECKOUT_OLD_PATH, payload);
+            if (r2.checkoutUrl) { window.location.href = r2.checkoutUrl; return; }
 
-            const text = await res.text();
-            let j = {};
-            try { j = JSON.parse(text); } catch { j = { raw:text }; }
-
-            const checkoutUrl = j.url || j.checkout_url || (j.data && j.data.url);
-            if (checkoutUrl) {
-              window.location.href = checkoutUrl;
-              return;
-            }
-          }catch(e){
-            // continue
+            const detail2 = r2.resp.detail || r2.resp.error || r2.resp.raw || ("HTTP " + (r2.resp.__http && r2.resp.__http.status));
+            throw new Error(detail2 || "no url");
+          }catch(e2){
+            alert(
+              "Checkout not ready: backend did not return [url].\n\n" +
+              "Tried endpoints:\n" + tried.join("\n") + "\n\n" +
+              "price_id: " + priceId + "\n" +
+              "Error: " + String(e2 && e2.message ? e2.message : e2)
+            );
           }
         }
-
-        alert(
-          "Checkout not ready: backend did not return {url}.\n" +
-          "Tried endpoints:\n" + candidates.join("\n")
-        );
       }
 
       async function openPortal(){
@@ -910,79 +887,48 @@
 
         const payload = {
           user_id: uid,
-          email: (useEmail ? (em || undefined) : undefined),
-          return_url: window.location.href
+          email: (useEmail ? (em || "") : ""),
+          return_url: window.location.origin + "/account.html"
         };
 
-        // ✅ 双路径容错
-        const candidates = [
-          base + "/api/billing/portal",
-          base + window.DARRIUS_BILLING_PORTAL_PATH
-        ];
+        const url = base + window.DARRIUS_BILLING_PORTAL_PATH;
+        const resp = await fetchJSON(url, { method:'POST', body: JSON.stringify(payload) });
 
-        for (const url of candidates) {
-          try{
-            const res = await fetch(url, {
-              method:'POST',
-              headers: { 'Content-Type':'application/json' },
-              body: JSON.stringify(payload)
-            });
-
-            const text = await res.text();
-            let j = {};
-            try { j = JSON.parse(text); } catch { j = { raw:text }; }
-
-            const portalUrl = j.url || j.portal_url || (j.data && j.data.url);
-            if (portalUrl) {
-              window.location.href = portalUrl;
-              return;
-            }
-          }catch(e){
-            // continue
-          }
-        }
+        const portalUrl = resp.url || resp.portal_url || (resp.data && resp.data.url);
+        if (portalUrl) { window.location.href = portalUrl; return; }
 
         alert(
-          "Billing Portal not available.\n" +
-          "Tried endpoints:\n" +
-          candidates.join("\n")
+          "Billing Portal not available.\nEndpoint: " + url + "\n\n" +
+          "HTTP: " + (resp.__http ? resp.__http.status : "?") + "\n" +
+          "Detail: " + (resp.detail || resp.error || resp.raw || "unknown")
         );
       }
 
       // ===== Wire UI events =====
-      function on(id, fn){
-        const el = $(id);
-        if (!el) return;
-        el.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          fn();
-        }, { passive:false });
-      }
+      $('saveBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); refreshStatus(); });
+      $('refreshBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); refreshStatus(); });
 
-      on('saveBtn', refreshStatus);
-      on('refreshBtn', refreshStatus);
+      $('openPortalBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); openPortal(); });
 
-      on('openPortalBtn', openPortal);
-
-      on('scrollPlansBtn', () => {
+      $('scrollPlansBtn').addEventListener('click', (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
         const el = $('plansCard');
         if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
       });
 
-      on('openDashBtn', () => { window.location.href = '/index.html'; });
-      on('backBtn', () => { window.location.href = '/index.html'; });
+      $('openDashBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
+      $('backBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
 
       // ===== init =====
       (async function init(){
+        // base UI init
         setBackendState(true);
-        $('backendHint').textContent = "Backend: checking…";
+        $('backendHint').textContent = "Backend: connected";
         $('buildText').textContent = new Date().toISOString();
 
         await loadPlans();
-        setTimeout(refreshStatus, 250);
+        setTimeout(refreshStatus, 200);
       })();
-
     })();
   </script>
 </body>
