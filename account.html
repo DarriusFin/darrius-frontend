@@ -21,9 +21,8 @@
       --r12:12px; --r14:14px; --r18:18px;
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
 
-      /* ✅ Logo control (按你要求 3.3 倍) */
       --logoBase: 40px;
-      --logoScale: 3.3; /* ← 你要的 3.3 */
+      --logoScale: 3.3;
       --logoSize: calc(var(--logoBase) * var(--logoScale));
       --logoRadius: 18px;
     }
@@ -42,7 +41,6 @@
     a{ color: rgba(76,194,255,.95); text-decoration:none; }
     a:hover{ text-decoration:underline; }
 
-    /* ===== Top bar ===== */
     #topbar{
       height:78px;
       padding:0 18px;
@@ -61,7 +59,6 @@
       min-width:420px;
     }
 
-    /* ✅ Big logo + remove dark ring/halo */
     .logoBox{
       width: var(--logoSize);
       height: var(--logoSize);
@@ -162,10 +159,8 @@
       font-weight:900;
     }
 
-    /* ===== Main ===== */
     #wrap{ padding:16px; }
 
-    /* ✅ 50/50 equal columns */
     #grid{
       display:grid;
       grid-template-columns: 1fr 1fr;
@@ -224,7 +219,7 @@
       padding:12px;
       margin-bottom:12px;
       position:relative;
-      z-index:5; /* ✅ 确保按钮可点 */
+      z-index:5;
     }
     .cardTitle{
       display:flex;
@@ -281,7 +276,6 @@
     }
     .kv b{ color: var(--text); font-weight:900; }
 
-    /* ✅ Buttons: fixed width like Subscribe */
     .btn{
       display:inline-flex;
       align-items:center;
@@ -300,7 +294,7 @@
       user-select:none;
       min-width: 170px;
       position:relative;
-      z-index:20; /* ✅ 绝对保证能点 */
+      z-index:20;
     }
     .btn:hover{ filter: brightness(1.04); }
     .btn:active{ transform: translateY(1px); }
@@ -342,7 +336,6 @@
       gap:12px;
     }
 
-    /* Plans */
     .plansGrid{
       display:grid;
       grid-template-columns: 1fr 1fr;
@@ -437,7 +430,7 @@
 
   <div id="wrap">
     <div id="grid">
-      <!-- LEFT: Identity + Status + Actions -->
+      <!-- LEFT -->
       <div class="panel">
         <div class="panelHeader">
           <div class="h">Subscription Overview · 订阅概览</div>
@@ -524,7 +517,7 @@
         </div>
       </div>
 
-      <!-- RIGHT: Plans + Control -->
+      <!-- RIGHT -->
       <div class="panel" id="rightPanel">
         <div class="panelHeader">
           <div class="h">Plans & Control · 套餐与控制</div>
@@ -533,7 +526,6 @@
 
         <div class="panelBody">
 
-          <!-- Plans -->
           <div class="card" id="plansCard">
             <div class="cardTitle">
               <b>Plans（套餐 / 4个产品订购）</b>
@@ -552,7 +544,6 @@
             </div>
           </div>
 
-          <!-- Quick actions -->
           <div class="card">
             <div class="cardTitle"><b>Quick Actions（快捷操作）</b></div>
             <div class="btnRow">
@@ -560,7 +551,6 @@
             </div>
           </div>
 
-          <!-- Support / System -->
           <div class="card">
             <div class="cardTitle"><b>System（系统信息）</b></div>
             <div class="kv">
@@ -596,14 +586,19 @@
 
   <script>
     // ===== Globals =====
+    // ✅ 你后端 API base
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
 
-    // ✅ 路由可配置（你后端现在 /billing/status 404，需要补后端或改为真实路由）
-    window.DARRIUS_BILLING_STATUS_PATH = window.DARRIUS_BILLING_STATUS_PATH || "/billing/status";
-    window.DARRIUS_BILLING_PRICES_PATH = window.DARRIUS_BILLING_PRICES_PATH || "/billing/prices";
-    window.DARRIUS_BILLING_CHECKOUT_PATH = window.DARRIUS_BILLING_CHECKOUT_PATH || "/billing/checkout";
-    window.DARRIUS_BILLING_PORTAL_PATH  = window.DARRIUS_BILLING_PORTAL_PATH  || "/billing/portal";
+    // ✅ 关键：不要再用 /billing/status（你之前 404）
+    // 订阅状态改为以 /api/subscription/status 为准
+    window.DARRIUS_SUB_STATUS_PATH = "/api/subscription/status";
+    window.DARRIUS_ENTITLEMENTS_PATH = "/api/me/entitlements";
+
+    // ✅ Plans/Portal/Checkout（双路径容错时会优先 api，再 fallback billing）
+    window.DARRIUS_BILLING_PRICES_PATH = "/billing/prices";
+    window.DARRIUS_BILLING_PORTAL_PATH  = "/billing/portal";
+    window.DARRIUS_BILLING_CHECKOUT_PATH = "/billing/create-checkout-session"; // ✅ 与你贴的 Flask route 对齐
 
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
@@ -620,6 +615,8 @@
 
   <script>
     (function(){
+      'use strict';
+
       const base = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,'');
       const $ = (id) => document.getElementById(id);
 
@@ -629,10 +626,13 @@
 
       function endpointText(){
         return [
-          "STATUS  : " + base + window.DARRIUS_BILLING_STATUS_PATH,
-          "PRICES  : " + base + window.DARRIUS_BILLING_PRICES_PATH,
-          "CHECKOUT: " + base + window.DARRIUS_BILLING_CHECKOUT_PATH,
-          "PORTAL  : " + base + window.DARRIUS_BILLING_PORTAL_PATH,
+          "SUB_STATUS     : " + base + window.DARRIUS_SUB_STATUS_PATH,
+          "ENTITLEMENTS   : " + base + window.DARRIUS_ENTITLEMENTS_PATH,
+          "PRICES         : " + base + window.DARRIUS_BILLING_PRICES_PATH,
+          "CHECKOUT (new) : " + base + "/billing/create-checkout-session",
+          "CHECKOUT (old) : " + base + "/billing/checkout",
+          "PORTAL (api)   : " + base + "/api/billing/portal",
+          "PORTAL (billing): " + base + window.DARRIUS_BILLING_PORTAL_PATH,
         ].join("\n");
       }
       $('endpointMap').textContent = endpointText();
@@ -657,7 +657,6 @@
       function setBackendState(connected){
         $('backendText').textContent = connected ? "Connected" : "Disconnected";
         $('backendHint').textContent = "Backend: " + (connected ? "connected" : "disconnected");
-        // login dot just for visual
         const dot = $('loginDot');
         if (dot) dot.classList.toggle('bad', !connected);
       }
@@ -665,6 +664,44 @@
       function setUpdatedNow(){
         $('updatedAt').textContent = "Updated: " + new Date().toISOString().replace('T',' ').replace('Z','Z');
         $('buildText').textContent = new Date().toISOString();
+      }
+
+      function escapeHtml(s){
+        return String(s ?? "")
+          .replaceAll("&","&amp;")
+          .replaceAll("<","&lt;")
+          .replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
+      }
+
+      function tsToLocal(ts){
+        if (typeof ts === 'number') return new Date(ts * 1000).toLocaleString();
+        if (!ts) return '—';
+        return String(ts);
+      }
+
+      async function fetchJSON(url, opts = {}) {
+        const r = await fetch(url, {
+          credentials: 'include',
+          ...opts,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(opts.headers || {})
+          }
+        });
+        const text = await r.text();
+        let data = {};
+        try { data = JSON.parse(text); } catch { data = { ok:false, raw:text }; }
+        data.__http = { ok: r.ok, status: r.status };
+        return data;
+      }
+
+      function pick(obj, keys, fallback = null) {
+        for (const k of keys) {
+          if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
+        }
+        return fallback;
       }
 
       function fillStatusFallback(uid){
@@ -693,26 +730,35 @@
           localStorage.setItem('darrius_use_email_match', useEmail ? '1' : '0');
         }catch(e){}
 
-        const qs = new URLSearchParams();
-        qs.set('user_id', uid);
-        if (useEmail && em) qs.set('email', em);
-
-        const url = base + window.DARRIUS_BILLING_STATUS_PATH + "?" + qs.toString();
+        const entUrl = base + window.DARRIUS_ENTITLEMENTS_PATH + "?user_id=" + encodeURIComponent(uid)
+          + ((useEmail && em) ? ("&email=" + encodeURIComponent(em)) : "");
+        const subUrl = base + window.DARRIUS_SUB_STATUS_PATH + "?user_id=" + encodeURIComponent(uid)
+          + ((useEmail && em) ? ("&email=" + encodeURIComponent(em)) : "");
 
         try{
-          const res = await fetch(url, { method:'GET' });
-          if (!res.ok) throw new Error("HTTP " + res.status);
+          // 1) entitlements
+          const entResp = await fetchJSON(entUrl, { method:'GET' });
+          // 2) subscription status
+          const subResp = await fetchJSON(subUrl, { method:'GET' });
 
-          const j = await res.json().catch(()=> ({}));
-          $('kvUser').textContent = j.user || j.user_id || uid;
-          $('kvPlan').textContent = j.plan || j.current_plan || j.price_nickname || '—';
-          $('kvSubStatus').textContent = j.status || j.subscription_status || '—';
-          $('kvEnds').textContent = j.renews_or_ends || j.ends_at || j.current_period_end || '—';
-          $('kvDataMode').textContent = j.data_mode || 'DELAYED';
+          const ent = entResp.entitlement || entResp.data || entResp || {};
+          const s = subResp.subscription || subResp.data || subResp || {};
 
-          setUpdatedNow();
+          const plan = pick(ent, ['plan','tier','product','current_plan'], '—');
+          const status = pick(s, ['status','subscription_status'], pick(ent, ['status','subscription_status'], '—'));
+          const cpe = pick(s, ['current_period_end','period_end','ends_at'], null);
+
+          $('kvUser').textContent = uid;
+          $('kvPlan').textContent = plan;
+          $('kvSubStatus').textContent = String(status || '—');
+          $('kvEnds').textContent = tsToLocal(cpe);
+          $('kvDataMode').textContent = 'DELAYED';
+
           setBackendState(true);
-          setBadge(true, "STATUS: " + String(j.status || j.subscription_status || 'ACTIVE').toUpperCase());
+          setUpdatedNow();
+
+          const ok = !!status && String(status).toLowerCase() !== 'unknown';
+          setBadge(ok, "STATUS: " + String(status || 'UNKNOWN').toUpperCase());
         }catch(e){
           setBackendState(false);
           fillStatusFallback(uid);
@@ -722,20 +768,11 @@
 
       // ---------- Plans ----------
       const FALLBACK_PLANS = [
-        { key:"weekly",   name:"Weekly · 周付",    price:"$4.90",  desc:"Short-term access. Ideal for trials and quick evaluations. 短期体验。", trial:"—",  price_id:"" },
-        { key:"monthly",  name:"Monthly · 月付",   price:"$19.90", desc:"Most popular. Balanced commitment and flexibility. 最受欢迎。", trial:"1-day free trial（1天免费试用）", price_id:"" },
-        { key:"quarterly",name:"Quarterly · 季付", price:"$49.90", desc:"Better value. Recommended for active users. 性价比更高。", trial:"3-day free trial（3天免费试用）", price_id:"" },
-        { key:"yearly",   name:"Yearly · 年付",    price:"$189.00",desc:"Best value for professionals and long-term users. 专业长期。", trial:"5-day free trial（5天免费试用）", price_id:"" },
+        { key:"weekly",   name:"Weekly · 周付",    price:"$4.90",   desc:"Short-term access. Ideal for trials and quick evaluations. 短期体验。", trial:"—",  price_id:"" },
+        { key:"monthly",  name:"Monthly · 月付",   price:"$19.90",  desc:"Most popular. Balanced commitment and flexibility. 最受欢迎。", trial:"1-day free trial（1天免费试用）", price_id:"" },
+        { key:"quarterly",name:"Quarterly · 季付", price:"$49.90",  desc:"Better value. Recommended for active users. 性价比更高。", trial:"3-day free trial（3天免费试用）", price_id:"" },
+        { key:"yearly",   name:"Yearly · 年付",    price:"$189.00", desc:"Best value for professionals and long-term users. 专业长期。", trial:"5-day free trial（5天免费试用）", price_id:"" },
       ];
-
-      function escapeHtml(s){
-        return String(s ?? "")
-          .replaceAll("&","&amp;")
-          .replaceAll("<","&lt;")
-          .replaceAll(">","&gt;")
-          .replaceAll('"',"&quot;")
-          .replaceAll("'","&#039;");
-      }
 
       function renderPlans(plans, sourceLabel){
         $('plansSource').textContent = "plans: " + sourceLabel;
@@ -769,7 +806,6 @@
             </div>
           `;
 
-          // ✅ Bind clicks (ensures "clickable")
           card.querySelector('[data-act="subscribe"]').addEventListener('click', async (ev) => {
             ev.preventDefault(); ev.stopPropagation();
             await startCheckout(p);
@@ -787,8 +823,11 @@
         const url = base + window.DARRIUS_BILLING_PRICES_PATH;
         try{
           const res = await fetch(url, { method:'GET' });
+          const text = await res.text();
           if (!res.ok) throw new Error("HTTP " + res.status);
-          const j = await res.json().catch(()=> ({}));
+
+          let j = {};
+          try { j = JSON.parse(text); } catch { j = {}; }
 
           const arr = Array.isArray(j) ? j : (Array.isArray(j.prices) ? j.prices : []);
           if (!arr.length) throw new Error("empty");
@@ -821,28 +860,42 @@
           user_id: uid,
           email: em || undefined,
           price_id: plan.price_id || undefined,
-          plan_key: plan.key || undefined,
           success_url: window.location.origin + "/account.html?checkout=success",
           cancel_url: window.location.origin + "/account.html?checkout=cancel"
         };
 
-        const url = base + window.DARRIUS_BILLING_CHECKOUT_PATH;
-        try{
-          const res = await fetch(url, {
-            method:'POST',
-            headers: { 'Content-Type':'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          const j = await res.json().catch(()=> ({}));
+        // ✅ 优先新接口，再 fallback 老接口
+        const candidates = [
+          base + "/billing/create-checkout-session",
+          base + "/billing/checkout"
+        ];
 
-          const checkoutUrl = j.url || j.checkout_url;
-          if (!checkoutUrl) throw new Error("no url");
+        for (const url of candidates) {
+          try{
+            const res = await fetch(url, {
+              method:'POST',
+              headers: { 'Content-Type':'application/json' },
+              body: JSON.stringify(payload)
+            });
 
-          window.location.href = checkoutUrl;
-        }catch(e){
-          alert("Checkout not ready: backend did not return [url].\nPlease verify endpoint: " + url);
+            const text = await res.text();
+            let j = {};
+            try { j = JSON.parse(text); } catch { j = { raw:text }; }
+
+            const checkoutUrl = j.url || j.checkout_url || (j.data && j.data.url);
+            if (checkoutUrl) {
+              window.location.href = checkoutUrl;
+              return;
+            }
+          }catch(e){
+            // continue
+          }
         }
+
+        alert(
+          "Checkout not ready: backend did not return {url}.\n" +
+          "Tried endpoints:\n" + candidates.join("\n")
+        );
       }
 
       async function openPortal(){
@@ -858,42 +911,67 @@
         const payload = {
           user_id: uid,
           email: (useEmail ? (em || undefined) : undefined),
-          return_url: window.location.origin + "/account.html"
+          return_url: window.location.href
         };
 
-        const url = base + window.DARRIUS_BILLING_PORTAL_PATH;
-        try{
-          const res = await fetch(url, {
-            method:'POST',
-            headers: { 'Content-Type':'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          const j = await res.json().catch(()=> ({}));
+        // ✅ 双路径容错
+        const candidates = [
+          base + "/api/billing/portal",
+          base + window.DARRIUS_BILLING_PORTAL_PATH
+        ];
 
-          const portalUrl = j.url || j.portal_url;
-          if (!portalUrl) throw new Error("no url");
+        for (const url of candidates) {
+          try{
+            const res = await fetch(url, {
+              method:'POST',
+              headers: { 'Content-Type':'application/json' },
+              body: JSON.stringify(payload)
+            });
 
-          window.location.href = portalUrl;
-        }catch(e){
-          alert("Billing Portal not available. Please wire billing portal route in backend.\nEndpoint: " + url);
+            const text = await res.text();
+            let j = {};
+            try { j = JSON.parse(text); } catch { j = { raw:text }; }
+
+            const portalUrl = j.url || j.portal_url || (j.data && j.data.url);
+            if (portalUrl) {
+              window.location.href = portalUrl;
+              return;
+            }
+          }catch(e){
+            // continue
+          }
         }
+
+        alert(
+          "Billing Portal not available.\n" +
+          "Tried endpoints:\n" +
+          candidates.join("\n")
+        );
       }
 
-      // ===== Wire UI events (fix "buttons not clickable") =====
-      $('saveBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); refreshStatus(); });
-      $('refreshBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); refreshStatus(); });
+      // ===== Wire UI events =====
+      function on(id, fn){
+        const el = $(id);
+        if (!el) return;
+        el.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          fn();
+        }, { passive:false });
+      }
 
-      $('openPortalBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); openPortal(); });
+      on('saveBtn', refreshStatus);
+      on('refreshBtn', refreshStatus);
 
-      $('scrollPlansBtn').addEventListener('click', (ev) => {
-        ev.preventDefault(); ev.stopPropagation();
+      on('openPortalBtn', openPortal);
+
+      on('scrollPlansBtn', () => {
         const el = $('plansCard');
         if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
       });
 
-      $('openDashBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
-      $('backBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
+      on('openDashBtn', () => { window.location.href = '/index.html'; });
+      on('backBtn', () => { window.location.href = '/index.html'; });
 
       // ===== init =====
       (async function init(){
@@ -904,6 +982,7 @@
         await loadPlans();
         setTimeout(refreshStatus, 250);
       })();
+
     })();
   </script>
 </body>
