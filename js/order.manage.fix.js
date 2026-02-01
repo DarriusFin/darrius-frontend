@@ -1,29 +1,46 @@
-// js/order.manage.fix.js
+// js/order.manage.fix.js (UNIFIED - FULL REPLACE) v2026.02.01
 (() => {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
 
-  async function jget(url) {
-    const r = await fetch(url, { credentials: 'include' });
-    const t = await r.text();
-    try { return JSON.parse(t); } catch { return { ok:false, raw:t, status:r.status }; }
-  }
-  async function jpost(url, body) {
+  // -----------------------------
+  // fetch helpers (GET/POST JSON)
+  // -----------------------------
+  async function fetchJSON(url, opts = {}) {
     const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify(body || {})
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(opts.headers || {})
+      }
     });
-    const t = await r.text();
-    try { return JSON.parse(t); } catch { return { ok:false, raw:t, status:r.status }; }
+
+    const text = await r.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch { data = { ok: false, raw: text }; }
+
+    data.__http = { ok: r.ok, status: r.status };
+    return data;
   }
 
-  function setText(id, v) {
+  const jget = (url) => fetchJSON(url, { method: 'GET' });
+  const jpost = (url, body) => fetchJSON(url, {
+    method: 'POST',
+    body: JSON.stringify(body || {})
+  });
+
+  // -----------------------------
+  // dom helpers
+  // -----------------------------
+  function setText(id, v, dash = true) {
     const el = $(id);
-    if (el) el.textContent = (v == null ? '' : String(v));
+    if (!el) return;
+    const val = (v == null || v === '') ? (dash ? '-' : '') : String(v);
+    el.textContent = val;
   }
+
   function enableBtn(id, enabled) {
     const b = $(id);
     if (!b) return;
@@ -33,106 +50,162 @@
     b.style.cursor = enabled ? 'pointer' : 'not-allowed';
   }
 
-  function pick(obj, keys, fallback = '') {
+  function pick(obj, keys, fallback = null) {
     for (const k of keys) {
-      if (obj && obj[k] != null && obj[k] !== '') return obj[k];
+      if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
     }
     return fallback;
   }
 
+  function tsToLocal(ts) {
+    if (typeof ts === 'number') return new Date(ts * 1000).toLocaleString();
+    return ts || '-';
+  }
+
+  // -----------------------------
+  // API loaders (your real routes)
+  // -----------------------------
+  async function loadMe() {
+    // /api/me exists now
+    const me = await jget('/api/me');
+    return me || {};
+  }
+
   async function loadEntitlements() {
-    // ✅ 现有接口：/api/me/entitlements
+    // /api/me/entitlements
     const ent = await jget('/api/me/entitlements');
     return ent || {};
   }
 
   async function loadSubStatus() {
-    // ✅ 现有接口：/api/subscription/status
+    // /api/subscription/status
     const st = await jget('/api/subscription/status');
     return st || {};
   }
 
   async function refreshStripeSync() {
-    // ✅ 现有接口：/api/subscription/refresh（如果你实现了刷新同步）
-    // 这个接口是 GET（按你 routes 显示）
-    return await jget('/api/subscription/refresh');
+    // /api/subscription/refresh (GET) - optional
+    const r = await jget('/api/subscription/refresh');
+    return r || {};
   }
 
-  async function render() {
-    // 1) entitlement
-    const entResp = await loadEntitlements();
+  // -----------------------------
+  // unified render (supports both UI-id schemas)
+  // -----------------------------
+  async function renderAll() {
+    // 1) me
+    const me = await loadMe();
+    const email = pick(me, ['email', 'user_email'], pick(me.user || {}, ['email'], '-'));
+    // schema B
+    setText('om_userEmail', email);
+    // (如果你旧 UI 没这个字段，就跳过)
 
-    // 这里字段名你项目可能不同，我做了容错 pick
-    const ent = entResp.entitlement || entResp.data || entResp;
+    // 2) entitlement
+    const entResp = await loadEntitlements();
+    const ent = entResp.entitlement || entResp.data || entResp || {};
+
     const active = !!pick(ent, ['active', 'is_active', 'entitled'], false);
     const plan = pick(ent, ['plan', 'tier', 'product'], active ? 'ACTIVE' : 'DEMO');
     const customerId = pick(ent, ['stripe_customer_id', 'customer_id'], '');
     const subId = pick(ent, ['stripe_subscription_id', 'subscription_id'], '');
 
-    setText('subLocalActive', active ? 'ACTIVE' : 'DEMO');
-    setText('subLocalPlan', plan);
-    setText('subStripeCustomer', customerId || '-');
-    setText('subStripeSub', subId || '-');
+    // old schema ids (your existing)
+    setText('subLocalActive', active ? 'ACTIVE' : 'DEMO', false);
+    setText('subLocalPlan', plan, false);
+    setText('subStripeCustomer', customerId || '-', true);
+    setText('subStripeSub', subId || '-', true);
 
-    // 2) subscription status（可选：先 refresh 一次再读）
-    // 如果你希望每次都对齐 Stripe，就打开下面两行
-    // await refreshStripeSync();
+    // new schema ids (patch schema)
+    setText('om_plan', plan);
+    setText('om_customerId', customerId || '-');
+    setText('om_subscriptionId', subId || '-');
+
+    // 3) subscription status
     const subResp = await loadSubStatus();
-    const s = subResp.subscription || subResp.data || subResp;
+    const s = subResp.subscription || subResp.data || subResp || {};
 
     const status = pick(s, ['status', 'subscription_status'], 'UNKNOWN');
     const cpe = pick(s, ['current_period_end', 'period_end'], null);
     const trialEnd = pick(s, ['trial_end'], null);
     const cancelAtPeriodEnd = !!pick(s, ['cancel_at_period_end'], false);
 
+    // old schema ids
     setText('subStripeStatus', status);
     setText('subCancelAtPeriodEnd', cancelAtPeriodEnd ? 'YES' : 'NO');
+    setText('subCurrentPeriodEnd', tsToLocal(cpe));
+    setText('subTrialEnd', tsToLocal(trialEnd));
 
-    if (typeof cpe === 'number') setText('subCurrentPeriodEnd', new Date(cpe * 1000).toLocaleString());
-    else setText('subCurrentPeriodEnd', cpe || '-');
+    // new schema ids
+    setText('om_subStatus', status);
+    setText('om_periodEnd', tsToLocal(cpe));
+    setText('om_trialEnd', tsToLocal(trialEnd));
 
-    if (typeof trialEnd === 'number') setText('subTrialEnd', new Date(trialEnd * 1000).toLocaleString());
-    else setText('subTrialEnd', trialEnd || '-');
-
-    // 3) buttons
+    // 4) buttons
+    // Billing Portal：你旧逻辑是 “有 customerId 才开放”，这个很合理，保留
     enableBtn('btnBillingPortal', !!customerId);
-    enableBtn('btnSubscribe', true); // 订阅按钮交给你现有 checkout 流程
+
+    // Subscribe：永远不要灰（跳转由你原 checkout 流程负责）
+    enableBtn('btnSubscribe', true);
+
+    // Refresh（如果存在）
+    enableBtn('btnRefreshSub', true);
   }
 
-  function bind() {
+  // -----------------------------
+  // bindings
+  // -----------------------------
+  function bindAll() {
+    // Billing Portal
     const portalBtn = $('btnBillingPortal');
     if (portalBtn) {
       portalBtn.onclick = async () => {
         enableBtn('btnBillingPortal', false);
         try {
-          // ✅ 现有接口：POST /api/billing/portal
           const resp = await jpost('/api/billing/portal', { return_url: window.location.href });
-          const url = resp.url || (resp.data && resp.data.url);
-          if (url) window.location.href = url;
-          else alert('Billing portal error: ' + (resp.error || resp.raw || 'unknown'));
+          const url = resp.url || (resp.data && resp.data.url) || (resp.portal && resp.portal.url);
+
+          if (url) {
+            window.location.href = url;
+            return;
+          }
+
+          if (resp.__http && (resp.__http.status === 401 || resp.__http.status === 403)) {
+            alert('Please sign in again, then retry Billing Portal.');
+            return;
+          }
+
+          alert('Billing portal error: ' + (resp.error || resp.detail || resp.raw || 'unknown'));
         } finally {
-          enableBtn('btnBillingPortal', true);
+          // 注意：这里不要强行 enable=true；应该按 entitlement 再决定
+          await renderAll().catch(() => {});
         }
       };
     }
 
-    // 如果你有“刷新状态”按钮，也可以绑定到 /api/subscription/refresh
+    // Refresh status
     const refreshBtn = $('btnRefreshSub');
     if (refreshBtn) {
       refreshBtn.onclick = async () => {
         enableBtn('btnRefreshSub', false);
         try {
           await refreshStripeSync();
-          await render();
+          await renderAll();
         } finally {
           enableBtn('btnRefreshSub', true);
         }
       };
     }
+
+    // Subscribe：这里不改 onclick（你已有 checkout），只确保它别被灰
+    const subBtn = $('btnSubscribe');
+    if (subBtn) enableBtn('btnSubscribe', true);
   }
 
+  // -----------------------------
+  // boot
+  // -----------------------------
   window.addEventListener('DOMContentLoaded', () => {
-    bind();
-    render().catch(() => {});
+    bindAll();
+    renderAll().catch(() => {});
   });
 })();
