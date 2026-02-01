@@ -41,8 +41,8 @@
       --text:#EAF0F7;
       --muted:#A2B0C2;
 
-      --brand1:#2BE2A6; /* green/teal */
-      --brand2:#4CC2FF; /* blue */
+      --brand1:#2BE2A6;
+      --brand2:#4CC2FF;
       --warn:#FFB86C;
       --danger:#FF5A5A;
 
@@ -56,14 +56,9 @@
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
       --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
 
-      /* ✅ Logo 放大到 2.5x：64px -> 160px */
-      --logoSize:160px;
-      --logoRadius:44px;
-
-      /* ✅ Logo 光效（可调） */
-      --logoGlowOpacity:.72;
-      --logoGlowBlur:.3px;
-      --logoGlowSpeed:6.8s;
+      /* ✅ Logo unified sizing (≈2x feel). Change once for both pages if you want. */
+      --logoSize: 72px;
+      --logoRadius: 20px;
     }
 
     *{ box-sizing:border-box; }
@@ -86,7 +81,7 @@
 
     /* ===== Header ===== */
     #topbar{
-      height:96px; /* ✅ 适配 160px Logo，避免挤压 */
+      height:78px;
       padding:0 18px;
       display:flex;
       align-items:center;
@@ -99,56 +94,39 @@
     #brand{
       display:flex;
       align-items:center;
-      gap:16px;
-      min-width:460px;
+      gap:14px;
+      min-width:420px;
+      min-height: 56px;
     }
 
-    /* ✅ Logo：图片 + 恢复 ::after 旋转光效（不遮挡图案） */
-    #brand .logo{
+    /* ✅ Real logo image, NO rotating halo */
+    .logoBox{
       width: var(--logoSize);
       height: var(--logoSize);
       border-radius: var(--logoRadius);
+      overflow:hidden;
       border:1px solid rgba(255,255,255,.12);
       box-shadow: 0 14px 30px rgba(0,0,0,.30);
-      position:relative;
-      overflow:hidden;
       flex:0 0 auto;
-      background: rgba(0,0,0,.16);
-      isolation:isolate;
+      background: rgba(0,0,0,.12);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
     }
-    #brand .logo img{
-      position:absolute; inset:0;
-      width:100%; height:100%;
-      object-fit:cover;
-      border-radius:inherit;
+    .logoBox img{
+      width: 100%;
+      height: 100%;
       display:block;
-      z-index:1;
-      user-select:none;
-      -webkit-user-drag:none;
-    }
-    @keyframes logoSpin{ to{ transform: rotate(360deg);} }
-    #brand .logo::after{
-      content:"";
-      position:absolute; inset:-70%;
-      background: conic-gradient(from 180deg,
-        rgba(43,226,166,0),
-        rgba(43,226,166,.68),
-        rgba(76,194,255,.68),
-        rgba(255,90,90,.52),
-        rgba(43,226,166,0));
-      animation: logoSpin var(--logoGlowSpeed) linear infinite;
-      opacity: var(--logoGlowOpacity);
-      pointer-events:none;
-      z-index:2;
-      mix-blend-mode: screen;     /* ✅ 光效叠加，不盖图案 */
-      filter: blur(var(--logoGlowBlur));
+      object-fit: cover;
+      border-radius: var(--logoRadius);
     }
 
     #brandText{ line-height:1.08; }
     #brandLine1{
       font-weight:950;
       letter-spacing:.3px;
-      font-size:26px;
+      font-size:24px;
     }
     #brandLine1 .accent{
       background: var(--gradBrand);
@@ -226,7 +204,7 @@
 
     /* ===== Main Layout ===== */
     #main{
-      height: calc(100vh - 96px);
+      height: calc(100vh - 78px);
       padding:16px;
       display:grid;
       grid-template-columns: 330px 1fr 380px;
@@ -334,22 +312,7 @@
       flex:0 0 auto;
       overflow:hidden;
     }
-    @keyframes spin{ to{ transform: rotate(360deg);} }
 
-    .gauge::before{
-      content:"";
-      position:absolute; inset:-38%;
-      background: conic-gradient(from 180deg,
-        rgba(43,226,166,0),
-        rgba(43,226,166,.35),
-        rgba(76,194,255,.35),
-        rgba(255,90,90,.28),
-        rgba(43,226,166,0));
-      animation: spin 9s linear infinite;
-      filter: blur(1.2px);
-      opacity:.75;
-      pointer-events:none;
-    }
     .gauge::after{
       content:"";
       position:absolute; inset:14px;
@@ -612,7 +575,7 @@
 
     .hidden{ display:none !important; }
 
-    /* ✅ 你要求：右侧 Manage 按钮背景和 Start 一样 */
+    /* ✅ right Manage button background same as Start */
     #manageBtn{
       border: 0 !important;
       color:#081119 !important;
@@ -627,17 +590,16 @@
       padding: 2px 8px;
       border-radius: 10px;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 700;
       letter-spacing: .3px;
     }
-    .accessBadge.ACTIVE { background: rgba(46, 204, 113, .15); color: #2ecc71; }
+    .accessBadge.ACTIVE { background: rgba(46, 204, 113, .16); color: #2ecc71; }
     .accessBadge.TRIAL  { background: rgba(241, 196, 15, .18); color: #f1c40f; }
     .accessBadge.EXPIRED{ background: rgba(231, 76, 60, .18); color: #e74c3c; }
     .accessBadge.UNKNOWN{ background: rgba(149, 165, 166, .18); color: #95a5a6; }
 
     @media (max-width: 1180px){
       body{ overflow:auto; }
-      #topbar{ height:auto; padding:12px 14px; align-items:flex-start; }
       #main{
         height:auto;
         grid-template-columns: 1fr;
@@ -647,10 +609,6 @@
       #topRight{ min-width:0; }
       #tfQuick{ justify-content:flex-start; }
       #chartPanel .panelBody{ overflow:auto; }
-      :root{
-        --logoSize: 120px; /* 手机/窄屏自动缩一点，避免把头撑爆 */
-        --logoRadius: 34px;
-      }
     }
   </style>
 </head>
@@ -659,8 +617,8 @@
   <!-- Header -->
   <div id="topbar">
     <div id="brand">
-      <div class="logo" aria-label="darrius.ai logo">
-        <img id="logoImg" alt="darrius.ai logo">
+      <div class="logoBox" aria-label="darrius.ai logo">
+        <img id="logoImg" alt="darrius.ai logo"/>
       </div>
       <div id="brandText">
         <div id="brandLine1">
@@ -921,19 +879,16 @@
        GLOBALS (must be before external JS if they read API_BASE on load)
        ========================= -->
   <script>
-    // ✅ keep both names to be compatible with different JS modules
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
-
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
-    // ✅ Logo loader w/ fallback
+    // ✅ load logo (same logic as account.html)
     (function(){
       const img = document.getElementById('logoImg');
       if (!img) return;
       const candidates = [
         '/assets/logo.png',
-        '/assets/logo.webp',
         '/assets/icon.png',
         '/favicon.png',
         '/favicon.ico'
@@ -947,59 +902,15 @@
     })();
   </script>
 
-  <!-- ✅ ID duplicate / binding diagnosis (safe) -->
-  <script>
-    (function(){
-      function findDuplicateIds(){
-        const nodes = Array.from(document.querySelectorAll("[id]"));
-        const map = new Map();
-        for (const n of nodes){
-          const id = n.id;
-          if (!id) continue;
-          if (!map.has(id)) map.set(id, []);
-          map.get(id).push(n);
-        }
-        const dupes = [];
-        for (const [id, arr] of map.entries()){
-          if (arr.length > 1) dupes.push({ id, count: arr.length });
-        }
-        return dupes;
-      }
-
-      const dupes = findDuplicateIds();
-      window.__DARRIUS_ID_DUPES__ = dupes;
-
-      window.sameAsEntry = function(){
-        const e  = document.getElementById("riskEntry");
-        const s  = document.getElementById("riskStop");
-        const t  = document.getElementById("riskTargets");
-        const c  = document.getElementById("riskConf");
-        const wr = document.getElementById("riskWR");
-        if (!e || !s || !t || !c || !wr) return { ok:false, reason:"missing ids" };
-        const set = new Set([e, s, t, c, wr]);
-        return { ok:true, same: (set.size !== 5), size:set.size };
-      };
-
-      if (dupes.length){
-        console.warn("[ID] Duplicate IDs found:", dupes);
-      } else {
-        console.log("[ID] No duplicate IDs.");
-      }
-      console.log("[ID] sameAsEntry():", window.sameAsEntry());
-    })();
-  </script>
-
   <!-- =========================
        SCRIPTS (ORDER IS CRITICAL)
        不动订阅/支付：subscription.js + boot.js 保持原
        ========================= -->
-
   <script src="js/chart.core.js?v=20260122"></script>
   <script src="js/market.pulse.js?v=20260122"></script>
   <script src="js/darrius.mutant.js?v=20260122"></script>
   <script src="js/subscription.js?v=20260122"></script>
 
-  <!-- ✅ referral client only ONCE -->
   <script src="js/referral.client.js?v=20260129"></script>
   <script src="js/referral.checkout.js?v=20260129"></script>
 
@@ -1015,19 +926,26 @@
 
     ready(() => {
       const card = document.getElementById('affiliateCard');
+      const btn  = document.getElementById('affiliateBtn');
       if (!card) return;
 
-      card.style.cursor = 'pointer';
-      card.style.pointerEvents = 'auto';
-
-      if (card.__AFF_BOUND__) return;
-      card.__AFF_BOUND__ = true;
-
-      card.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      function go(){
         window.location.href = '/affiliate.html';
-      }, true);
+      }
+
+      card.style.cursor = 'pointer';
+      if (!card.__AFF_BOUND__){
+        card.__AFF_BOUND__ = true;
+        card.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          go();
+        }, true);
+      }
+      if (btn && !btn.__AFF_BTN_BOUND__){
+        btn.__AFF_BTN_BOUND__ = true;
+        btn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); go(); }, true);
+      }
     });
   })();
   </script>
