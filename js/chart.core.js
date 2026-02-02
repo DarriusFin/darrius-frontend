@@ -321,7 +321,7 @@
   // Signals are authoritative from backend only.
   async function fetchSignalsFromBackend(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
-    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}&include_ema=1`;
 
     let lastErr = null;
     for (const p of SIGS_PATH_CANDIDATES) {
