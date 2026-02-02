@@ -977,7 +977,17 @@
     if (!s || typeof s !== 'object') s = {};
     if (!s.meta || typeof s.meta !== 'object') s.meta = {};
     if (!Array.isArray(s.signals)) s.signals = [];
-    if (!Array.isArray(s.aux)) s.aux = [];
+    if (!Array.isArray(s.aux)) {
+  // try best-effort recovery from legacy globals
+  if (Array.isArray(window.__AUX_SERIES__)) {
+    s.aux = window.__AUX_SERIES__;
+  } else if (Array.isArray(window.__DARRIUS_AUX__)) {
+    s.aux = window.__DARRIUS_AUX__;
+  } else {
+    s.aux = [];
+  }
+}
+
     if (!Array.isArray(s.ema)) s.ema = []; // optional
     // helpful defaults to prevent NaN
     if (typeof s.meta.lastPrice !== 'number') s.meta.lastPrice = NaN;
