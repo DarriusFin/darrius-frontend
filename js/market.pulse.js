@@ -3,9 +3,10 @@
  *
  * Purpose:
  *  - UI-only layer. Reads window.__DARRIUS_CHART_STATE__ snapshot (multi schema)
- *  - Renders Market Pulse + Risk Copilot text fields WITHOUT producing NaN
- *  - Targets real DOM ids on darrius.ai:
- *      #pulseScore, #bullPct, #bearPct, #neuPct, #inSConf, #riskWR, .kv
+ *  - Renders Market Pulse + Risk Copilot fields WITHOUT producing NaN
+ *  - Targets real DOM ids on darrius.ai (index.html):
+ *      #pulseScore, #bullPct, #bearPct, #neuPct, #netInflow,
+ *      #riskEntry, #riskStop, #riskTargets, #riskConf, #riskWR
  *  - Never touches billing/subscription/payment logic
  *  - Never mutates chart.core.js internals
  *
@@ -16,8 +17,12 @@
 
 (() => {
   'use strict';
-console.log('[PULSE LOADED]', 'v2026.02.02-R2', Date.now());
-window.__PULSE_LOADED__ = 'v2026.02.02-R2';
+
+  // ---- probe: prove which file is running on prod ----
+  try {
+    window.__PULSE_LOADED__ = 'v2026.02.02-R2';
+    console.log('[PULSE LOADED]', window.__PULSE_LOADED__, Date.now());
+  } catch (_) {}
 
   // -----------------------------
   // Safe zone
@@ -42,6 +47,7 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
 
   const fmtPct0 = (v) => (v === null ? '—' : `${Math.round(v)}%`);
   const fmtPrice2 = (v) => (v === null ? '—' : `${Number(v).toFixed(2)}`);
+  const fmtInt = (v) => (v === null ? '—' : `${Math.round(Number(v))}`);
 
   // -----------------------------
   // Snapshot reader (supports v2 + older)
@@ -53,7 +59,7 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
 
   function readSignals(s) {
     // v2 contract
-    if (s.signals && typeof s.signals === 'object') {
+    if (s && s.signals && typeof s.signals === 'object') {
       const bullish = num(s.signals.bullish, 0);
       const bearish = num(s.signals.bearish, 0);
       const neutral = num(s.signals.neutral, 0);
@@ -61,7 +67,7 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
       return { bullish, bearish, neutral, net };
     }
     // older shapes
-    const stats = s.stats || s.signal_stats || s.signals || {};
+    const stats = (s && (s.stats || s.signal_stats || s.signals)) || {};
     const bullish = num(stats.bullish, 0);
     const bearish = num(stats.bearish, 0);
     const neutral = num(stats.neutral, 0);
@@ -71,7 +77,7 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
 
   function readRisk(s) {
     // v2
-    if (s.risk && typeof s.risk === 'object') {
+    if (s && s.risk && typeof s.risk === 'object') {
       return {
         entry: nnull(s.risk.entry),
         stop: nnull(s.risk.stop),
@@ -80,7 +86,7 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
       };
     }
     // older
-    const r = s.risk || s.copilot || {};
+    const r = (s && (s.risk || s.copilot)) || {};
     return {
       entry: nnull(r.entry),
       stop: nnull(r.stop),
@@ -90,7 +96,7 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
   }
 
   function readBacktest(s) {
-    const b = s.backtest || s.bt || {};
+    const b = (s && (s.backtest || s.bt)) || {};
     return {
       winRate: nnull(b.winRate),
       sampleSize: nnull(b.sampleSize)
@@ -98,7 +104,7 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
   }
 
   function readMeta(s) {
-    const m = s.meta || {};
+    const m = (s && s.meta) || {};
     return {
       ready: !!m.ready,
       source: str(m.source, 'unknown')
@@ -106,36 +112,29 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
   }
 
   // -----------------------------
-  // DOM: real ids first + flexible fallbacks
+  // DOM: real ids only (your index.html)
   // -----------------------------
   const SEL = {
-    // Real ids you confirmed
-    pulseScore: ['#pulseScore'],
-    bullPct: ['#bullPct', '[data-pulse="bullish"]', '#pulseBullish', '.pulse-bullish', '.mp-bullish'],
-    bearPct: ['#bearPct', '[data-pulse="bearish"]', '#pulseBearish', '.pulse-bearish', '.mp-bearish'],
-    neuPct:  ['#neuPct',  '[data-pulse="neutral"]', '#pulseNeutral', '.pulse-neutral', '.mp-neutral'],
-    confPct: ['#inSConf', '[data-risk="confidence"]', '#riskConfidence', '.risk-confidence'],
-    winRate: ['#riskWR',  '[data-risk="winRate"]', '#riskWinRate', '.risk-winrate', '.backtest-winrate'],
+    pulseScore: '#pulseScore',
+    bullPct: '#bullPct',
+    bearPct: '#bearPct',
+    neuPct: '#neuPct',
+    netInflow: '#netInflow',
 
-    // Optional fields (if you have them, we fill; if not, ignore)
-    entry:   ['#riskEntry', '[data-risk="entry"]', '.risk-entry'],
-    stop:    ['#riskStop', '[data-risk="stop"]', '.risk-stop'],
-    targets: ['#riskTargets', '[data-risk="targets"]', '.risk-targets'],
-    statusLine: ['#pulseStatus', '[data-pulse="status"]', '.pulse-status', '.mp-status'],
+    riskEntry: '#riskEntry',
+    riskStop: '#riskStop',
+    riskTargets: '#riskTargets',
+    riskConf: '#riskConf',
+    riskWR: '#riskWR',
 
-    // The container line that showed "BullishNaN%" with class kv
-    kv: ['.kv']
+    // gauge mask is optional
+    gaugeMask: '#pulseGaugeMask'
   };
 
-  function qAny(list) {
-    for (const sel of list) {
-      const el = document.querySelector(sel);
-      if (el) return el;
-    }
-    return null;
-  }
+  const $ = (sel) => document.querySelector(sel);
 
-  function setText(el, text) {
+  function setText(sel, text) {
+    const el = $(sel);
     if (!el) return;
     el.textContent = text;
   }
@@ -143,74 +142,82 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
   // -----------------------------
   // Rendering rules (NO NaN)
   // -----------------------------
-  function compute(sentSig) {
-    const total = sentSig.bullish + sentSig.bearish + sentSig.neutral;
+  function computeSentiment(sig) {
+    const total = sig.bullish + sig.bearish + sig.neutral;
 
-    // Hard gate: if no structure, everything is empty state.
     if (total <= 0) {
       return {
         total: 0,
         bullPct: null,
         bearPct: null,
         neuPct: null,
-        label: 'Warming up'
+        label: '—',
+        net: null
       };
     }
 
-    const bullPct = safePct(sentSig.bullish, total);
-    const bearPct = safePct(sentSig.bearish, total);
-    const neuPct  = safePct(sentSig.neutral, total);
+    const bullPct = safePct(sig.bullish, total);
+    const bearPct = safePct(sig.bearish, total);
+    const neuPct  = safePct(sig.neutral, total);
 
-    // Another hard gate: any null => empty (prevents NaN ever)
+    // Hard gate: any null => empty
     if ([bullPct, bearPct, neuPct].some(v => v === null)) {
       return {
         total: 0,
         bullPct: null,
         bearPct: null,
         neuPct: null,
-        label: 'Warming up'
+        label: '—',
+        net: null
       };
     }
 
-    // Label logic: prefer net, else compare bull/bear
+    // label logic: prefer net, else compare bull/bear
     let label = 'Neutral';
-    if (sentSig.net > 0) label = 'Bullish';
-    else if (sentSig.net < 0) label = 'Bearish';
-    else if (sentSig.bullish > sentSig.bearish) label = 'Bullish';
-    else if (sentSig.bearish > sentSig.bullish) label = 'Bearish';
+    if (sig.net > 0) label = 'Bullish';
+    else if (sig.net < 0) label = 'Bearish';
+    else if (sig.bullish > sig.bearish) label = 'Bullish';
+    else if (sig.bearish > sig.bullish) label = 'Bearish';
 
-    return { total, bullPct, bearPct, neuPct, label };
+    return { total, bullPct, bearPct, neuPct, label, net: sig.net };
   }
 
-  function renderEmpty(meta) {
-    // Market pulse
-    setText(qAny(SEL.pulseScore), '—');
-    setText(qAny(SEL.bullPct), '—');
-    setText(qAny(SEL.bearPct), '—');
-    setText(qAny(SEL.neuPct), '—');
+  function setGaugeByBullPct(bullPct) {
+    // Optional: if gauge mask exists, we can visually reflect bullPct
+    // We do NOT require it, and we do NOT break layout if missing.
+    const mask = $(SEL.gaugeMask);
+    if (!mask) return;
 
-    // Risk
-    setText(qAny(SEL.confPct), '—');
-    setText(qAny(SEL.winRate), '—');
-    setText(qAny(SEL.entry), '—');
-    setText(qAny(SEL.stop), '—');
-    setText(qAny(SEL.targets), '—');
+    // bullPct null => reset to 0 (no NaN)
+    const p = (bullPct === null) ? 0 : Math.max(0, Math.min(100, Number(bullPct)));
+    const deg = (p / 100) * 360;
 
-    // Status line (optional)
-    const status = !meta.ready ? 'Loading…' : 'Warming up';
-    setText(qAny(SEL.statusLine), status);
+    // This mask sits above the fancy conic-gradient gauge to show "filled" angle
+    // Keep it simple: fill from 0 -> deg, rest dark.
+    mask.style.background = `conic-gradient(rgba(43,226,166,.92) 0deg, rgba(43,226,166,.92) ${deg}deg, rgba(255,90,90,.22) ${deg}deg, rgba(255,90,90,.22) 360deg)`;
+  }
 
-    // FIX the ".kv" line that currently concatenates "BullishNaN%"
-    // We DO NOT alter layout; just replace the text if it still contains NaN.
-    safe(() => {
-      const kv = qAny(SEL.kv);
-      if (!kv) return;
-      const t = (kv.textContent || '');
-      if (t.includes('NaN')) kv.textContent = 'Bullish —';
-    });
+  function renderEmpty(mt) {
+    setText(SEL.pulseScore, '—');
+    setText(SEL.bullPct, '—');
+    setText(SEL.bearPct, '—');
+    setText(SEL.neuPct, '—');
+    setText(SEL.netInflow, '—');
 
-    // Final fallback scrub (text nodes only)
+    setText(SEL.riskEntry, '—');
+    setText(SEL.riskStop, '—');
+    setText(SEL.riskTargets, '—');
+    setText(SEL.riskConf, '—');
+    setText(SEL.riskWR, '—');
+
+    setGaugeByBullPct(null);
+
+    // best-effort scrub: remove literal "NaN" from any text node (rare legacy residue)
     scrubNaNText();
+
+    // keep optional status somewhere? (you don't have pulseStatus in index.html)
+    // we intentionally do nothing.
+    void mt;
   }
 
   function scrubNaNText() {
@@ -218,9 +225,10 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       let n;
       while ((n = walker.nextNode())) {
-        if (!n.nodeValue) continue;
-        if (n.nodeValue.includes('NaN%')) n.nodeValue = n.nodeValue.replaceAll('NaN%', '—');
-        if (n.nodeValue.trim() === 'NaN') n.nodeValue = '—';
+        const v = n.nodeValue;
+        if (!v) continue;
+        if (v.includes('NaN%')) n.nodeValue = v.replaceAll('NaN%', '—');
+        else if (v.trim() === 'NaN') n.nodeValue = '—';
       }
     });
   }
@@ -231,43 +239,43 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
     const bt = readBacktest(s);
     const mt = readMeta(s);
 
-    const sent = compute(sig);
+    const sent = computeSentiment(sig);
 
-    // If empty structure => render empty
     if (sent.total <= 0) {
       renderEmpty(mt);
       return;
     }
 
-    // Market Pulse: write percentages to the real ids
-    setText(qAny(SEL.bullPct), fmtPct0(sent.bullPct));
-    setText(qAny(SEL.bearPct), fmtPct0(sent.bearPct));
-    setText(qAny(SEL.neuPct),  fmtPct0(sent.neuPct));
+    // Market Pulse
+    setText(SEL.bullPct, fmtPct0(sent.bullPct));
+    setText(SEL.bearPct, fmtPct0(sent.bearPct));
+    setText(SEL.neuPct, fmtPct0(sent.neuPct));
 
-    // Center score: your DOM shows big "NaN" at #pulseScore.
-    // Product-wise best: show label (Bullish/Bearish/Neutral).
-    setText(qAny(SEL.pulseScore), sent.label);
+    // Center score: show label (not a number -> avoids NaN forever)
+    setText(SEL.pulseScore, sent.label);
 
-    // Status line (optional)
-    const status = (!mt.ready) ? 'Loading…' : (mt.source === 'delayed' ? 'Delayed data' : 'Ready');
-    setText(qAny(SEL.statusLine), status);
+    // Net inflow: you display it green in UI; we output net count (or —)
+    // If you later want it as %, you can change to fmtPct0(safePct(sig.net, totalAbs)) etc.
+    setText(SEL.netInflow, (sent.net === null) ? '—' : (sent.net > 0 ? `+${sent.net}` : `${sent.net}`));
 
-    // Risk Copilot fields (NO NaN)
-    setText(qAny(SEL.entry), fmtPrice2(rk.entry));
-    setText(qAny(SEL.stop), fmtPrice2(rk.stop));
+    setGaugeByBullPct(sent.bullPct);
+
+    // Risk Copilot
+    setText(SEL.riskEntry, fmtPrice2(rk.entry));
+    setText(SEL.riskStop, fmtPrice2(rk.stop));
 
     if (rk.targets && rk.targets.length) {
-      setText(qAny(SEL.targets), rk.targets.map(x => Number(x).toFixed(2)).join(' / '));
+      setText(SEL.riskTargets, rk.targets.map(x => Number(x).toFixed(2)).join(' / '));
     } else {
-      setText(qAny(SEL.targets), '—');
+      setText(SEL.riskTargets, '—');
     }
 
-    // Confidence & winRate are shown as % if present else —
-    setText(qAny(SEL.confPct), rk.confidence === null ? '—' : fmtPct0(rk.confidence));
-    setText(qAny(SEL.winRate), bt.winRate === null ? '—' : fmtPct0(bt.winRate));
+    setText(SEL.riskConf, rk.confidence === null ? '—' : fmtPct0(rk.confidence));
+    setText(SEL.riskWR, bt.winRate === null ? '—' : fmtPct0(bt.winRate));
 
-    // Clean any leftover NaN text (just in case)
+    // Final scrub
     scrubNaNText();
+    void mt;
   }
 
   // -----------------------------
@@ -291,8 +299,7 @@ window.__PULSE_LOADED__ = 'v2026.02.02-R2';
     // listen updates
     window.addEventListener('darrius:chartUpdated', onUpdate);
 
-    // if the event never fires (rare), still keep UI clean
-    // (does not touch layout; only removes NaN text)
+    // if the event never fires, keep UI clean anyway
     safe(() => { scrubNaNText(); });
   }
 
