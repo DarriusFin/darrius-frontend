@@ -1,9 +1,10 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.01.23-EBES-TRENDLOCK
+ * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.02.02-SERVER-SIGS-CLEAN
  *
  * Role:
- *  - Render main chart (candles + EMA + AUX + signals)
- *  - Fetch OHLCV via backend proxy (Massive/Polygon aggregates)
+ *  - Render main chart (candles + EMA [+ optional AUX if backend provides series])
+ *  - Fetch OHLCV via backend proxy (/api/data/stocks/aggregates)
+ *  - Fetch signals via backend (/api/market/sigs) ONLY (no local signal logic)
  *  - Output a read-only snapshot to window.__DARRIUS_CHART_STATE__
  *  - Provide read-only bridge for UI overlay (market.pulse.js):
  *      DarriusChart.timeToX / DarriusChart.priceToY / DarriusChart.getSnapshot()
@@ -13,6 +14,7 @@
  *  1) Main chart render is highest priority and will not be broken by UI
  *  2) Non-critical parts (snapshot/event/markers) are wrapped in no-throw safe zones
  *  3) No billing/subscription code touched
+ *  4) Secrets moved out: NO local signals compute, NO local AUX core algo
  * ========================================================================= */
 
 (() => {
@@ -25,6 +27,7 @@
     lastError: null,
     chartError: null,
     lastBarsUrl: null,
+    lastSigsUrl: null,
     lastSigCount: null,
   });
 
@@ -75,6 +78,7 @@
     "/market/ohlc",
   ];
 
+  // Signals endpoint candidates (backend authoritative)
   const SIGS_PATH_CANDIDATES = [
     "/api/market/sigs",
     "/api/market/signals",
@@ -85,12 +89,15 @@
   ];
 
   // -----------------------------
-  // Preset 2 params
+  // Params (UI can display; algo NOT implemented on frontend)
   // -----------------------------
-  const EMA_PERIOD = 14;
-  const AUX_PERIOD = 40;
-  const AUX_METHOD = "SMA";
-  const CONFIRM_WINDOW = 3;
+  // Keep as "display params" only.
+  const DEFAULT_PARAMS = Object.freeze({
+    EMA_PERIOD: 14,
+    AUX_PERIOD: 40,
+    AUX_METHOD: "SMA",
+    CONFIRM_WINDOW: 3,
+  });
 
   // -----------------------------
   // Colors
@@ -188,7 +195,6 @@
   function toUnixSec(t) {
     if (t == null) return null;
     if (typeof t === "number") {
-      // ms -> s
       if (t > 2e10) return Math.floor(t / 1000);
       return t;
     }
@@ -204,7 +210,7 @@
   function normalizeBars(payload) {
     const raw =
       Array.isArray(payload) ? payload :
-      Array.isArray(payload?.results) ? payload.results : // Polygon/Massive-like
+      Array.isArray(payload?.results) ? payload.results :
       Array.isArray(payload?.bars) ? payload.bars :
       Array.isArray(payload?.ohlcv) ? payload.ohlcv :
       Array.isArray(payload?.data) ? payload.data :
@@ -225,7 +231,6 @@
 
     bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
 
-    // de-dupe by time
     const out = [];
     let lastT = null;
     for (const b of bars) {
@@ -251,7 +256,6 @@
         const sideRaw = String(s.side ?? s.type ?? s.action ?? s.text ?? "").trim();
         const sideUp = sideRaw.toUpperCase();
 
-        // support eB/eS if backend ever sends
         let side2 = "";
         if (sideRaw === "eB" || sideUp === "EB") side2 = "eB";
         else if (sideRaw === "eS" || sideUp === "ES") side2 = "eS";
@@ -265,7 +269,6 @@
       .filter(Boolean)
       .sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
 
-    // de-dupe by (time, side)
     const used = new Set();
     const dedup = [];
     for (const s of out) {
@@ -281,11 +284,9 @@
   async function fetchBarsPack(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
 
-    // tf -> multiplier/timespan + range
     const cfg = tfToAggParams(tf);
     const { from, to } = rangeByDaysBack(cfg.daysBack);
 
-    // build URL
     const url = new URL(apiBase + MASSIVE_AGGS_PATH);
     url.searchParams.set("ticker", String(sym || "AAPL").trim().toUpperCase());
     url.searchParams.set("multiplier", String(cfg.multiplier));
@@ -296,12 +297,10 @@
     const urlStr = url.toString();
     DIAG.lastBarsUrl = urlStr;
 
-    // fetch + normalize
     const payload = await fetchJson(urlStr);
     const bars = normalizeBars(payload);
     if (bars.length) return { payload, bars, urlUsed: urlStr, aggCfg: cfg, range: { from, to } };
 
-    // fallback candidates (optional)
     let lastErr = new Error(`Aggs returned empty. ticker=${sym} tf=${tf} from=${from} to=${to}`);
     const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
 
@@ -319,22 +318,43 @@
     throw new Error(`All bars endpoints failed. Last error: ${lastErr?.message || lastErr}`);
   }
 
-  async function fetchOptionalSignals(sym, tf) {
+  // Signals are authoritative from backend only.
+  async function fetchSignalsFromBackend(sym, tf) {
     const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
     const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+
+    let lastErr = null;
     for (const p of SIGS_PATH_CANDIDATES) {
       const url = `${apiBase}${p}?${q}`;
       try {
+        DIAG.lastSigsUrl = url;
         const payload = await fetchJson(url);
         const sigs = normalizeSignals(payload);
-        if (sigs.length) return sigs;
-      } catch (_) {}
+        const params =
+          payload?.params && typeof payload.params === "object"
+            ? payload.params
+            : null;
+        const provider = payload?.provider ? String(payload.provider) : null;
+        // Even if sigs is empty, still return params/provider for UI/snapshot.
+        return { sigs, params, provider, raw: payload, urlUsed: url };
+      } catch (e) {
+        lastErr = e;
+      }
     }
-    return [];
+
+    // Do NOT compute locally (secrets moved out). Just return empty.
+    return {
+      sigs: [],
+      params: null,
+      provider: null,
+      raw: null,
+      urlUsed: null,
+      error: lastErr ? String(lastErr?.message || lastErr) : "signals_fetch_failed",
+    };
   }
 
   // -----------------------------
-  // Math
+  // Math (non-secret: EMA for chart aesthetics / coloring)
   // -----------------------------
   function ema(values, period) {
     const k = 2 / (period + 1);
@@ -347,76 +367,6 @@
       out[i] = e;
     }
     return out;
-  }
-
-  function wmaAt(values, endIdx, period) {
-    const start = endIdx - period + 1;
-    if (start < 0) return NaN;
-    let num = 0, den = 0;
-    for (let i = start; i <= endIdx; i++) {
-      const v = values[i];
-      if (!Number.isFinite(v)) return NaN;
-      const w = i - start + 1;
-      num += v * w;
-      den += w;
-    }
-    return den ? (num / den) : NaN;
-  }
-
-  function smaAt(values, endIdx, period) {
-    const start = endIdx - period + 1;
-    if (start < 0) return NaN;
-    let sum = 0;
-    for (let i = start; i <= endIdx; i++) {
-      const v = values[i];
-      if (!Number.isFinite(v)) return NaN;
-      sum += v;
-    }
-    return sum / period;
-  }
-
-  function maOnArray(values, period, method) {
-    const m = String(method || "SMA").toUpperCase();
-    const out = new Array(values.length).fill(NaN);
-
-    if (period <= 1) {
-      for (let i = 0; i < values.length; i++) out[i] = values[i];
-      return out;
-    }
-
-    if (m === "EMA") {
-      const k = 2 / (period + 1);
-      let e = null;
-      for (let i = 0; i < values.length; i++) {
-        const v = values[i];
-        if (!Number.isFinite(v)) { out[i] = NaN; continue; }
-        e = e == null ? v : v * k + e * (1 - k);
-        out[i] = e;
-      }
-      return out;
-    }
-
-    if (m === "WMA") {
-      for (let i = 0; i < values.length; i++) out[i] = wmaAt(values, i, period);
-      return out;
-    }
-
-    for (let i = 0; i < values.length; i++) out[i] = smaAt(values, i, period);
-    return out;
-  }
-
-  function computeAuxByYourAlgo(closes, period, method) {
-    const n = Math.max(2, Math.floor(period || 40));
-    const half = Math.max(1, Math.floor(n / 2));
-    const p = Math.max(1, Math.round(Math.sqrt(n)));
-
-    const vect = new Array(closes.length).fill(NaN);
-    for (let i = 0; i < closes.length; i++) {
-      const w1 = wmaAt(closes, i, half);
-      const w2 = wmaAt(closes, i, n);
-      vect[i] = (Number.isFinite(w1) && Number.isFinite(w2)) ? (2 * w1 - w2) : NaN;
-    }
-    return maOnArray(vect, p, method || "SMA");
   }
 
   function buildLinePoints(bars, values) {
@@ -458,220 +408,9 @@
     return out;
   }
 
-  function computeTrendFromAux(auxVals) {
-    const trend = new Array(auxVals.length).fill(0);
-    let last = 0;
-    for (let i = 1; i < auxVals.length; i++) {
-      const a0 = auxVals[i - 1];
-      const a1 = auxVals[i];
-      if (!Number.isFinite(a0) || !Number.isFinite(a1)) { trend[i] = last; continue; }
-      if (a1 > a0) last = 1;
-      else if (a1 < a0) last = -1;
-      trend[i] = last;
-    }
-    trend[0] = trend[1] || 0;
-    return trend;
-  }
-
-  // Cross + confirm (legacy fallback). Returns unique {time, side}
-  function computeSignalsCrossPlusConfirm(bars, emaPts, auxPts, confirmWindow) {
-    const n = bars.length;
-    if (n < 5) return [];
-
-    const emaV = emaPts.map(p => p.value);
-    const auxV = auxPts.map(p => p.value);
-    const trend = computeTrendFromAux(auxV);
-
-    const cw = Math.max(0, Math.floor(confirmWindow ?? 3));
-    const sigs = [];
-    const used = new Set();
-
-    function addSig(i, side) {
-      const t = bars[i].time;
-      const k = `${t}:${side}`;
-      if (used.has(k)) return;
-      used.add(k);
-      sigs.push({ time: t, side });
-    }
-
-    function findConfirmIndex(startIdx, wantTrend) {
-      // wantTrend: +1 confirm up, -1 confirm down
-      for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
-        const prev = trend[j - 1];
-        const curr = trend[j];
-        if (wantTrend > 0) {
-          if (prev <= 0 && curr > 0) return j;
-        } else {
-          if (prev >= 0 && curr < 0) return j;
-        }
-      }
-      return -1;
-    }
-
-    for (let i = 1; i < n; i++) {
-      const e0 = emaV[i - 1], e1 = emaV[i];
-      const a0 = auxV[i - 1], a1 = auxV[i];
-      if (![e0, e1, a0, a1].every(Number.isFinite)) continue;
-
-      const crossUp = (e0 <= a0 && e1 > a1);
-      const crossDn = (e0 >= a0 && e1 < a1);
-
-      if (crossUp) {
-        const k = findConfirmIndex(i, +1);
-        if (k >= 0) addSig(k, "B");
-      } else if (crossDn) {
-        const k = findConfirmIndex(i, -1);
-        if (k >= 0) addSig(k, "S");
-      }
-    }
-
-    sigs.sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
-    return sigs;
-  }
-
-  // Early + Confirm with Trend-Lock + Dead-zone
-  // Output sides: 'eB','eS','B','S' (unique by time+side)
-  function computeSignalsEarlyConfirmTrendLock(bars, emaPts, auxPts, confirmWindow) {
-    const n = bars.length;
-    if (n < 8) return [];
-
-    const emaV = emaPts.map(p => p.value);
-    const auxV = auxPts.map(p => p.value);
-    const auxTrend = computeTrendFromAux(auxV);
-
-    const cw = Math.max(0, Math.floor(confirmWindow ?? 3));
-    const sigs = [];
-    const used = new Set();
-
-    // ---- knobs (stable defaults) ----
-    const DEADZONE_K = 0.00018;     // 0.018% of price as dead-zone baseline
-    const DEADZONE_MIN = 1e-6;
-    const COOLDOWN_BARS = Math.max(2, cw);   // avoid spam
-
-    let lastSigIdx = -99999;
-
-    // Trend lock:
-    //  0 = unlocked, +1 = locked UP, -1 = locked DOWN
-    let lock = 0;
-
-    function addSig(i, side, reason) {
-      const t = bars[i].time;
-      const k = `${t}:${side}`;
-      if (used.has(k)) return;
-      used.add(k);
-      sigs.push({ time: t, side, i, reason: reason || null });
-      lastSigIdx = i;
-    }
-
-    function deadZoneOk(i) {
-      const e = emaV[i], a = auxV[i];
-      if (![e, a].every(Number.isFinite)) return false;
-      const base = Math.max(DEADZONE_MIN, Math.abs(e));
-      const eps = Math.max(DEADZONE_MIN, base * DEADZONE_K);
-      return Math.abs(e - a) >= eps;
-    }
-
-    function findConfirmIndex(startIdx, wantTrend) {
-      // wantTrend: +1 confirm up, -1 confirm down
-      for (let j = startIdx; j <= Math.min(n - 1, startIdx + cw); j++) {
-        const prev = auxTrend[j - 1];
-        const curr = auxTrend[j];
-        if (wantTrend > 0) {
-          if (prev <= 0 && curr > 0) return j;
-        } else {
-          if (prev >= 0 && curr < 0) return j;
-        }
-      }
-      return -1;
-    }
-
-    function maybeUnlock(i) {
-      // unlock only when aux trend has flipped and stayed for 2 bars
-      if (lock === 1) {
-        if (auxTrend[i] < 0 && auxTrend[i - 1] < 0) lock = 0;
-      } else if (lock === -1) {
-        if (auxTrend[i] > 0 && auxTrend[i - 1] > 0) lock = 0;
-      }
-    }
-
-    for (let i = 2; i < n; i++) {
-      maybeUnlock(i);
-
-      const e0 = emaV[i - 1], e1 = emaV[i];
-      const a0 = auxV[i - 1], a1 = auxV[i];
-      if (![e0, e1, a0, a1].every(Number.isFinite)) continue;
-
-      // cooldown
-      if (i - lastSigIdx < COOLDOWN_BARS) continue;
-
-      // dead-zone filter (ignore tiny wiggles)
-      if (!deadZoneOk(i) || !deadZoneOk(i - 1)) continue;
-
-      const crossUp = (e0 <= a0 && e1 > a1);
-      const crossDn = (e0 >= a0 && e1 < a1);
-
-      if (crossUp) {
-        if (lock === -1) continue;            // locked down => ignore
-        addSig(i, "eB", "crossUp");           // EARLY appears immediately (earlier than confirm)
-        const k = findConfirmIndex(i, +1);
-        if (k >= 0) {
-          addSig(k, "B", "confirmUp");
-          lock = 1;                           // lock up after confirm
-        }
-      } else if (crossDn) {
-        if (lock === 1) continue;             // locked up => ignore
-        addSig(i, "eS", "crossDn");
-        const k = findConfirmIndex(i, -1);
-        if (k >= 0) {
-          addSig(k, "S", "confirmDn");
-          lock = -1;                          // lock down after confirm
-        }
-      }
-    }
-
-    sigs.sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
-    return sigs;
-  }
-
-  // Merge confirmed (B/S) from backend with locally computed early (eB/eS).
-  // This guarantees eB/eS exists even when backend only gives confirmed.
-  function mergeConfirmedWithEarly(confirmedSigs, earlyAllSigs) {
-    const conf = Array.isArray(confirmedSigs) ? confirmedSigs : [];
-    const early = Array.isArray(earlyAllSigs) ? earlyAllSigs : [];
-
-    const out = [];
-    const used = new Set();
-
-    function pushSig(s) {
-      if (!s || s.time == null || !s.side) return;
-      const k = `${s.time}:${s.side}`;
-      if (used.has(k)) return;
-      used.add(k);
-      out.push({ time: s.time, side: s.side, i: s.i, reason: s.reason, strength: s.strength });
-    }
-
-    // 1) push early (eB/eS) first (earlier)
-    for (const s of early) {
-      if (s.side === "eB" || s.side === "eS") pushSig(s);
-    }
-
-    // 2) push confirmed (B/S) from backend/endpoints (authoritative)
-    for (const s of conf) {
-      if (s.side === "B" || s.side === "S") pushSig(s);
-    }
-
-    // 3) if confirmed list was empty, keep local confirmed too
-    if (!conf.length) {
-      for (const s of early) {
-        if (s.side === "B" || s.side === "S") pushSig(s);
-      }
-    }
-
-    out.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
-    return out;
-  }
-
+  // -----------------------------
   // series markers (small). Overlay uses big markers; we keep small empty when overlay enabled.
+  // -----------------------------
   function applyMarkers(sigs) {
     safeRun("applyMarkers", () => {
       if (!candleSeries) return;
@@ -681,9 +420,7 @@
         return;
       }
 
-      // only confirmed B/S for small markers
       const arr = (Array.isArray(sigs) ? sigs : []).filter(s => s && (s.side === "B" || s.side === "S"));
-
       candleSeries.setMarkers(
         arr.map((s) => ({
           time: s.time,
@@ -739,19 +476,15 @@
   // Data mode / source labels (for strong UI hint)
   // -----------------------------
   function resolveDataMeta(tf) {
-    // Your UI has: Demo(Local) / Market delayed (Massive)
-    // We read a few globals if you set them in index.html; otherwise we infer.
     const dataMode = String(window.__DATA_MODE__ || window.__DATA_SOURCE__ || "").toLowerCase();
     const source =
       String(window.__DATA_SOURCE_NAME__ || window.__DATA_PROVIDER__ || window.__DATA_SOURCE__ || "").trim() ||
       (dataMode.includes("demo") ? "Local" : "Massive");
 
-    // delayed minutes: default 15 when using market delayed minute data
     let delayedMinutes = Number(window.__DELAYED_MINUTES__);
     if (!Number.isFinite(delayedMinutes)) {
       delayedMinutes = 0;
       const t = String(tf || "").toLowerCase();
-      // if you are on Massive Starter delayed feeds, keep it 15
       if (!dataMode.includes("demo")) delayedMinutes = 15;
       if (t === "1d" || t === "1w" || t === "1m") delayedMinutes = !dataMode.includes("demo") ? 15 : 0;
     }
@@ -761,6 +494,41 @@
       source,
       delayedMinutes: Math.max(0, Math.floor(delayedMinutes)),
     };
+  }
+
+  // -----------------------------
+  // OPTIONAL: attempt to read backend-provided AUX series (future-proof)
+  // If backend sends: payload.indicators.aux = [{time,value},...]
+  // or payload.aux = [{time,value},...]
+  // -----------------------------
+  function normalizeLineSeries(payload, keyCandidates) {
+    const keys = Array.isArray(keyCandidates) ? keyCandidates : [];
+    let raw = null;
+    for (const k of keys) {
+      const v = k.split(".").reduce((acc, kk) => (acc && acc[kk] != null ? acc[kk] : null), payload);
+      if (Array.isArray(v)) { raw = v; break; }
+    }
+    if (!Array.isArray(raw)) return null;
+
+    const pts = raw
+      .map((p) => {
+        const time = toUnixSec(p.time ?? p.t ?? p.timestamp ?? p.ts ?? p.date);
+        const value = Number(p.value ?? p.v ?? p.val);
+        if (!time || !Number.isFinite(value)) return null;
+        return { time, value };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+
+    // de-dupe by time
+    const out = [];
+    let last = null;
+    for (const p of pts) {
+      if (p.time === last) continue;
+      last = p.time;
+      out.push(p);
+    }
+    return out;
   }
 
   // -----------------------------
@@ -792,35 +560,38 @@
 
     if (!bars.length) throw new Error("bars empty after normalization");
 
-    // -------- MAIN CHART: never let UI break this --------
+    // -------- MAIN CHART --------
     const closes = bars.map((b) => b.close);
-    const emaVals = ema(closes, EMA_PERIOD);
-    const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
+
+    // EMA is non-secret display element; keep it for visuals.
+    const emaPeriod = Number(window.__EMA_PERIOD__ ?? DEFAULT_PARAMS.EMA_PERIOD) || DEFAULT_PARAMS.EMA_PERIOD;
+    const emaVals = ema(closes, emaPeriod);
 
     const coloredBars = colorCandlesByEMATrend(bars, emaVals);
     candleSeries.setData(coloredBars);
 
     const emaPts = buildLinePoints(bars, emaVals);
-    const auxPts = buildLinePoints(bars, auxVals);
     emaSeries.setData(emaPts);
+
+    // AUX line: DO NOT compute locally (secret removed).
+    // If backend provides aux series in bars payload or signals payload later, we render it.
+    // For now, default to empty series (no crash).
+    let auxPts = null;
+    safeRun("auxFromBarsPayload", () => {
+      auxPts = normalizeLineSeries(payload, ["indicators.aux", "aux", "data.aux", "data.indicators.aux"]);
+    });
+    if (!auxPts) {
+      // empty aux points aligned to bars (all null) to keep UI stable
+      auxPts = bars.map((b) => ({ time: b.time, value: null }));
+    }
     auxSeries.setData(auxPts);
 
-    // Signals:
-    // Confirmed priority:
-    //  1) payload carries confirmed signals
-    //  2) optional signals endpoints
-    //  3) compute local (early+confirm trendlock)
-    //
-    // Additionally:
-    //  - We ALWAYS compute local early signals (eB/eS) and merge, so eB/eS is always present and earlier.
-    let confirmed = normalizeSignals(payload).filter(s => s.side === "B" || s.side === "S");
-    if (!confirmed.length) confirmed = (await fetchOptionalSignals(sym, tf)).filter(s => s.side === "B" || s.side === "S");
-
-    // local early+confirm (trendlock) – ensures eB/eS appear earlier and are stable
-    const localAll = computeSignalsEarlyConfirmTrendLock(bars, emaPts, auxPts, CONFIRM_WINDOW);
-
-    // If confirmed still empty (no backend), keep local confirmed too
-    const sigs = mergeConfirmedWithEarly(confirmed, localAll);
+    // -------- SIGNALS (Backend authoritative) --------
+    const sigPack = await fetchSignalsFromBackend(sym, tf);
+    const sigs = Array.isArray(sigPack?.sigs) ? sigPack.sigs : [];
+    const sigParams =
+      (sigPack?.params && typeof sigPack.params === "object") ? sigPack.params : null;
+    const sigProvider = sigPack?.provider || null;
 
     DIAG.lastSigCount = sigs.length;
 
@@ -831,38 +602,31 @@
       const last = bars[bars.length - 1];
       if ($("symText")) $("symText").textContent = sym;
       if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
+
+      const sigNote = sigPack?.urlUsed ? `sigs=API` : `sigs=none`;
+      const errNote = sigPack?.error ? ` · sigErr=${sigPack.error}` : "";
       if ($("hintText")) $("hintText").textContent =
-        `Loaded · ${metaDS.dataMode === "demo" ? "Demo" : "Market"} · TF=${tf} · bars=${bars.length} · sigs=${sigs.length}`;
+        `Loaded · ${metaDS.dataMode === "demo" ? "Demo" : "Market"} · TF=${tf} · bars=${bars.length} · sigs=${sigs.length} · ${sigNote}${errNote}`;
     });
 
     // ---- snapshot for market.pulse.js ----
-    // Keep 2 compatible forms:
-    //   A) window.__DARRIUS_CHART_STATE__ (flat)
-    //   B) DarriusChart.getSnapshot() schema (meta/candles/ema/aux/signals)
     safeRun("setSnapshotForUI", () => {
       try {
         window.DarriusChart = window.DarriusChart || {};
 
-        // bar map for signal anchor (LOW/HIGH) + fallback CLOSE
         const barByTime = new Map();
         for (const b of bars) barByTime.set(b.time, b);
 
-        // Build rich signals array with anchor price for overlay
+        // Rich signals with anchor price (fixes B below / S above)
         const richSignals = (Array.isArray(sigs) ? sigs : [])
           .map((s, idx) => {
             const t = s.time ?? null;
-            const sideRaw = String(s.side || "").trim();
-            const side =
-              (sideRaw === "eB" || sideRaw === "eS" || sideRaw === "B" || sideRaw === "S")
-                ? sideRaw
-                : ((String(sideRaw).toUpperCase() === "S") ? "S" : "B");
+            const side = String(s.side || "").trim();
+            if (!t || !side) return null;
 
             const b = barByTime.get(t);
             if (!b) return null;
 
-            // Anchor rule (THIS fixes B above / S below):
-            //  - B/eB => candle LOW  (below wick)
-            //  - S/eS => candle HIGH (above wick)
             const anchor =
               (side === "B" || side === "eB") ? Number(b.low) :
               (side === "S" || side === "eS") ? Number(b.high) :
@@ -881,25 +645,8 @@
           })
           .filter((x) => x && x.time != null && x.price != null);
 
-        // trend quick summary
-        const n = Math.min(10, emaVals.length - 1);
-        let emaSlope = null;
-        let emaRegime = null;
-        let emaColor = null;
-        if (n >= 2) {
-          const eNow = emaVals[emaVals.length - 1];
-          const ePrev = emaVals[emaVals.length - 1 - n];
-          if (Number.isFinite(eNow) && Number.isFinite(ePrev)) {
-            emaSlope = (eNow - ePrev) / n;
-            if (emaSlope > 0) emaRegime = "UP";
-            else if (emaSlope < 0) emaRegime = "DOWN";
-            else emaRegime = "FLAT";
-          }
-        }
-        if (emaRegime === "UP") emaColor = "GREEN";
-        else if (emaRegime === "DOWN") emaColor = "RED";
-        else emaColor = "NEUTRAL";
-
+        // Display params: prefer backend params; fallback to defaults
+        const mergedParams = Object.assign({}, DEFAULT_PARAMS, sigParams || {});
         const snapMeta = {
           symbol: sym || null,
           timeframe: tf || null,
@@ -907,25 +654,24 @@
           source: metaDS.source || "Massive",
           dataMode: metaDS.dataMode || "market",
           delayedMinutes: metaDS.delayedMinutes ?? 0,
-          emaPeriod: EMA_PERIOD,
-          auxPeriod: AUX_PERIOD,
-          confirmWindow: CONFIRM_WINDOW,
+          provider: sigProvider || null,
+          params: mergedParams,
           urlUsed: urlUsed || null,
+          sigsUrlUsed: sigPack?.urlUsed || null,
         };
 
         const snapObj = {
-          version: "snapshot_v1",
+          version: "snapshot_v2_server_sigs",
           ts: Date.now(),
           meta: snapMeta,
           candles: Array.isArray(bars) ? bars : [],
           ema: Array.isArray(emaPts) ? emaPts : [],
           aux: Array.isArray(auxPts) ? auxPts : [],
           signals: richSignals,
-          trend: { emaSlope, emaRegime, emaColor, flipCount: null },
+          trend: { emaSlope: null, emaRegime: null, emaColor: null, flipCount: null },
           risk: { entry: null, stop: null, targets: null, confidence: null, winrate: null },
         };
 
-        // attach read-only getter for UI
         window.DarriusChart.getSnapshot = () => {
           try {
             return {
@@ -944,40 +690,43 @@
           }
         };
 
-        // also keep compatibility with your older hook names
         if (typeof window.getChartSnapshot !== "function") {
           window.getChartSnapshot = window.DarriusChart.getSnapshot;
         }
 
-        // Provide __hostId for overlay host resolution
         window.DarriusChart.__hostId = window.DarriusChart.__hostId || "chart";
       } catch (_) {}
     });
 
-    // ---- publish flat snapshot (what you are checking in console) ----
+    // ---- flat snapshot (console friendly) ----
     const N = Math.min(600, bars.length);
     const start = bars.length - N;
 
     const flatSnapshot = {
-      version: "2026.01.23-EBES-TRENDLOCK",
+      version: "2026.02.02-SERVER-SIGS-CLEAN",
       ts: Date.now(),
       apiBase: DEFAULT_API_BASE,
       urlUsed: urlUsed || null,
+      sigsUrlUsed: sigPack?.urlUsed || null,
       symbol: sym,
       tf,
       dataMode: metaDS.dataMode,
       source: metaDS.source,
       delayedMinutes: metaDS.delayedMinutes,
-      params: { EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW },
+      provider: sigProvider || null,
+      params: Object.assign({}, DEFAULT_PARAMS, sigParams || {}),
       barsCount: bars.length,
       bars: bars.slice(start),
       ema: emaVals.slice(start),
-      aux: auxVals.slice(start),
-      // provide BOTH names for UI:
-      // (NOTE: here "signals/sigs" are still time+side; overlay uses DarriusChart.getSnapshot().signals with anchor price)
+      // auxValues intentionally not computed locally (secret removed)
+      aux: null,
       sigs: (Array.isArray(sigs) ? sigs.slice(Math.max(0, sigs.length - 300)) : []),
       signals: (Array.isArray(sigs) ? sigs.slice(Math.max(0, sigs.length - 300)) : []),
       lastClose: bars[bars.length - 1].close,
+      diag: {
+        lastBarsUrl: DIAG.lastBarsUrl || null,
+        lastSigsUrl: DIAG.lastSigsUrl || null,
+      },
     };
 
     publishSnapshot(flatSnapshot);
@@ -1088,7 +837,6 @@
     }
   }
 
-  // Optional: allow UI to read snapshot via ChartCore too (extra fallback)
   function getSnapshot() {
     try {
       if (window.DarriusChart && typeof window.DarriusChart.getSnapshot === "function") {
