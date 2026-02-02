@@ -16,6 +16,8 @@
 
 (() => {
   'use strict';
+console.log('[PULSE LOADED]', 'v2026.02.02-R2', Date.now());
+window.__PULSE_LOADED__ = 'v2026.02.02-R2';
 
   // -----------------------------
   // Safe zone
