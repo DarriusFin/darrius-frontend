@@ -962,3 +962,45 @@
 
   window.ChartCore = { init, load, applyToggles, getSnapshot };
 })();
+
+/* =========================================================================
+ * SNAPSHOT BRIDGE (STABILITY PATCH) v2026.02.02
+ * Goal:
+ *  - Ensure UI layers always have a stable snapshot API
+ *  - Avoid NaN/undefined by normalizing keys
+ *  - Do NOT touch billing/subscription/UI logic
+ * ========================================================================= */
+(() => {
+  'use strict';
+
+  function normalizeSnap(s) {
+    if (!s || typeof s !== 'object') s = {};
+    if (!s.meta || typeof s.meta !== 'object') s.meta = {};
+    if (!Array.isArray(s.signals)) s.signals = [];
+    if (!Array.isArray(s.aux)) s.aux = [];
+    if (!Array.isArray(s.ema)) s.ema = []; // optional
+    // helpful defaults to prevent NaN
+    if (typeof s.meta.lastPrice !== 'number') s.meta.lastPrice = NaN;
+    if (typeof s.meta.symbol !== 'string') s.meta.symbol = '';
+    return s;
+  }
+
+  // 1) Canonical state
+  const state = window.__DARRIUS_CHART_STATE__;
+  window.__DARRIUS_CHART_STATE__ = normalizeSnap(state);
+
+  // 2) Backward compatible accessor for UI code
+  if (typeof window.getChartSnapshot !== 'function') {
+    window.getChartSnapshot = function () {
+      return normalizeSnap(window.__DARRIUS_CHART_STATE__);
+    };
+  }
+
+  // 3) Minimal diag for debugging (optional, safe)
+  if (!window.__DARRIUS_DIAG__ || typeof window.__DARRIUS_DIAG__ !== 'object') {
+    window.__DARRIUS_DIAG__ = {};
+  }
+  window.__DARRIUS_DIAG__.snapshotReady = true;
+  window.__DARRIUS_DIAG__.ts = Date.now();
+})();
+
