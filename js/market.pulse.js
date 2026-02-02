@@ -1,9 +1,11 @@
 /* =========================================================================
- * DarriusAI - market.pulse.js (FINAL FROZEN DISPLAY-ONLY) v2026.02.02-PULSE-NAN-LOCK
+ * DarriusAI - market.pulse.js (FINAL FROZEN DISPLAY-ONLY) v2026.02.02-PULSE-NAN-LOCK-R2
  *
  * Purpose:
  *  - UI-only layer. Reads window.__DARRIUS_CHART_STATE__ snapshot (multi schema)
  *  - Renders Market Pulse + Risk Copilot text fields WITHOUT producing NaN
+ *  - Targets real DOM ids on darrius.ai:
+ *      #pulseScore, #bullPct, #bearPct, #neuPct, #inSConf, #riskWR, .kv
  *  - Never touches billing/subscription/payment logic
  *  - Never mutates chart.core.js internals
  *
@@ -28,61 +30,41 @@
   const nnull = (v) => (isNum(v) ? v : null);
   const str = (v, fb = '') => (typeof v === 'string' && v.length ? v : fb);
 
-  const pct = (part, total) => {
-    const p = num(part, 0);
-    const t = num(total, 0);
-    if (t <= 0) return null;            // IMPORTANT: no NaN
+  // IMPORTANT: hard-stop on invalid denominator
+  const safePct = (part, total) => {
+    const p = Number(part);
+    const t = Number(total);
+    if (!Number.isFinite(p) || !Number.isFinite(t) || t <= 0) return null;
     return (p / t) * 100;
   };
 
-  const fmtPct = (v) => (v === null ? '—' : `${v.toFixed(0)}%`);
-  const fmtPrice = (v) => (v === null ? '—' : `${v.toFixed(2)}`);
-  const fmtMaybePct = (v) => (v === null ? '—' : `${v.toFixed(0)}%`);
+  const fmtPct0 = (v) => (v === null ? '—' : `${Math.round(v)}%`);
+  const fmtPrice2 = (v) => (v === null ? '—' : `${Number(v).toFixed(2)}`);
 
   // -----------------------------
   // Snapshot reader (supports v2 + older)
   // -----------------------------
   function getSnap() {
     const s = window.__DARRIUS_CHART_STATE__;
-    if (!s || typeof s !== 'object') return null;
-    return s;
+    return (s && typeof s === 'object') ? s : null;
   }
 
   function readSignals(s) {
     // v2 contract
     if (s.signals && typeof s.signals === 'object') {
-      return {
-        bullish: num(s.signals.bullish, 0),
-        bearish: num(s.signals.bearish, 0),
-        neutral: num(s.signals.neutral, 0),
-        net: num(s.signals.net, 0)
-      };
+      const bullish = num(s.signals.bullish, 0);
+      const bearish = num(s.signals.bearish, 0);
+      const neutral = num(s.signals.neutral, 0);
+      const net = num(s.signals.net, bullish - bearish);
+      return { bullish, bearish, neutral, net };
     }
-    // older possible shapes
+    // older shapes
     const stats = s.stats || s.signal_stats || s.signals || {};
-    return {
-      bullish: num(stats.bullish, 0),
-      bearish: num(stats.bearish, 0),
-      neutral: num(stats.neutral, 0),
-      net: num((stats.bullish || 0) - (stats.bearish || 0), 0)
-    };
-  }
-
-  function readPrice(s) {
-    // v2
-    if (s.price && typeof s.price === 'object') {
-      return {
-        last: nnull(s.price.last),
-        bias: str(s.price.bias, 'stable'),
-        trend: str(s.price.trend, 'flat')
-      };
-    }
-    // older
-    return {
-      last: nnull(s.last || s.lastPrice),
-      bias: str(s.bias, 'stable'),
-      trend: str(s.trend, 'flat')
-    };
+    const bullish = num(stats.bullish, 0);
+    const bearish = num(stats.bearish, 0);
+    const neutral = num(stats.neutral, 0);
+    const net = num(stats.net, bullish - bearish);
+    return { bullish, bearish, neutral, net };
   }
 
   function readRisk(s) {
@@ -122,29 +104,25 @@
   }
 
   // -----------------------------
-  // DOM: be flexible, do NOT change layout.
-  // We try multiple selectors so we don't need you to rename HTML.
+  // DOM: real ids first + flexible fallbacks
   // -----------------------------
   const SEL = {
-    // Market Pulse numbers
-    bullish: ['[data-pulse="bullish"]', '#pulseBullish', '.pulse-bullish', '.mp-bullish'],
-    bearish: ['[data-pulse="bearish"]', '#pulseBearish', '.pulse-bearish', '.mp-bearish'],
-    neutral: ['[data-pulse="neutral"]', '#pulseNeutral', '.pulse-neutral', '.mp-neutral'],
-    net:     ['[data-pulse="net"]', '#pulseNet', '.pulse-net', '.mp-net'],
+    // Real ids you confirmed
+    pulseScore: ['#pulseScore'],
+    bullPct: ['#bullPct', '[data-pulse="bullish"]', '#pulseBullish', '.pulse-bullish', '.mp-bullish'],
+    bearPct: ['#bearPct', '[data-pulse="bearish"]', '#pulseBearish', '.pulse-bearish', '.mp-bearish'],
+    neuPct:  ['#neuPct',  '[data-pulse="neutral"]', '#pulseNeutral', '.pulse-neutral', '.mp-neutral'],
+    confPct: ['#inSConf', '[data-risk="confidence"]', '#riskConfidence', '.risk-confidence'],
+    winRate: ['#riskWR',  '[data-risk="winRate"]', '#riskWinRate', '.risk-winrate', '.backtest-winrate'],
 
-    // Sentiment center label
-    sentimentText: ['[data-pulse="sentimentText"]', '#pulseSentiment', '.pulse-sentiment', '.mp-sentiment'],
-    sentimentValue: ['[data-pulse="sentimentValue"]', '#pulseSentimentValue', '.pulse-sentiment-value', '.mp-sentiment-value'],
+    // Optional fields (if you have them, we fill; if not, ignore)
+    entry:   ['#riskEntry', '[data-risk="entry"]', '.risk-entry'],
+    stop:    ['#riskStop', '[data-risk="stop"]', '.risk-stop'],
+    targets: ['#riskTargets', '[data-risk="targets"]', '.risk-targets'],
+    statusLine: ['#pulseStatus', '[data-pulse="status"]', '.pulse-status', '.mp-status'],
 
-    // Risk Copilot
-    entry: ['[data-risk="entry"]', '#riskEntry', '.risk-entry'],
-    stop: ['[data-risk="stop"]', '#riskStop', '.risk-stop'],
-    targets: ['[data-risk="targets"]', '#riskTargets', '.risk-targets'],
-    confidence: ['[data-risk="confidence"]', '#riskConfidence', '.risk-confidence'],
-    winRate: ['[data-risk="winRate"]', '#riskWinRate', '.risk-winrate', '.backtest-winrate'],
-
-    // Optional: a small status line
-    statusLine: ['[data-pulse="status"]', '#pulseStatus', '.pulse-status', '.mp-status']
+    // The container line that showed "BullishNaN%" with class kv
+    kv: ['.kv']
   };
 
   function qAny(list) {
@@ -157,84 +135,137 @@
 
   function setText(el, text) {
     if (!el) return;
-    // preserve layout: only set textContent
     el.textContent = text;
   }
 
   // -----------------------------
   // Rendering rules (NO NaN)
   // -----------------------------
-  function computeSentiment(sig) {
-    const total = sig.bullish + sig.bearish + sig.neutral;
+  function compute(sentSig) {
+    const total = sentSig.bullish + sentSig.bearish + sentSig.neutral;
+
+    // Hard gate: if no structure, everything is empty state.
     if (total <= 0) {
-      return { label: 'Warming up', note: 'Awaiting sufficient market structure', bp: null, sp: null, np: null };
+      return {
+        total: 0,
+        bullPct: null,
+        bearPct: null,
+        neuPct: null,
+        label: 'Warming up'
+      };
     }
-    const bp = pct(sig.bullish, total);
-    const sp = pct(sig.bearish, total);
-    const np = pct(sig.neutral, total);
 
-    // label by net
+    const bullPct = safePct(sentSig.bullish, total);
+    const bearPct = safePct(sentSig.bearish, total);
+    const neuPct  = safePct(sentSig.neutral, total);
+
+    // Another hard gate: any null => empty (prevents NaN ever)
+    if ([bullPct, bearPct, neuPct].some(v => v === null)) {
+      return {
+        total: 0,
+        bullPct: null,
+        bearPct: null,
+        neuPct: null,
+        label: 'Warming up'
+      };
+    }
+
+    // Label logic: prefer net, else compare bull/bear
     let label = 'Neutral';
-    if (sig.net > 0) label = 'Bullish';
-    else if (sig.net < 0) label = 'Bearish';
+    if (sentSig.net > 0) label = 'Bullish';
+    else if (sentSig.net < 0) label = 'Bearish';
+    else if (sentSig.bullish > sentSig.bearish) label = 'Bullish';
+    else if (sentSig.bearish > sentSig.bullish) label = 'Bearish';
 
-    return { label, note: '', bp, sp, np };
+    return { total, bullPct, bearPct, neuPct, label };
+  }
+
+  function renderEmpty(meta) {
+    // Market pulse
+    setText(qAny(SEL.pulseScore), '—');
+    setText(qAny(SEL.bullPct), '—');
+    setText(qAny(SEL.bearPct), '—');
+    setText(qAny(SEL.neuPct), '—');
+
+    // Risk
+    setText(qAny(SEL.confPct), '—');
+    setText(qAny(SEL.winRate), '—');
+    setText(qAny(SEL.entry), '—');
+    setText(qAny(SEL.stop), '—');
+    setText(qAny(SEL.targets), '—');
+
+    // Status line (optional)
+    const status = !meta.ready ? 'Loading…' : 'Warming up';
+    setText(qAny(SEL.statusLine), status);
+
+    // FIX the ".kv" line that currently concatenates "BullishNaN%"
+    // We DO NOT alter layout; just replace the text if it still contains NaN.
+    safe(() => {
+      const kv = qAny(SEL.kv);
+      if (!kv) return;
+      const t = (kv.textContent || '');
+      if (t.includes('NaN')) kv.textContent = 'Bullish —';
+    });
+
+    // Final fallback scrub (text nodes only)
+    scrubNaNText();
+  }
+
+  function scrubNaNText() {
+    safe(() => {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      let n;
+      while ((n = walker.nextNode())) {
+        if (!n.nodeValue) continue;
+        if (n.nodeValue.includes('NaN%')) n.nodeValue = n.nodeValue.replaceAll('NaN%', '—');
+        if (n.nodeValue.trim() === 'NaN') n.nodeValue = '—';
+      }
+    });
   }
 
   function renderFromSnapshot(s) {
     const sig = readSignals(s);
-    const px = readPrice(s);
     const rk = readRisk(s);
     const bt = readBacktest(s);
     const mt = readMeta(s);
 
-    const total = sig.bullish + sig.bearish + sig.neutral;
-    const sent = computeSentiment(sig);
+    const sent = compute(sig);
 
-    // ---- Market Pulse ----
-    // If your UI expects percentages, we display %; if it expects raw, still okay—your selectors decide.
-    // Here we choose percentage strings for bullish/bearish/neutral because your screenshot shows "NaN%".
-    const bullEl = qAny(SEL.bullish);
-    const bearEl = qAny(SEL.bearish);
-    const neutEl = qAny(SEL.neutral);
-    const netEl = qAny(SEL.net);
+    // If empty structure => render empty
+    if (sent.total <= 0) {
+      renderEmpty(mt);
+      return;
+    }
 
-    setText(bullEl, fmtPct(sent.bp));
-    setText(bearEl, fmtPct(sent.sp));
-    setText(neutEl, fmtPct(sent.np));
+    // Market Pulse: write percentages to the real ids
+    setText(qAny(SEL.bullPct), fmtPct0(sent.bullPct));
+    setText(qAny(SEL.bearPct), fmtPct0(sent.bearPct));
+    setText(qAny(SEL.neuPct),  fmtPct0(sent.neuPct));
 
-    // net: show number (or — if no structure)
-    setText(netEl, (total <= 0) ? '—' : (sig.net > 0 ? `+${sig.net}` : `${sig.net}`));
+    // Center score: your DOM shows big "NaN" at #pulseScore.
+    // Product-wise best: show label (Bullish/Bearish/Neutral).
+    setText(qAny(SEL.pulseScore), sent.label);
 
-    // Sentiment center
-    setText(qAny(SEL.sentimentText), 'Sentiment');
-    setText(qAny(SEL.sentimentValue), total <= 0 ? '—' : sent.label);
-
-    // Optional status line
-    const status = (!mt.ready)
-      ? 'Loading…'
-      : (total <= 0 ? sent.note : (mt.source === 'delayed' ? 'Delayed data' : 'Live/Ready'));
+    // Status line (optional)
+    const status = (!mt.ready) ? 'Loading…' : (mt.source === 'delayed' ? 'Delayed data' : 'Ready');
     setText(qAny(SEL.statusLine), status);
 
-    // ---- Risk Copilot ----
-    // entry/stop/targets may be null; we show "—" not NaN
-    setText(qAny(SEL.entry), fmtPrice(rk.entry));
-    setText(qAny(SEL.stop), fmtPrice(rk.stop));
+    // Risk Copilot fields (NO NaN)
+    setText(qAny(SEL.entry), fmtPrice2(rk.entry));
+    setText(qAny(SEL.stop), fmtPrice2(rk.stop));
 
     if (rk.targets && rk.targets.length) {
-      const t = rk.targets.map(x => x.toFixed(2)).join(' / ');
-      setText(qAny(SEL.targets), t);
+      setText(qAny(SEL.targets), rk.targets.map(x => Number(x).toFixed(2)).join(' / '));
     } else {
       setText(qAny(SEL.targets), '—');
     }
 
-    // confidence: if null, show —
-    setText(qAny(SEL.confidence), rk.confidence === null ? '—' : fmtMaybePct(rk.confidence));
+    // Confidence & winRate are shown as % if present else —
+    setText(qAny(SEL.confPct), rk.confidence === null ? '—' : fmtPct0(rk.confidence));
+    setText(qAny(SEL.winRate), bt.winRate === null ? '—' : fmtPct0(bt.winRate));
 
-    // backtest: if null, show —
-    setText(qAny(SEL.winRate), bt.winRate === null ? '—' : fmtMaybePct(bt.winRate));
-
-    // Done.
+    // Clean any leftover NaN text (just in case)
+    scrubNaNText();
   }
 
   // -----------------------------
@@ -257,6 +288,10 @@
 
     // listen updates
     window.addEventListener('darrius:chartUpdated', onUpdate);
+
+    // if the event never fires (rare), still keep UI clean
+    // (does not touch layout; only removes NaN text)
+    safe(() => { scrubNaNText(); });
   }
 
   if (document.readyState === 'loading') {
