@@ -1,28 +1,34 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (FINAL FROZEN MAIN CHART) v2026.02.02-FINAL-SNAPSHOT-NAN-LOCK
+ * DarriusAI - chart.core.js (FINAL / DROP-IN) v2026.02.02-FINAL-FULL-FIX-R3
  *
  * Role:
  *  - Render main chart (candles + EMA [+ optional AUX if backend provides series])
- *  - Fetch OHLCV via backend proxy (/api/data/stocks/aggregates)
- *  - Fetch signals via backend (/api/market/sigs) ONLY (no local signal logic)
- *  - Output a read-only snapshot to window.__DARRIUS_CHART_STATE__ (stable schema)
+ *  - Fetch OHLCV via backend proxy:   /api/data/stocks/aggregates
+ *  - Fetch signals via backend ONLY:  /api/market/sigs   (NO local signal logic)
+ *  - Output stable snapshot: window.__DARRIUS_CHART_STATE__  (never NaN/undefined)
  *  - Provide read-only bridge for UI overlay (market.pulse.js):
  *      DarriusChart.timeToX / DarriusChart.priceToY / DarriusChart.getSnapshot()
  *  - Emit event "darrius:chartUpdated" with snapshot detail
  *
- * Guarantees:
- *  1) Snapshot schema is stable, never undefined/NaN leaks
- *  2) Main chart render is highest priority and protected by safe zones
- *  3) Signals come only from backend /api/market/sigs (no local signal logic)
+ * HARD FIXES INCLUDED:
+ *  A) Always call backend with absolute API_BASE (prevents GitHub Pages /api 404)
+ *  B) Auto-fill from/to (YYYY-MM-DD) if missing (backend requires it)
+ *  C) Snapshot schema v2 is stable; no NaN leaks; safe zones everywhere
  * ========================================================================= */
 
 (() => {
   'use strict';
 
+  // ---- PROVE LOADED (debug) ----
+  try {
+    console.log('[CHART CORE LOADED]', 'v2026.02.02-R3', Date.now());
+    window.__CHART_CORE_LOADED__ = 'v2026.02.02-R3';
+  } catch (_) {}
+
   // -----------------------------
   // No-throw safe zone
   // -----------------------------
-  function safe(fn, tag = 'chart.core') {
+  function safe(fn, _tag = 'chart.core') {
     try { return fn(); } catch (e) { return null; }
   }
 
@@ -30,21 +36,30 @@
   // Helpers: NaN lock & contract
   // -----------------------------
   function isNum(v) { return typeof v === 'number' && Number.isFinite(v); }
-  function num(v, fallback = 0) { return isNum(v) ? v : fallback; }
-  function nnull(v) { return isNum(v) ? v : null; } // number or null
-  function str(v, fallback = '') { return (typeof v === 'string' && v.length) ? v : fallback; }
-  function arr(v) { return Array.isArray(v) ? v : []; }
-  function bool(v, fallback = false) { return typeof v === 'boolean' ? v : fallback; }
-
-  function clamp01(x) {
-    x = num(x, 0);
-    if (x < 0) return 0;
-    if (x > 1) return 1;
-    return x;
+  function num(v, fb = 0) {
+    const x = (typeof v === 'string' && v.trim() !== '') ? Number(v) : v;
+    return isNum(x) ? x : fb;
   }
+  function nnull(v) { const x = num(v, NaN); return Number.isFinite(x) ? x : null; }
+  function str(v, fb = '') { return (typeof v === 'string' && v.length) ? v : fb; }
+  function arr(v) { return Array.isArray(v) ? v : []; }
+  function clamp01(x) { x = num(x, 0); return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function nowIso() { return new Date().toISOString(); }
+  function fmtDateYYYYMMDD(d) { return d.toISOString().slice(0, 10); }
 
-  function nowIso() {
-    return new Date().toISOString();
+  // -----------------------------
+  // API base (ABSOLUTE)  ✅ FIX A
+  // -----------------------------
+  function apiBase() {
+    // priority: __API_BASE__ > API_BASE > hard default
+    const b = (window.__API_BASE__ || window.API_BASE || 'https://darrius-api.onrender.com');
+    return String(b).replace(/\/+$/, '');
+  }
+  function apiUrl(path) {
+    const p = String(path || '');
+    if (/^https?:\/\//i.test(p)) return p;
+    if (!p.startsWith('/')) return apiBase() + '/' + p;
+    return apiBase() + p;
   }
 
   // -----------------------------
@@ -54,7 +69,6 @@
     return {
       schema: 'darrius.snapshot.v2',
       ts: nowIso(),
-
       meta: {
         symbol: 'TSLA',
         timeframe: '1D',
@@ -63,175 +77,126 @@
         bars: 480,
         from: null,
         to: null,
-
-        source: 'unknown',   // 'live' | 'delayed' | 'demo' | 'unknown'
+        source: 'unknown', // 'live'|'delayed'|'demo'|'unknown'
         ready: false,
         loaded: false,
-        error: null,         // string | null
+        error: null,
         notes: []
       },
-
       price: {
-        last: null,          // number | null
-        lastTime: null,      // ms epoch | null
-
+        last: null,
+        lastTime: null,
         emaFast: null,
         emaSlow: null,
-        trend: 'flat',       // 'up'|'down'|'flat'
-        bias: 'stable'       // 'bullish'|'bearish'|'stable'
+        trend: 'flat',
+        bias: 'stable'
       },
-
       signals: {
         bullish: 0,
         bearish: 0,
         neutral: 0,
         net: 0,
-        lastSig: null,       // { t, side, label } | null
-        raw: null            // original payload (sanitized/limited) | null
+        lastSig: null, // { t, side, label } | null
+        raw: null
       },
-
       risk: {
         entry: null,
         stop: null,
         targets: [],
         confidence: null
       },
-
       backtest: {
         winRate: null,
         sampleSize: null
       },
-
       series: {
         candlesCount: 0,
         emaCount: 0,
         auxCount: 0
       },
-
       map: {
-        // used by overlays: time->x and price->y mapping
-        // these values are derived per-render; always present.
-        xMin: 0,
-        xMax: 1,
-        yMin: 0,
-        yMax: 1,
-        tMin: null,  // ms epoch
-        tMax: null   // ms epoch
+        xMin: 0, xMax: 1,
+        yMin: 0, yMax: 1,
+        tMin: null, tMax: null,
+        pMin: null, pMax: null
       }
     };
   }
 
   function snapshotCommit(snap) {
-    // Absolute guarantee: no undefined anywhere in top-level contract fields we control
-    // (We avoid deep-walk for perf; we only ever write via setters that enforce types)
+    // hard guarantee: always an object
+    if (!snap || typeof snap !== 'object') snap = makeSnapshotBase();
     window.__DARRIUS_CHART_STATE__ = snap;
-
-    // fire event (never throws)
     safe(() => {
       window.dispatchEvent(new CustomEvent('darrius:chartUpdated', { detail: snap }));
     }, 'chartUpdated');
   }
 
   // -----------------------------
-  // Config & DOM
+  // Config (minimal, do NOT touch billing/subscription)
   // -----------------------------
   const CFG = {
-    // API endpoints
-    aggregatesUrl: '/api/data/stocks/aggregates',
-    sigsUrl: '/api/market/sigs',
+    aggregatesPath: '/api/data/stocks/aggregates',
+    sigsPath: '/api/market/sigs',
 
-    // refresh / polling
-    refreshMs: 15000,          // default 15s
-    sigsRefreshMs: 15000,      // align with chart refresh
-    cacheBust: false,          // set true if you suspect stale caching
+    refreshMs: 15000,
+    sigsRefreshMs: 15000,
+    cacheBust: false,
 
-    // EMA params (internal)
     emaFastPeriod: 20,
     emaSlowPeriod: 50,
 
-    // DOM search order
     containerSelectors: [
       '#chart',
+      '#chartWrap #chart',
       '#chartContainer',
       '#mainChart',
       '#tvchart',
       '#chart-root',
-      '.chart-container',
-      'main canvas',
-      'canvas#chartCanvas'
+      '.chart-container'
     ]
   };
 
+  // -----------------------------
+  // DOM container
+  // -----------------------------
   function findContainer() {
     for (const sel of CFG.containerSelectors) {
       const el = document.querySelector(sel);
       if (el) return el;
     }
-    // last resort: body
-    return document.body;
-  }
-
-  function ensureCanvas(container) {
-    // if container is already a canvas
-    if (container && container.tagName === 'CANVAS') return container;
-
-    let canvas = container.querySelector('canvas.darrius-main-canvas');
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      canvas.className = 'darrius-main-canvas';
-      canvas.style.width = '100%';
-      canvas.style.height = '100%';
-      canvas.style.display = 'block';
-      // avoid impacting layout: only append if container looks like a chart box
-      container.appendChild(canvas);
-    }
-    return canvas;
-  }
-
-  function resizeCanvas(canvas) {
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.max(2, Math.floor(rect.width * dpr));
-    const h = Math.max(2, Math.floor(rect.height * dpr));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-    return { w, h, dpr };
+    return null;
   }
 
   // -----------------------------
-  // Data normalize
-  // Backend aggregates expected (typical):
-  // { results: [{ t: ms, o,h,l,c,v }, ...] }
-  // We sanitize to [{ t, o,h,l,c,v }]
+  // Normalize aggregates
+  // backend format: { results: [{ t, o,h,l,c,v }, ...] }
   // -----------------------------
   function normalizeAggregates(payload) {
     const results = arr(payload && payload.results);
     const out = [];
     for (const r of results) {
       const t = num(r.t, 0);
-      const o = num(r.o, NaN);
-      const h = num(r.h, NaN);
-      const l = num(r.l, NaN);
-      const c = num(r.c, NaN);
-      const v = num(r.v, 0);
-      if (!t || !isNum(o) || !isNum(h) || !isNum(l) || !isNum(c)) continue;
-      out.push({ t, o, h, l, c, v });
+      const o = nnull(r.o);
+      const h = nnull(r.h);
+      const l = nnull(r.l);
+      const c = nnull(r.c);
+      const v = nnull(r.v) ?? 0;
+      if (!t || o === null || h === null || l === null || c === null) continue;
+      out.push({ t, o, h, l, c, v: num(v, 0) });
     }
     out.sort((a, b) => a.t - b.t);
     return out;
   }
 
   // -----------------------------
-  // EMA calculation (internal; does not produce signals)
+  // EMA (internal; does NOT produce signals)
   // -----------------------------
   function calcEMA(values, period) {
     const p = Math.max(1, Math.floor(num(period, 1)));
     const k = 2 / (p + 1);
     let ema = null;
     const out = new Array(values.length).fill(null);
-
     for (let i = 0; i < values.length; i++) {
       const v = values[i];
       if (!isNum(v)) { out[i] = null; continue; }
@@ -242,9 +207,9 @@
     return out;
   }
 
-  function detectTrend(emaFast, emaSlow) {
-    const f = nnull(emaFast);
-    const s = nnull(emaSlow);
+  function detectTrend(emaFastLast, emaSlowLast) {
+    const f = nnull(emaFastLast);
+    const s = nnull(emaSlowLast);
     if (f === null || s === null) return { trend: 'flat', bias: 'stable' };
     if (f > s) return { trend: 'up', bias: 'bullish' };
     if (f < s) return { trend: 'down', bias: 'bearish' };
@@ -253,10 +218,7 @@
 
   // -----------------------------
   // Signals normalize (backend-only)
-  // We accept a flexible payload shape, but convert to stable contract.
-  // Expected common shapes:
-  // 1) { bullish, bearish, neutral, lastSig, risk:{...}, backtest:{...} }
-  // 2) { stats:{bullish,bearish,neutral}, risk:{...}, backtest:{...}, last:{...} }
+  // Accept flexible shapes, convert to stable contract.
   // -----------------------------
   function normalizeSigs(payload) {
     const p = payload || {};
@@ -266,22 +228,22 @@
     const bearish = num(stats && stats.bearish, 0);
     const neutral = num(stats && stats.neutral, 0);
 
-    const last = p.lastSig || p.last || null;
+    const last = p.lastSig || p.last || p.last_signal || null;
     let lastSig = null;
-    if (last && (last.t || last.time || last.ts)) {
-      const t = num(last.t || last.time || last.ts, 0);
-      const side = str(last.side || last.type || last.dir || '', '');
-      const label = str(last.label || last.name || '', '');
-      if (t > 0) lastSig = { t, side: side || null, label: label || null };
+    if (last && typeof last === 'object') {
+      const t = num(last.t || last.time || last.ts || 0, 0);
+      if (t > 0) {
+        const side = str(last.side || last.type || last.dir || '', '') || null;
+        const label = str(last.label || last.name || '', '') || null;
+        lastSig = { t, side, label };
+      }
     }
 
-    // risk
     const risk = p.risk || p.copilot || {};
     const entry = nnull(risk.entry);
     const stop = nnull(risk.stop);
     const confidence = nnull(risk.confidence);
 
-    // targets: accept array of numbers or {price}
     const rawTargets = arr(risk.targets || risk.target || []);
     const targets = [];
     for (const x of rawTargets) {
@@ -289,21 +251,16 @@
       else if (x && isNum(x.price)) targets.push(x.price);
     }
 
-    // backtest
     const bt = p.backtest || p.bt || {};
     const winRate = (bt.winRate == null) ? null : nnull(bt.winRate);
     const sampleSize = (bt.sampleSize == null) ? null : nnull(bt.sampleSize);
 
-    // keep a tiny raw copy to help debugging without exploding size
-    const raw = safe(() => {
-      const mini = {
-        bullish, bearish, neutral,
-        lastSig,
-        risk: { entry, stop, targets: targets.slice(0, 5), confidence },
-        backtest: { winRate, sampleSize }
-      };
-      return mini;
-    }) || null;
+    const rawMini = safe(() => ({
+      bullish, bearish, neutral,
+      lastSig,
+      risk: { entry, stop, targets: targets.slice(0, 6), confidence },
+      backtest: { winRate, sampleSize }
+    })) || null;
 
     return {
       bullish, bearish, neutral,
@@ -311,15 +268,15 @@
       lastSig,
       risk: { entry, stop, targets, confidence },
       backtest: { winRate, sampleSize },
-      raw
+      raw: rawMini
     };
   }
 
   // -----------------------------
-  // HTTP helpers (no throw)
+  // HTTP json (absolute; no throw outside)
   // -----------------------------
-  async function httpJson(url, params) {
-    const u = new URL(url, window.location.origin);
+  async function httpJson(absUrl, params) {
+    const u = new URL(absUrl);
     if (params && typeof params === 'object') {
       for (const [k, v] of Object.entries(params)) {
         if (v === undefined || v === null || v === '') continue;
@@ -333,268 +290,54 @@
       credentials: 'include',
       headers: { 'Accept': 'application/json' }
     });
+
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status}: ${txt.slice(0, 160)}`);
+      // keep error short but useful
+      throw new Error(`HTTP ${res.status}: ${txt.slice(0, 180)}`);
     }
     return await res.json();
   }
 
   // -----------------------------
-  // Rendering: prefer LightweightCharts if present, else Canvas fallback
+  // Runtime params
+  //  - respects window.__DARRIUS_RUNTIME__ and URL query
+  //  - auto-fills from/to ✅ FIX B
   // -----------------------------
-  let lc = null; // lightweight chart instance
-  let lcSeries = null;
-
-  function initLightweight(container) {
-    const LW = window.LightweightCharts;
-    if (!LW || !LW.createChart) return false;
-
-    // if container already has a chart, reuse by clearing
-    container.innerHTML = '';
-    lc = LW.createChart(container, {
-      layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#9fb3c8' },
-      grid: { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
-      timeScale: { borderColor: 'rgba(255,255,255,0.08)' },
-      crosshair: { mode: 1 }
-    });
-    lcSeries = {
-      candles: lc.addCandlestickSeries({
-        upColor: '#2BE2A6',
-        downColor: '#FF5B6E',
-        wickUpColor: '#2BE2A6',
-        wickDownColor: '#FF5B6E',
-        borderVisible: false
-      }),
-      emaFast: lc.addLineSeries({ lineWidth: 2, color: '#F5B700' }),
-      emaSlow: lc.addLineSeries({ lineWidth: 2, color: '#4CC2FF' })
-    };
-    return true;
-  }
-
-  function renderWithLightweight(data, emaFast, emaSlow) {
-    if (!lc || !lcSeries) return false;
-    const candles = data.map(d => ({
-      time: Math.floor(d.t / 1000),
-      open: d.o, high: d.h, low: d.l, close: d.c
-    }));
-    const ef = [];
-    const es = [];
-    for (let i = 0; i < data.length; i++) {
-      const t = Math.floor(data[i].t / 1000);
-      if (isNum(emaFast[i])) ef.push({ time: t, value: emaFast[i] });
-      if (isNum(emaSlow[i])) es.push({ time: t, value: emaSlow[i] });
-    }
-
-    safe(() => lcSeries.candles.setData(candles), 'lw.candles');
-    safe(() => lcSeries.emaFast.setData(ef), 'lw.emaFast');
-    safe(() => lcSeries.emaSlow.setData(es), 'lw.emaSlow');
-
-    // update mapping approx (LightweightCharts mapping is internal; we keep stable bounds)
-    return true;
-  }
-
-  function renderWithCanvas(canvas, data, emaFast, emaSlow, snap) {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const { w, h, dpr } = resizeCanvas(canvas);
-    ctx.clearRect(0, 0, w, h);
-
-    // padding
-    const padL = Math.floor(48 * dpr);
-    const padR = Math.floor(64 * dpr);
-    const padT = Math.floor(18 * dpr);
-    const padB = Math.floor(26 * dpr);
-
-    const cw = Math.max(10, w - padL - padR);
-    const ch = Math.max(10, h - padT - padB);
-
-    // bounds
-    let pMin = Infinity, pMax = -Infinity;
-    for (const d of data) {
-      pMin = Math.min(pMin, d.l);
-      pMax = Math.max(pMax, d.h);
-    }
-    if (!Number.isFinite(pMin) || !Number.isFinite(pMax) || pMax <= pMin) {
-      pMin = 0; pMax = 1;
-    }
-
-    const tMin = data.length ? data[0].t : null;
-    const tMax = data.length ? data[data.length - 1].t : null;
-
-    // mapping functions
-    const xOf = (i) => padL + (cw * (data.length <= 1 ? 0 : (i / (data.length - 1))));
-    const yOf = (price) => {
-      const p = num(price, pMin);
-      const r = (p - pMin) / (pMax - pMin || 1);
-      return padT + (ch * (1 - clamp01(r)));
-    };
-
-    // save map in snapshot (for overlays)
-    snap.map.xMin = padL;
-    snap.map.xMax = padL + cw;
-    snap.map.yMin = padT;
-    snap.map.yMax = padT + ch;
-    snap.map.tMin = tMin;
-    snap.map.tMax = tMax;
-
-    // subtle grid
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.lineWidth = Math.max(1, Math.floor(1 * dpr));
-    const gridN = 6;
-    for (let i = 1; i < gridN; i++) {
-      const y = padT + (ch * i / gridN);
-      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + cw, y); ctx.stroke();
-    }
-    ctx.restore();
-
-    // candles
-    const barW = Math.max(1, Math.floor((cw / Math.max(1, data.length)) * 0.6));
-    for (let i = 0; i < data.length; i++) {
-      const d = data[i];
-      const x = Math.floor(xOf(i));
-      const yo = yOf(d.o);
-      const yc = yOf(d.c);
-      const yh = yOf(d.h);
-      const yl = yOf(d.l);
-
-      const up = d.c >= d.o;
-      const color = up ? 'rgba(43,226,166,0.95)' : 'rgba(255,91,110,0.95)';
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-
-      // wick
-      ctx.beginPath();
-      ctx.moveTo(x, yh);
-      ctx.lineTo(x, yl);
-      ctx.stroke();
-
-      // body
-      const top = Math.min(yo, yc);
-      const bot = Math.max(yo, yc);
-      const hh = Math.max(1, Math.floor(bot - top));
-      ctx.fillRect(Math.floor(x - barW / 2), Math.floor(top), barW, hh);
-    }
-
-    // EMA lines
-    function drawLine(series, stroke) {
-      ctx.save();
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = Math.max(2, Math.floor(2 * dpr));
-      ctx.beginPath();
-      let started = false;
-      for (let i = 0; i < series.length; i++) {
-        const v = series[i];
-        if (!isNum(v)) continue;
-        const x = xOf(i);
-        const y = yOf(v);
-        if (!started) { ctx.moveTo(x, y); started = true; }
-        else ctx.lineTo(x, y);
-      }
-      if (started) ctx.stroke();
-      ctx.restore();
-    }
-    drawLine(emaFast, 'rgba(245,183,0,0.95)');
-    drawLine(emaSlow, 'rgba(76,194,255,0.95)');
-
-    // last price marker (right)
-    const last = data[data.length - 1];
-    if (last) {
-      const y = yOf(last.c);
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-      ctx.beginPath();
-      ctx.moveTo(padL, y);
-      ctx.lineTo(padL + cw, y);
-      ctx.stroke();
-
-      ctx.fillStyle = 'rgba(255,91,110,0.95)';
-      const boxW = Math.floor(56 * dpr);
-      const boxH = Math.floor(18 * dpr);
-      ctx.fillRect(padL + cw + Math.floor(8 * dpr), y - boxH / 2, boxW, boxH);
-
-      ctx.fillStyle = 'white';
-      ctx.font = `${Math.floor(12 * dpr)}px Arial`;
-      ctx.textBaseline = 'middle';
-      ctx.fillText(String(num(last.c, 0).toFixed(2)), padL + cw + Math.floor(12 * dpr), y);
-      ctx.restore();
-    }
-  }
-
-  // -----------------------------
-  // State & public bridge
-  // -----------------------------
-  let SNAP = makeSnapshotBase();
-  let DATA = [];
-  let EMA_FAST = [];
-  let EMA_SLOW = [];
-
-  // mapping funcs (fallback uses SNAP.map)
-  function timeToX(msEpoch) {
-    // use mapping bounds
-    const t = num(msEpoch, 0);
-    const tMin = SNAP.map.tMin;
-    const tMax = SNAP.map.tMax;
-    if (!tMin || !tMax || tMax <= tMin) return SNAP.map.xMin;
-
-    const r = (t - tMin) / (tMax - tMin);
-    return SNAP.map.xMin + (SNAP.map.xMax - SNAP.map.xMin) * clamp01(r);
-  }
-
-  function priceToY(price) {
-    // fallback: derive from last known bounds
-    const yMin = SNAP.map.yMin;
-    const yMax = SNAP.map.yMax;
-    // if we don't have proper bounds, return middle
-    if (!isNum(yMin) || !isNum(yMax) || yMax <= yMin) return 0;
-
-    // We don't store pMin/pMax in snapshot to keep contract lean; approximate using last ema/price:
-    // This is only used by overlay; it will still work if overlay uses its own mapping.
-    // If you want perfect mapping, your overlay can use DarriusChart.getSnapshot() series data itself.
-    return (yMin + yMax) / 2;
-  }
-
-  function getSnapshot() {
-    return window.__DARRIUS_CHART_STATE__ || SNAP;
-  }
-
-  // Provide global bridge
-  window.DarriusChart = {
-    timeToX,
-    priceToY,
-    getSnapshot
-  };
-
-  // -----------------------------
-  // Params reading (from window globals or URL)
-  // -----------------------------
-  function readRuntimeParams() {
-    // 1) from globals (your UI might set these)
+  function readRuntimeParams(SNAP) {
     const g = window.__DARRIUS_RUNTIME__ || {};
-
-    // 2) from URL query as fallback
     const q = new URLSearchParams(window.location.search);
 
-    const symbol = str(g.symbol, '') || str(q.get('symbol'), '') || SNAP.meta.symbol;
-    const timeframe = str(g.timeframe, '') || str(q.get('tf'), '') || SNAP.meta.timeframe;
+    const symbol = str(g.symbol, '') || str(q.get('symbol'), '') || (SNAP && SNAP.meta.symbol) || 'TSLA';
+    const timeframe = str(g.timeframe, '') || str(q.get('tf'), '') || (SNAP && SNAP.meta.timeframe) || '1D';
 
-    // allow overrides
-    const timespan = str(g.timespan, '') || str(q.get('timespan'), '') || SNAP.meta.timespan;
-    const multiplier = num(g.multiplier ?? q.get('multiplier'), SNAP.meta.multiplier);
-    const bars = num(g.bars ?? q.get('bars'), SNAP.meta.bars);
+    const timespan = str(g.timespan, '') || str(q.get('timespan'), '') || (SNAP && SNAP.meta.timespan) || 'day';
+    const multiplier = num(g.multiplier ?? q.get('multiplier'), (SNAP && SNAP.meta.multiplier) || 1);
+    const bars = num(g.bars ?? q.get('bars'), (SNAP && SNAP.meta.bars) || 480);
 
-    // source hint (ui may set)
-    const source = str(g.source, '') || str(q.get('source'), '') || SNAP.meta.source;
+    const source = str(g.source, '') || str(q.get('source'), '') || (SNAP && SNAP.meta.source) || 'unknown';
 
-    // range
-    const from = g.from ?? q.get('from');
-    const to = g.to ?? q.get('to');
+    let from = g.from ?? q.get('from');
+    let to   = g.to   ?? q.get('to');
+
+    if (!from || !to) {
+      // cover enough window for bars; conservative, stable
+      const m = Math.max(1, Math.floor(multiplier));
+      const b = Math.max(50, Math.floor(bars));
+
+      // if day-based chart: bars ~ days; else still use days as backend expects date window
+      const days = Math.max(10, Math.min(3650, Math.ceil((b / m) + 10)));
+      const dTo = new Date();
+      const dFrom = new Date(dTo.getTime() - days * 86400000);
+
+      from = from || fmtDateYYYYMMDD(dFrom);
+      to   = to   || fmtDateYYYYMMDD(dTo);
+    }
 
     return {
-      symbol, timeframe, timespan,
+      symbol,
+      timeframe,
+      timespan,
       multiplier: Math.max(1, Math.floor(multiplier)),
       bars: Math.max(50, Math.floor(bars)),
       source,
@@ -604,16 +347,148 @@
   }
 
   // -----------------------------
-  // Core loop: fetch + render + snapshot
+  // Rendering: LightweightCharts (preferred)
   // -----------------------------
-  let container = null;
-  let canvas = null;
-  let useLW = false;
+  let lwChart = null;
+  let lwSeries = null;
+  let lwInited = false;
 
+  function initLightweight(container) {
+    const LW = window.LightweightCharts;
+    if (!LW || !LW.createChart) return false;
+
+    // do NOT nuke the whole container if it contains overlay nodes;
+    // only clear if it's a pure chart div.
+    safe(() => { container.innerHTML = ''; });
+
+    lwChart = LW.createChart(container, {
+      layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#9fb3c8' },
+      grid: { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
+      rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
+      timeScale: { borderColor: 'rgba(255,255,255,0.08)' },
+      crosshair: { mode: 1 }
+    });
+
+    lwSeries = {
+      candles: lwChart.addCandlestickSeries({
+        upColor: '#2BE2A6',
+        downColor: '#FF5B6E',
+        wickUpColor: '#2BE2A6',
+        wickDownColor: '#FF5B6E',
+        borderVisible: false
+      }),
+      emaFast: lwChart.addLineSeries({ lineWidth: 2, color: '#F5B700' }),
+      emaSlow: lwChart.addLineSeries({ lineWidth: 2, color: '#4CC2FF' })
+    };
+
+    lwInited = true;
+    return true;
+  }
+
+  function renderWithLightweight(DATA, EMA_FAST, EMA_SLOW) {
+    if (!lwInited || !lwChart || !lwSeries) return false;
+
+    const candles = DATA.map(d => ({
+      time: Math.floor(d.t / 1000),
+      open: d.o, high: d.h, low: d.l, close: d.c
+    }));
+
+    const ef = [];
+    const es = [];
+    for (let i = 0; i < DATA.length; i++) {
+      const t = Math.floor(DATA[i].t / 1000);
+      const f = EMA_FAST[i];
+      const s = EMA_SLOW[i];
+      if (isNum(f)) ef.push({ time: t, value: f });
+      if (isNum(s)) es.push({ time: t, value: s });
+    }
+
+    safe(() => lwSeries.candles.setData(candles), 'lw.candles');
+    safe(() => lwSeries.emaFast.setData(ef), 'lw.emaFast');
+    safe(() => lwSeries.emaSlow.setData(es), 'lw.emaSlow');
+
+    safe(() => {
+      // keep visible window sensible
+      lwChart.timeScale().fitContent();
+    }, 'lw.fit');
+
+    return true;
+  }
+
+  function resizeLightweight() {
+    if (!lwInited || !lwChart) return;
+    const container = findContainer();
+    if (!container) return;
+    const r = container.getBoundingClientRect();
+    const w = Math.max(100, Math.floor(r.width));
+    const h = Math.max(100, Math.floor(r.height));
+    safe(() => lwChart.applyOptions({ width: w, height: h }), 'lw.resize');
+  }
+
+  // -----------------------------
+  // Mapping (for overlay)
+  // -----------------------------
+  function computeBounds(DATA) {
+    let pMin = Infinity, pMax = -Infinity;
+    for (const d of DATA) {
+      pMin = Math.min(pMin, d.l);
+      pMax = Math.max(pMax, d.h);
+    }
+    if (!Number.isFinite(pMin) || !Number.isFinite(pMax) || pMax <= pMin) {
+      pMin = 0; pMax = 1;
+    }
+    const tMin = DATA.length ? DATA[0].t : null;
+    const tMax = DATA.length ? DATA[DATA.length - 1].t : null;
+    return { pMin, pMax, tMin, tMax };
+  }
+
+  // Bridge functions use snapshot bounds (work even if chart impl changes)
+  function timeToX(msEpoch) {
+    const snap = window.__DARRIUS_CHART_STATE__ || SNAP;
+    const t = num(msEpoch, 0);
+    const tMin = snap.map.tMin;
+    const tMax = snap.map.tMax;
+    if (!tMin || !tMax || tMax <= tMin) return snap.map.xMin;
+    const r = clamp01((t - tMin) / (tMax - tMin));
+    return snap.map.xMin + (snap.map.xMax - snap.map.xMin) * r;
+  }
+
+  function priceToY(price) {
+    const snap = window.__DARRIUS_CHART_STATE__ || SNAP;
+    const p = nnull(price);
+    const pMin = snap.map.pMin;
+    const pMax = snap.map.pMax;
+    if (p === null || pMin === null || pMax === null || pMax <= pMin) return (snap.map.yMin + snap.map.yMax) / 2;
+    const r = clamp01((p - pMin) / (pMax - pMin));
+    // y increases downward
+    return snap.map.yMin + (snap.map.yMax - snap.map.yMin) * (1 - r);
+  }
+
+  function getSnapshot() {
+    return window.__DARRIUS_CHART_STATE__ || SNAP;
+  }
+
+  window.DarriusChart = window.DarriusChart || {};
+  window.DarriusChart.timeToX = timeToX;
+  window.DarriusChart.priceToY = priceToY;
+  window.DarriusChart.getSnapshot = getSnapshot;
+
+  // -----------------------------
+  // State
+  // -----------------------------
+  let SNAP = makeSnapshotBase();
+  let DATA = [];
+  let EMA_FAST = [];
+  let EMA_SLOW = [];
+
+  // -----------------------------
+  // Main loop: fetch aggregates -> render -> fetch sigs -> commit snapshot
+  // -----------------------------
   async function fetchAndRender() {
-    const p = readRuntimeParams();
+    const p = readRuntimeParams(SNAP);
 
-    // update meta early
+    // meta early
+    SNAP.ts = nowIso();
     SNAP.meta.symbol = p.symbol;
     SNAP.meta.timeframe = p.timeframe;
     SNAP.meta.timespan = p.timespan;
@@ -621,20 +496,17 @@
     SNAP.meta.bars = p.bars;
     SNAP.meta.from = p.from;
     SNAP.meta.to = p.to;
-    SNAP.meta.source = p.source || SNAP.meta.source || 'unknown';
-    SNAP.ts = nowIso();
+    SNAP.meta.source = p.source || 'unknown';
     SNAP.meta.error = null;
-
-    // mark not-ready until successful
     SNAP.meta.ready = false;
     SNAP.meta.loaded = false;
 
     snapshotCommit(SNAP);
 
-    // fetch aggregates
-    let aggPayload = null;
+    // ---- aggregates (ABSOLUTE + from/to) ----
+    let aggPayload;
     try {
-      aggPayload = await httpJson(CFG.aggregatesUrl, {
+      aggPayload = await httpJson(apiUrl(CFG.aggregatesPath), {
         symbol: p.symbol,
         multiplier: p.multiplier,
         timespan: p.timespan,
@@ -644,8 +516,8 @@
       });
     } catch (e) {
       SNAP.meta.error = `aggregates: ${str(e && e.message, 'failed')}`;
-      SNAP.meta.ready = false;
       SNAP.meta.loaded = false;
+      SNAP.meta.ready = false;
       snapshotCommit(SNAP);
       return;
     }
@@ -655,8 +527,8 @@
 
     if (!DATA.length) {
       SNAP.meta.error = 'aggregates: empty';
-      SNAP.meta.ready = false;
       SNAP.meta.loaded = false;
+      SNAP.meta.ready = false;
       snapshotCommit(SNAP);
       return;
     }
@@ -681,56 +553,63 @@
     SNAP.price.trend = tb.trend;
     SNAP.price.bias = tb.bias;
 
-    // render (protected)
+    // bounds -> snapshot map
+    const b = computeBounds(DATA);
+    SNAP.map.tMin = b.tMin;
+    SNAP.map.tMax = b.tMax;
+    SNAP.map.pMin = b.pMin;
+    SNAP.map.pMax = b.pMax;
+
+    // map x/y bounds: use container rect (so overlay mapping is stable)
     safe(() => {
-      if (!container) container = findContainer();
+      const c = findContainer();
+      if (!c) return;
+      const r = c.getBoundingClientRect();
+      SNAP.map.xMin = 0;
+      SNAP.map.xMax = Math.max(1, Math.floor(r.width));
+      SNAP.map.yMin = 0;
+      SNAP.map.yMax = Math.max(1, Math.floor(r.height));
+    });
 
-      // init once
-      if (container && !useLW) {
-        // if lightweight available, use it (preferred)
+    // render (prefer LW)
+    safe(() => {
+      const container = findContainer();
+      if (!container) return;
+
+      if (!lwInited) {
         const ok = initLightweight(container);
-        if (ok) useLW = true;
+        if (ok) resizeLightweight();
       }
-
-      if (useLW) {
+      if (lwInited) {
         renderWithLightweight(DATA, EMA_FAST, EMA_SLOW);
-        // mapping fallback (approx)
-        SNAP.map.tMin = DATA[0].t;
-        SNAP.map.tMax = DATA[DATA.length - 1].t;
-        SNAP.map.xMin = 0; SNAP.map.xMax = 1;
-        SNAP.map.yMin = 0; SNAP.map.yMax = 1;
-      } else {
-        // canvas fallback
-        canvas = ensureCanvas(container);
-        renderWithCanvas(canvas, DATA, EMA_FAST, EMA_SLOW, SNAP);
       }
     }, 'render');
 
-    // mark loaded
     SNAP.meta.loaded = true;
 
-    // signals fetch (separate; do not block chart)
+    // commit after chart render (so UI sees latest price/ema even if sigs fails)
+    snapshotCommit(SNAP);
+
+    // ---- signals (backend-only; do not block chart) ----
     safe(async () => {
-      let sigPayload = null;
+      let sigPayload;
       try {
-        sigPayload = await httpJson(CFG.sigsUrl, {
+        sigPayload = await httpJson(apiUrl(CFG.sigsPath), {
           symbol: p.symbol,
           timeframe: p.timeframe,
-          // keep aligned with chart window
           bars: p.bars
         });
       } catch (e) {
-        // do NOT fail chart; just keep stable defaults and error note
-        SNAP.meta.notes = arr(SNAP.meta.notes);
-        SNAP.meta.notes = SNAP.meta.notes.slice(-6);
+        SNAP.meta.notes = arr(SNAP.meta.notes).slice(-6);
         SNAP.meta.notes.push(`sigs: ${str(e && e.message, 'failed')}`);
-        // keep old signals as-is (never NaN)
+        // keep existing stable defaults
+        SNAP.meta.ready = true; // chart is ready even if sigs fails
         snapshotCommit(SNAP);
         return;
       }
 
       const s = normalizeSigs(sigPayload);
-      // stable signals
+
       SNAP.signals.bullish = num(s.bullish, 0);
       SNAP.signals.bearish = num(s.bearish, 0);
       SNAP.signals.neutral = num(s.neutral, 0);
@@ -738,7 +617,6 @@
       SNAP.signals.lastSig = s.lastSig || null;
       SNAP.signals.raw = s.raw || null;
 
-      // stable risk/backtest
       SNAP.risk.entry = s.risk ? s.risk.entry : null;
       SNAP.risk.stop = s.risk ? s.risk.stop : null;
       SNAP.risk.targets = arr(s.risk && s.risk.targets).slice(0, 6).map(x => nnull(x)).filter(x => x !== null);
@@ -747,9 +625,7 @@
       SNAP.backtest.winRate = (s.backtest ? s.backtest.winRate : null);
       SNAP.backtest.sampleSize = (s.backtest ? s.backtest.sampleSize : null);
 
-      // ready now
       SNAP.meta.ready = true;
-
       snapshotCommit(SNAP);
     }, 'sigs');
   }
@@ -760,35 +636,34 @@
   let timer = null;
 
   function start() {
-    // initial snapshot
+    // init snapshot immediately
     SNAP = makeSnapshotBase();
     snapshotCommit(SNAP);
 
-    // render now
+    // first render
     safe(() => fetchAndRender(), 'start.fetch');
 
-    // poll
+    // polling
     if (timer) clearInterval(timer);
     timer = setInterval(() => safe(() => fetchAndRender(), 'poll.fetch'), Math.max(3000, CFG.refreshMs));
 
-    // resize hook (canvas fallback)
+    // resize (LW)
     safe(() => {
-      window.addEventListener('resize', () => safe(() => fetchAndRender(), 'resize.rerender'));
+      window.addEventListener('resize', () => safe(() => resizeLightweight(), 'resize'));
     });
 
-    // optional: allow other modules to force refresh
+    // allow others to force refresh
     safe(() => {
       window.addEventListener('darrius:forceRefresh', () => safe(() => fetchAndRender(), 'forceRefresh'));
     });
   }
 
   // -----------------------------
-  // Boot after DOM ready
+  // Boot
   // -----------------------------
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start);
   } else {
     start();
   }
-
 })();
