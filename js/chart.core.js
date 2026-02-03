@@ -1,22 +1,16 @@
 /* =========================================================================
  * DarriusAI - chart.core.js
- * FINAL-STABLE v2026.02.02-TD-PROXY-V1
+ * FINAL-STABLE v2026.02.02-TD-PROXY-V2 (SNAPSHOT-V1 COMPAT)
  *
- * Goals:
- *  1) Main chart ALWAYS renders (candles + EMA + AUX optional)
- *  2) Use backend aggregates endpoint with correct params:
- *      /api/data/stocks/aggregates?ticker=...&multiplier=...&timespan=...&from=...&to=...
- *  3) Publish snapshot for UI overlay:
- *      window.__DARRIUS_CHART_STATE__
- *      window.DarriusChart.timeToX / priceToY / getSnapshot
- *      dispatch "darrius:chartUpdated"
- *  4) HARD DIAGNOSTICS:
- *      __LAST_AGG_URL__ __LAST_AGG_HTTP__ __LAST_AGG_TEXT_HEAD__ __LAST_AGG_ERR__
- *  5) NEVER touch billing/subscription logic
+ * Fixes:
+ *  - Main chart OK (TD proxy aggregates)
+ *  - Publish snapshot_v1 schema for market.pulse.js (prevents "Waiting...")
+ *  - Keep legacy flat fields for backward compatibility
+ *  - HARD DIAGNOSTICS preserved
  * ========================================================================= */
 
-console.log("=== chart.core.js ACTIVE BUILD: 2026-02-02 TD-PROXY-V1 ===");
-window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
+console.log("=== chart.core.js ACTIVE BUILD: 2026-02-02 TD-PROXY-V2 ===");
+window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V2";
 
 (() => {
   "use strict";
@@ -86,7 +80,7 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
   ];
 
   // -----------------------------
-  // Preset params (same as old)
+  // Preset params (same spirit as old)
   // -----------------------------
   const EMA_PERIOD = 14;
   const AUX_PERIOD = 40;
@@ -94,7 +88,7 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
   const CONFIRM_WINDOW = 3;
 
   // -----------------------------
-  // Colors (same feel as brand)
+  // Colors
   // -----------------------------
   const COLOR_UP = "#2BE2A6";
   const COLOR_DN = "#FF5A5A";
@@ -113,7 +107,7 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
   let showAUX = true;
 
   // -----------------------------
-  // UI readers (keep old behavior)
+  // UI readers
   // -----------------------------
   function getUiSymbol() {
     const el =
@@ -124,7 +118,8 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
       qs("#symbol") ||
       qs("#sym");
     const v = el && (el.value || el.textContent);
-    return (v || window.__CURRENT_SYMBOL__ || "BTCUSDT").trim();
+    const s = (v || window.__CURRENT_SYMBOL__ || "BTCUSDT").trim();
+    return s || "BTCUSDT";
   }
 
   function getUiTf() {
@@ -135,11 +130,12 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
       qs('select[name="timeframe"]') ||
       qs("#timeframe");
     const v = el && (el.value || el.textContent);
-    return (v || window.__CURRENT_TIMEFRAME__ || "1d").trim();
+    const tf = (v || window.__CURRENT_TIMEFRAME__ || "1d").trim();
+    return tf || "1d";
   }
 
   // -----------------------------
-  // Fetch helper (CORS safe)
+  // Fetch helper
   // -----------------------------
   async function fetchText(url) {
     const r = await fetch(url, { method: "GET", cache: "no-store", credentials: "omit" });
@@ -166,7 +162,7 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
   }
 
   // -----------------------------
-  // tf -> agg params (use OLD mapping)
+  // tf -> agg params (old mapping)
   // -----------------------------
   function tfToAggParams(tf) {
     const m = String(tf || "1d").trim();
@@ -179,7 +175,7 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
       "1d":  { multiplier: 1,   timespan: "day",    daysBack: 700 },
       "1w":  { multiplier: 1,   timespan: "week",   daysBack: 1800 },
       "1M":  { multiplier: 1,   timespan: "month",  daysBack: 3600 },
-      "1m":  { multiplier: 1,   timespan: "month",  daysBack: 3600 }, // tolerate lower-case
+      "1m":  { multiplier: 1,   timespan: "month",  daysBack: 3600 },
     };
     return map[m] || map["1d"];
   }
@@ -197,17 +193,34 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
     return { from: toYMD(from), to: toYMD(to) };
   }
 
+  function buildAggUrl(sym, tf) {
+    const cfg = tfToAggParams(tf);
+    const { from, to } = rangeByDaysBack(cfg.daysBack);
+
+    const url = new URL(API_BASE + AGGS_PATH);
+    url.searchParams.set("ticker", String(sym || "BTCUSDT").trim().toUpperCase());
+    url.searchParams.set("multiplier", String(cfg.multiplier));
+    url.searchParams.set("timespan", String(cfg.timespan));
+    url.searchParams.set("from", from);
+    url.searchParams.set("to", to);
+
+    // optional passthrough flags your backend might use
+    if (window.__DARRIUS_PROVIDER__) url.searchParams.set("provider", String(window.__DARRIUS_PROVIDER__));
+    if (window.__DARRIUS_SOURCE__) url.searchParams.set("source", String(window.__DARRIUS_SOURCE__));
+
+    return { url: url.toString(), cfg, range: { from, to } };
+  }
+
   // -----------------------------
-  // Normalize bars: accept Polygon/Massive/TwelveData-proxy shapes
+  // Normalization
   // -----------------------------
   function toUnixSec(t) {
     if (t == null) return null;
     if (typeof t === "number") {
-      if (t > 2e10) return Math.floor(t / 1000); // ms -> s
+      if (t > 2e10) return Math.floor(t / 1000);
       return Math.floor(t);
     }
     if (typeof t === "string") {
-      // string may be ms number
       const n = Number(t);
       if (Number.isFinite(n)) return toUnixSec(n);
       const ms = Date.parse(t);
@@ -240,7 +253,6 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
 
     bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
 
-    // de-dupe by time
     const out = [];
     let lastT = null;
     for (const b of bars) {
@@ -249,6 +261,45 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
       out.push(b);
     }
     return out;
+  }
+
+  function normalizeSignals(payload) {
+    const raw =
+      payload?.sigs ||
+      payload?.signals ||
+      payload?.data?.sigs ||
+      payload?.data?.signals ||
+      [];
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((s) => {
+        const time = toUnixSec(s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date);
+        const sideRaw = String(s.side ?? s.type ?? s.action ?? s.text ?? "").trim();
+        const up = sideRaw.toUpperCase();
+        let side = "";
+        if (sideRaw === "eB" || up === "EB") side = "eB";
+        else if (sideRaw === "eS" || up === "ES") side = "eS";
+        else if (up.includes("BUY")) side = "B";
+        else if (up.includes("SELL")) side = "S";
+        else if (up === "B" || up === "S") side = up;
+        if (!time || !side) return null;
+        return { time, side };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+  }
+
+  async function fetchOptionalSignals(sym, tf) {
+    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+    for (const p of SIGS_PATH_CANDIDATES) {
+      const url = `${API_BASE}${p}?${q}`;
+      try {
+        const payload = await fetchJson(url);
+        const sigs = normalizeSignals(payload);
+        if (sigs.length) return sigs;
+      } catch (_) {}
+    }
+    return [];
   }
 
   // -----------------------------
@@ -346,7 +397,7 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
   }
 
   // -----------------------------
-  // Toggles (same as old)
+  // Toggles
   // -----------------------------
   function applyToggles() {
     safeRun("applyToggles", () => {
@@ -371,77 +422,27 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
   }
 
   // -----------------------------
-  // Snapshot output (read-only) + event
+  // Snapshot publish (v1 schema + legacy)
   // -----------------------------
-  function publishSnapshot(snapshot) {
+  function publishSnapshot(snapshotV1) {
     safeRun("publishSnapshot", () => {
-      const frozen = Object.freeze(snapshot);
+      const frozen = Object.freeze(snapshotV1);
       window.__DARRIUS_CHART_STATE__ = frozen;
       try { window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: frozen })); } catch (_) {}
     });
   }
 
-  // -----------------------------
-  // Build aggregates URL (CORRECT FORMAT)
-  // -----------------------------
-  function buildAggUrl(sym, tf) {
-    const cfg = tfToAggParams(tf);
-    const { from, to } = rangeByDaysBack(cfg.daysBack);
-
-    const url = new URL(API_BASE + AGGS_PATH);
-    url.searchParams.set("ticker", String(sym || "BTCUSDT").trim().toUpperCase());
-    url.searchParams.set("multiplier", String(cfg.multiplier));
-    url.searchParams.set("timespan", String(cfg.timespan));
-    url.searchParams.set("from", from);
-    url.searchParams.set("to", to);
-
-    // optional passthrough flags your backend might use
-    if (window.__DARRIUS_PROVIDER__) url.searchParams.set("provider", String(window.__DARRIUS_PROVIDER__));
-    if (window.__DARRIUS_SOURCE__) url.searchParams.set("source", String(window.__DARRIUS_SOURCE__));
-
-    return { url: url.toString(), cfg, range: { from, to } };
-  }
-
-  // -----------------------------
-  // Optional signals (best-effort)
-  // -----------------------------
-  function normalizeSignals(payload) {
-    const raw =
-      payload?.sigs ||
-      payload?.signals ||
-      payload?.data?.sigs ||
-      payload?.data?.signals ||
-      [];
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .map((s) => {
-        const time = toUnixSec(s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date);
-        const sideRaw = String(s.side ?? s.type ?? s.action ?? s.text ?? "").trim();
-        const sideUp = sideRaw.toUpperCase();
-        let side = "";
-        if (sideRaw === "eB" || sideUp === "EB") side = "eB";
-        else if (sideRaw === "eS" || sideUp === "ES") side = "eS";
-        else if (sideUp.includes("BUY")) side = "B";
-        else if (sideUp.includes("SELL")) side = "S";
-        else if (sideUp === "B" || sideUp === "S") side = sideUp;
-        if (!time || !side) return null;
-        return { time, side };
-      })
-      .filter(Boolean)
-      .sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
-  }
-
-  async function fetchOptionalSignals(sym, tf) {
-    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
-    for (const p of SIGS_PATH_CANDIDATES) {
-      const url = `${API_BASE}${p}?${q}`;
-      try {
-        const payload = await fetchJson(url);
-        const sigs = normalizeSignals(payload);
-        if (sigs.length) return sigs;
-      } catch (_) {}
-    }
-    return [];
+  function computeTrend(emaVals) {
+    const len = emaVals.length;
+    if (len < 5) return { emaSlope: null, emaRegime: "NEUTRAL", emaColor: "NEUTRAL" };
+    const step = Math.min(10, len - 1);
+    const eNow = emaVals[len - 1];
+    const ePrev = emaVals[len - 1 - step];
+    if (!Number.isFinite(eNow) || !Number.isFinite(ePrev)) return { emaSlope: null, emaRegime: "NEUTRAL", emaColor: "NEUTRAL" };
+    const emaSlope = (eNow - ePrev) / step;
+    const emaRegime = emaSlope > 0 ? "UP" : emaSlope < 0 ? "DOWN" : "FLAT";
+    const emaColor = emaRegime === "UP" ? "GREEN" : emaRegime === "DOWN" ? "RED" : "NEUTRAL";
+    return { emaSlope, emaRegime, emaColor };
   }
 
   // -----------------------------
@@ -469,18 +470,14 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
       payload = await fetchJson(urlUsed);
     } catch (e) {
       window.__LAST_AGG_ERR__ = String(e?.message || e);
-      writeMutant(
-        `Darrius Mutant\nAGG ERROR: ${window.__LAST_AGG_ERR__}\nHTTP: ${window.__LAST_AGG_HTTP__}\nHEAD: ${String(window.__LAST_AGG_TEXT_HEAD__ || "").slice(0,180)}`
-      );
+      writeMutant(`Darrius Mutant\nAGG ERROR: ${window.__LAST_AGG_ERR__}\nHTTP: ${window.__LAST_AGG_HTTP__}`);
       throw e;
     }
 
     const bars = normalizeBars(payload);
     if (!bars.length) {
       window.__LAST_AGG_ERR__ = "bars empty after normalization";
-      writeMutant(
-        `Darrius Mutant\nAGG ERROR: bars empty\nkeys=${payload ? Object.keys(payload).join(",") : "null"}`
-      );
+      writeMutant(`Darrius Mutant\nAGG ERROR: bars empty`);
       throw new Error("bars empty after normalization");
     }
 
@@ -490,52 +487,95 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
     const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
 
     candleSeries.setData(bars);
-    emaSeries.setData(buildLinePoints(bars, emaVals));
-    auxSeries.setData(buildLinePoints(bars, auxVals));
+    const emaPts = buildLinePoints(bars, emaVals);
+    const auxPts = buildLinePoints(bars, auxVals);
+    emaSeries.setData(emaPts);
+    auxSeries.setData(auxPts);
 
     applyToggles();
 
     // optional sigs
     const sigs = await fetchOptionalSignals(sym, tf);
     DIAG.lastSigCount = sigs.length;
+    window.__LAST_SIGS__ = sigs;
 
-    // publish snapshot (keep old names)
-    const flatSnapshot = {
-      version: "2026.02.02-TD-PROXY-V1",
+    // rich signals with anchor price (for overlay)
+    const barByTime = new Map();
+    for (const b of bars) barByTime.set(b.time, b);
+
+    const richSignals = (sigs || [])
+      .map((s, idx) => {
+        const b = barByTime.get(s.time);
+        if (!b) return null;
+        const side = s.side;
+        const anchor =
+          (side === "B" || side === "eB") ? b.low :
+          (side === "S" || side === "eS") ? b.high :
+          b.close;
+        const price = Number(anchor);
+        if (!Number.isFinite(price)) return null;
+        return { time: s.time, side, price, i: idx, reason: s.reason || null, strength: s.strength ?? null };
+      })
+      .filter(Boolean);
+
+    // trend summary
+    const trend = computeTrend(emaVals);
+
+    const meta = {
+      symbol: String(sym).trim().toUpperCase(),
+      timeframe: String(tf).trim(),
+      bars: bars.length,
+      source: String(window.__DATA_SOURCE_NAME__ || window.__DARRIUS_PROVIDER__ || "TwelveData").trim(),
+      dataMode: String(window.__DATA_MODE__ || "market").trim(),
+      delayedMinutes: Number.isFinite(Number(window.__DELAYED_MINUTES__)) ? Number(window.__DELAYED_MINUTES__) : 0,
+      emaPeriod: EMA_PERIOD,
+      auxPeriod: AUX_PERIOD,
+      confirmWindow: CONFIRM_WINDOW,
+      urlUsed,
+    };
+
+    // snapshot_v1 (what market.pulse.js expects)
+    const snapshotV1 = {
+      version: "snapshot_v1",
       ts: Date.now(),
+      meta,
+      candles: bars,
+      ema: emaPts,
+      aux: auxPts,
+      signals: richSignals,     // ✅ key for overlay/panels
+      trend,
+      risk: { entry: null, stop: null, targets: null, confidence: null, winrate: null },
+
+      // legacy flat fields (compat)
       apiBase: API_BASE,
       urlUsed,
-      symbol: String(sym).trim().toUpperCase(),
-      tf: String(tf).trim(),
-      params: { EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW },
+      symbol: meta.symbol,
+      tf: meta.timeframe,
       barsCount: bars.length,
       bars,
-      ema: emaVals,
-      aux: auxVals,
-      sigs,
-      signals: sigs,
+      emaVals: emaVals,
+      auxVals: auxVals,
+      sigs: sigs,
       lastClose: bars[bars.length - 1].close,
     };
 
-    publishSnapshot(flatSnapshot);
+    // publish + expose getter
+    publishSnapshot(snapshotV1);
 
-    // rich snapshot getter for overlay
-    safeRun("exposeSnapshotGetter", () => {
+    safeRun("exposeGetter", () => {
       window.DarriusChart = window.DarriusChart || {};
-      window.DarriusChart.getSnapshot = () => {
-        try { return window.__DARRIUS_CHART_STATE__ || null; }
-        catch (_) { return null; }
-      };
+      window.DarriusChart.getSnapshot = () => window.__DARRIUS_CHART_STATE__ || null;
+      if (typeof window.getChartSnapshot !== "function") window.getChartSnapshot = window.DarriusChart.getSnapshot;
     });
 
-    writeMutant(`Darrius Mutant\nOK: ${flatSnapshot.symbol} ${flatSnapshot.tf}\nBars: ${bars.length}\nLast: ${flatSnapshot.lastClose}`);
-    safeRun("fitContent", () => chart.timeScale().fitContent());
+    writeMutant(`Darrius Mutant\nOK: ${meta.symbol} ${meta.timeframe}\nBars: ${bars.length}\nLast: ${snapshotV1.lastClose}`);
 
-    return { urlUsed, bars: bars.length };
+    safeRun("fitContent", () => chart.timeScale().fitContent());
+    return { urlUsed, bars: bars.length, sigs: sigs.length };
   }
 
   // -----------------------------
-  // Init chart + coordinate bridge
+  // Init + coordinate bridge
   // -----------------------------
   function init(opts) {
     opts = opts || {};
@@ -577,7 +617,7 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
       lastValueVisible: false,
     });
 
-    // coordinate bridge for overlay
+    // coordinate bridge for market.pulse overlay
     safeRun("bridgeExpose", () => {
       window.DarriusChart = window.DarriusChart || {};
       window.DarriusChart.timeToX = (t) => safeRun("timeToX", () => chart?.timeScale()?.timeToCoordinate(t));
