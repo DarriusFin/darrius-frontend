@@ -1,124 +1,73 @@
-/* =========================================================================
- * DarriusAI - chart.core.js
- * FINAL + DOM AUTO ADAPTIVE VERSION
- * ========================================================================= */
-
 (() => {
   'use strict';
 
-  /* ---------------------------------------------------------
-   * HARD STOP: prevent re-init
-   * --------------------------------------------------------- */
-  if (window.__DARRIUS_CHART_ENGINE_FINAL__) {
-    console.warn('[chart.core] already initialized, skip');
-    return;
-  }
-  window.__DARRIUS_CHART_ENGINE_FINAL__ = true;
+  console.log('[chart.core] FINAL v3 loaded');
 
-  console.log('[chart.core] FINAL DOM-AUTO version loaded');
-
-  /* ---------------------------------------------------------
-   * Guard: LightweightCharts
-   * --------------------------------------------------------- */
-  if (!window.LightweightCharts) {
-    console.error('[chart.core] LightweightCharts NOT loaded');
-    return;
-  }
-
-  /* ---------------------------------------------------------
-   * Config
-   * --------------------------------------------------------- */
   const POLL_INTERVAL = 15000;
   const API_AGG = '/api/data/stocks/aggregates';
   const API_SIGS = '/api/market/sigs';
 
-  /* ---------------------------------------------------------
-   * State
-   * --------------------------------------------------------- */
-  let chart = null;
-  let candleSeries = null;
-  let emaFastSeries = null;
-  let emaSlowSeries = null;
+  // --------- global refs (for diagnosis + self-heal) ----------
+  window.__DARRIUS_CHART_RUNTIME__ = window.__DARRIUS_CHART_RUNTIME__ || {};
+  const R = window.__DARRIUS_CHART_RUNTIME__;
 
-  let pollingTimer = null;
-  let initialized = false;
-  let loadingClosed = false;
-
-  /* ---------------------------------------------------------
-   * DOM helpers
-   * --------------------------------------------------------- */
   function findChartContainer() {
-    const selectors = [
-      '#chart',
-      '.chart',
-      '.chart-container',
-      '.tv-lightweight-chart',
-      '.tv-chart',
-      '[data-chart]',
-    ];
-
-    for (const sel of selectors) {
-      const el = document.querySelector(sel);
-      if (el) return el;
-    }
-    return null;
+    return (
+      document.querySelector('#chart') ||
+      document.querySelector('.chart-container') ||
+      document.querySelector('.tv-lightweight-chart') ||
+      document.querySelector('.tv-chart') ||
+      document.querySelector('[data-chart]')
+    );
   }
 
-  function ensureContainerSize(el) {
-    const rect = el.getBoundingClientRect();
-    if (rect.width === 0) el.style.width = '100%';
-    if (rect.height === 0) el.style.minHeight = '420px';
+  function ensureSize(el) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0) el.style.width = '100%';
+    if (r.height === 0) el.style.minHeight = '420px';
+    return el.getBoundingClientRect();
   }
 
   function showLoading() {
     const el = document.getElementById('chart-loading');
     if (el) el.style.display = 'block';
   }
-
   function hideLoadingOnce() {
-    if (loadingClosed) return;
-    loadingClosed = true;
+    if (R.loadingClosed) return;
+    R.loadingClosed = true;
     const el = document.getElementById('chart-loading');
     if (el) el.style.display = 'none';
   }
 
-  /* ---------------------------------------------------------
-   * Init Chart (ONLY ONCE)
-   * --------------------------------------------------------- */
-  function initChartOnce() {
-    if (initialized) return;
-    initialized = true;
+  // ------------------- THE KEY FIX -------------------
+  // If lock exists but chart isn't created, allow ONE self-heal init.
+  function hasUsableChart() {
+    return !!(R.chart && R.candleSeries);
+  }
 
+  function canInitNow() {
+    return !!window.LightweightCharts && typeof window.LightweightCharts.createChart === 'function';
+  }
+
+  function initChart() {
     const container = findChartContainer();
-    if (!container) {
-      console.error('[chart.core] chart container NOT FOUND');
-      return;
-    }
+    if (!container) return false;
 
-    ensureContainerSize(container);
+    const rect = ensureSize(container);
+    console.log('[chart.core] init with container:', { w: rect.width, h: rect.height, id: container.id, cls: container.className });
 
-    chart = LightweightCharts.createChart(container, {
-      layout: {
-        background: { color: '#0b1220' },
-        textColor: '#cfd8dc',
-      },
-      grid: {
-        vertLines: { color: '#1f2a38' },
-        horzLines: { color: '#1f2a38' },
-      },
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      rightPriceScale: {
-        borderColor: '#263238',
-      },
-      crosshair: {
-        mode: LightweightCharts.CrosshairMode.Normal,
-      },
+    // destroy previous (if any)
+    try { if (R.chart && R.chart.remove) R.chart.remove(); } catch (_) {}
+
+    const chart = LightweightCharts.createChart(container, {
+      layout: { background: { color: '#0b1220' }, textColor: '#cfd8dc' },
+      grid: { vertLines: { color: '#1f2a38' }, horzLines: { color: '#1f2a38' } },
+      timeScale: { timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: '#263238' },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     });
 
-    candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addCandlestickSeries({
       upColor: '#26a69a',
       downColor: '#ef5350',
       wickUpColor: '#26a69a',
@@ -126,54 +75,47 @@
       borderVisible: false,
     });
 
-    emaFastSeries = chart.addLineSeries({
-      color: '#fdd835',
-      lineWidth: 2,
-    });
+    const emaFastSeries = chart.addLineSeries({ color: '#fdd835', lineWidth: 2 });
+    const emaSlowSeries = chart.addLineSeries({ color: '#42a5f5', lineWidth: 2 });
 
-    emaSlowSeries = chart.addLineSeries({
-      color: '#42a5f5',
-      lineWidth: 2,
-    });
+    R.chart = chart;
+    R.candleSeries = candleSeries;
+    R.emaFastSeries = emaFastSeries;
+    R.emaSlowSeries = emaSlowSeries;
 
     window.addEventListener('resize', () => {
-      const r = container.getBoundingClientRect();
-      chart.applyOptions({ width: r.width, height: r.height });
+      const rr = container.getBoundingClientRect();
+      try { chart.applyOptions({ width: rr.width, height: rr.height }); } catch (_) {}
     });
+
+    console.log('[chart.core] chart init OK');
+    return true;
   }
 
-  /* ---------------------------------------------------------
-   * Fetch
-   * --------------------------------------------------------- */
   async function fetchAggregates() {
     const symbol = window.__CURRENT_SYMBOL__ || 'TSLA';
     const timeframe = window.__CURRENT_TIMEFRAME__ || '1D';
-    const url = `${API_AGG}?symbol=${symbol}&timeframe=${timeframe}`;
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('aggregates fetch failed');
+    const url = `${API_AGG}?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`aggregates ${res.status}`);
     return res.json();
   }
 
   async function fetchSigs() {
     const symbol = window.__CURRENT_SYMBOL__ || 'TSLA';
     const timeframe = window.__CURRENT_TIMEFRAME__ || '1D';
-    const url = `${API_SIGS}?symbol=${symbol}&timeframe=${timeframe}`;
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('sigs fetch failed');
+    const url = `${API_SIGS}?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`sigs ${res.status}`);
     return res.json();
   }
 
-  /* ---------------------------------------------------------
-   * Update Series (NO REINIT)
-   * --------------------------------------------------------- */
   function updateSeries(payload) {
-    if (!candleSeries) return;
+    if (!R.candleSeries) return;
 
     const rows = payload?.candles || payload?.results || [];
     if (!Array.isArray(rows) || rows.length === 0) {
-      console.warn('[chart.core] empty data');
+      console.warn('[chart.core] empty candles');
       return;
     }
 
@@ -184,7 +126,6 @@
     for (const r of rows) {
       const t = r.t || r.timestamp;
       if (!t) continue;
-
       const time = Math.floor(t / 1000);
 
       candles.push({
@@ -194,35 +135,20 @@
         low: r.l ?? r.low,
         close: r.c ?? r.close,
       });
-
-      if (r.ema_fast != null)
-        emaFast.push({ time, value: r.ema_fast });
-
-      if (r.ema_slow != null)
-        emaSlow.push({ time, value: r.ema_slow });
+      if (r.ema_fast != null) emaFast.push({ time, value: r.ema_fast });
+      if (r.ema_slow != null) emaSlow.push({ time, value: r.ema_slow });
     }
 
-    candleSeries.setData(candles);
-    if (emaFast.length) emaFastSeries.setData(emaFast);
-    if (emaSlow.length) emaSlowSeries.setData(emaSlow);
+    try { R.candleSeries.setData(candles); } catch (e) { console.error('[chart.core] setData candles error', e); }
+    try { if (emaFast.length) R.emaFastSeries.setData(emaFast); } catch (_) {}
+    try { if (emaSlow.length) R.emaSlowSeries.setData(emaSlow); } catch (_) {}
 
     hideLoadingOnce();
 
-    window.__DARRIUS_CHART_STATE__ = {
-      lastBar: candles[candles.length - 1],
-      count: candles.length,
-    };
-
-    window.dispatchEvent(
-      new CustomEvent('darrius:chartUpdated', {
-        detail: window.__DARRIUS_CHART_STATE__,
-      })
-    );
+    window.__DARRIUS_CHART_STATE__ = { lastBar: candles[candles.length - 1], count: candles.length };
+    window.dispatchEvent(new CustomEvent('darrius:chartUpdated', { detail: window.__DARRIUS_CHART_STATE__ }));
   }
 
-  /* ---------------------------------------------------------
-   * Polling
-   * --------------------------------------------------------- */
   async function pollOnce() {
     try {
       const data = await fetchAggregates();
@@ -230,30 +156,37 @@
     } catch (e) {
       console.error('[chart.core] poll error', e);
     }
-
-    // sigs 不影响主图
     fetchSigs().catch(() => null);
   }
 
   function startPolling() {
-    if (pollingTimer) return;
+    if (R.pollingTimer) return;
     pollOnce();
-    pollingTimer = setInterval(pollOnce, POLL_INTERVAL);
+    R.pollingTimer = setInterval(pollOnce, POLL_INTERVAL);
   }
 
-  /* ---------------------------------------------------------
-   * Boot
-   * --------------------------------------------------------- */
-  showLoading();
+  // ------------------- BOOT (self-heal) -------------------
+  function boot() {
+    // lib not ready
+    if (!canInitNow()) return;
 
-  // 等 DOM 真正 ready（防止你页面是异步 layout）
-  const bootTimer = setInterval(() => {
-    const el = findChartContainer();
-    if (el && window.LightweightCharts) {
-      clearInterval(bootTimer);
-      initChartOnce();
+    // If chart usable, only ensure polling
+    if (hasUsableChart()) {
       startPolling();
+      return;
     }
-  }, 100);
 
+    // self-heal init attempt (even if previous lock was set by old versions)
+    showLoading();
+    const ok = initChart();
+    if (ok) startPolling();
+  }
+
+  // run boot repeatedly for a short window to defeat timing/layout issues
+  let tries = 0;
+  const t = setInterval(() => {
+    tries += 1;
+    boot();
+    if (hasUsableChart() || tries > 200) clearInterval(t);
+  }, 50);
 })();
