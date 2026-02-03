@@ -1,26 +1,19 @@
 /* =========================================================================
- * DarriusAI - market.pulse.js (FINAL FROZEN DISPLAY-ONLY) v2026.02.03-BADGE-ANCHOR-HILO
+ * DarriusAI - market.pulse.js (FINAL FROZEN DISPLAY-ONLY) v2026.02.03-BADGE-CLEAN-HILO
  *
- * Purpose:
- *  - UI-only layer. Reads window.__DARRIUS_CHART_STATE__ snapshot (multi schema)
- *  - Renders Market Pulse + Risk Copilot text fields WITHOUT producing NaN
- *  - Renders BIG glowing B/S/eB/eS badges (overlay) anchored to candle high/low
- *  - Targets real DOM ids on darrius.ai:
- *      #pulseScore, #bullPct, #bearPct, #neuPct, #inSConf, #riskWR, .kv
- *  - Never touches billing/subscription/payment logic
- *  - Never mutates chart.core.js internals
- *
- * Safety:
- *  - Never throws (absolute safe zone)
- *  - Missing DOM is OK
+ * - UI-only. Never touches billing/subscription/payment.
+ * - Market Pulse + Risk Copilot (NaN lock) kept.
+ * - BIG glowing badges only (B/S/eB/eS), anchored to candle high/low.
+ * - Prevent dirty screen:
+ *    1) Do NOT draw tiny markers here (tiny markers are from chart.core.js).
+ *    2) Do NOT use __LAST_SIG__ unless symbol/tf matches current snapshot.
  * ========================================================================= */
 
 (() => {
   'use strict';
 
-  // ===== PROBE (to prove which file is running) =====
-  console.log('[PULSE LOADED]', 'v2026.02.03-BADGE-ANCHOR-HILO', Date.now());
-  window.__PULSE_LOADED__ = 'v2026.02.03-BADGE-ANCHOR-HILO';
+  console.log('[PULSE LOADED]', 'v2026.02.03-BADGE-CLEAN-HILO', Date.now());
+  window.__PULSE_LOADED__ = 'v2026.02.03-BADGE-CLEAN-HILO';
 
   // -----------------------------
   // Safe zone
@@ -46,14 +39,13 @@
   const fmtPrice2 = (v) => (v === null ? '—' : `${Number(v).toFixed(2)}`);
 
   // -----------------------------
-  // Snapshot reader (supports v2 + older)
+  // Snapshot reader
   // -----------------------------
   function getSnap() {
     const s = window.__DARRIUS_CHART_STATE__;
     return (s && typeof s === 'object') ? s : null;
   }
 
-  // NOTE: 这里用于“Market Pulse统计”，不是B/S徽章数组
   function readSignalsStats(s) {
     if (s.signals && typeof s.signals === 'object' && !Array.isArray(s.signals)) {
       const bullish = num(s.signals.bullish, 0);
@@ -90,22 +82,16 @@
 
   function readBacktest(s) {
     const b = s.backtest || s.bt || {};
-    return {
-      winRate: nnull(b.winRate),
-      sampleSize: nnull(b.sampleSize)
-    };
+    return { winRate: nnull(b.winRate), sampleSize: nnull(b.sampleSize) };
   }
 
   function readMeta(s) {
     const m = s.meta || {};
-    return {
-      ready: !!m.ready,
-      source: str(m.source, 'unknown')
-    };
+    return { ready: !!m.ready, source: str(m.source, 'unknown') };
   }
 
   // -----------------------------
-  // DOM: real ids first + flexible fallbacks
+  // DOM targets
   // -----------------------------
   const SEL = {
     pulseScore: ['#pulseScore'],
@@ -114,12 +100,10 @@
     neuPct:  ['#neuPct',  '[data-pulse="neutral"]', '#pulseNeutral', '.pulse-neutral', '.mp-neutral'],
     confPct: ['#inSConf', '[data-risk="confidence"]', '#riskConfidence', '.risk-confidence'],
     winRate: ['#riskWR',  '[data-risk="winRate"]', '#riskWinRate', '.risk-winrate', '.backtest-winrate'],
-
     entry:   ['#riskEntry', '[data-risk="entry"]', '.risk-entry'],
     stop:    ['#riskStop', '[data-risk="stop"]', '.risk-stop'],
     targets: ['#riskTargets', '[data-risk="targets"]', '.risk-targets'],
     statusLine: ['#pulseStatus', '[data-pulse="status"]', '.pulse-status', '.mp-status'],
-
     kv: ['.kv']
   };
 
@@ -136,15 +120,10 @@
     el.textContent = text;
   }
 
-  // -----------------------------
-  // Rendering rules (NO NaN)
-  // -----------------------------
   function compute(sentSig) {
     const total = sentSig.bullish + sentSig.bearish + sentSig.neutral;
 
-    if (total <= 0) {
-      return { total: 0, bullPct: null, bearPct: null, neuPct: null, label: 'Warming up' };
-    }
+    if (total <= 0) return { total: 0, bullPct: null, bearPct: null, neuPct: null, label: 'Warming up' };
 
     const bullPct = safePct(sentSig.bullish, total);
     const bearPct = safePct(sentSig.bearish, total);
@@ -190,44 +169,23 @@
     const status = !meta.ready ? 'Loading…' : 'Warming up';
     setText(qAny(SEL.statusLine), status);
 
-    safe(() => {
-      const kv = qAny(SEL.kv);
-      if (!kv) return;
-      const t = (kv.textContent || '');
-      if (t.includes('NaN')) kv.textContent = 'Bullish —';
-    });
-
     scrubNaNText();
   }
 
-  // ------------------------------------------------------------------
-  // HARDENED SIGNAL ARRAY FALLBACK (徽章用的 B/S/eB/eS 数组)
-  // ------------------------------------------------------------------
-  function pickSigArrayWithFallback(snap) {
-    let arr =
-      (Array.isArray(snap?.signals) && snap.signals) ||
-      (Array.isArray(snap?.sigs) && snap.sigs) ||
-      (Array.isArray(snap?.data?.signals) && snap.data.signals) ||
-      (Array.isArray(snap?.data?.sigs) && snap.data.sigs) ||
-      [];
+  // -----------------------------
+  // Signal array (badges) — CLEAN PICK
+  // -----------------------------
+  function readSymbolTfFromSnap(snap) {
+    const symbol = str(snap?.symbol, str(snap?.meta?.symbol, ''));
+    const tf = str(snap?.tf, str(snap?.meta?.tf, ''));
+    return { symbol, tf };
+  }
 
-    if (!arr.length) {
-      const ls = window.__LAST_SIG__;
-      arr =
-        (Array.isArray(ls?.signals) && ls.signals) ||
-        (Array.isArray(ls?.sigs) && ls.sigs) ||
-        (Array.isArray(ls?.data?.signals) && ls.data.signals) ||
-        (Array.isArray(ls?.data?.sigs) && ls.data.sigs) ||
-        [];
-    }
-
-    // normalize + dedupe
+  function normalizeSigArray(arr) {
     const out = [];
     const seen = new Set();
-
-    for (const x of arr) {
+    for (const x of (arr || [])) {
       if (!x) continue;
-
       const time = Number(x.time ?? x.t ?? x.timestamp ?? x.ts);
       if (!Number.isFinite(time) || time <= 0) continue;
 
@@ -245,35 +203,58 @@
       if (seen.has(key)) continue;
       seen.add(key);
 
-      const price = Number(x.price ?? x.p ?? NaN);
-      out.push({ time, side, price: Number.isFinite(price) ? price : null });
+      out.push({ time, side });
     }
-
     return out;
   }
 
-  // ------------------------------------------------------------------
+  function pickSigArray(snap) {
+    // 1) snapshot first
+    let arr =
+      (Array.isArray(snap?.signals) && snap.signals) ||
+      (Array.isArray(snap?.sigs) && snap.sigs) ||
+      (Array.isArray(snap?.data?.signals) && snap.data.signals) ||
+      (Array.isArray(snap?.data?.sigs) && snap.data.sigs) ||
+      [];
+
+    arr = normalizeSigArray(arr);
+    if (arr.length) return arr;
+
+    // 2) fallback only if same symbol/tf
+    const ls = window.__LAST_SIG__;
+    if (!ls || typeof ls !== 'object') return [];
+
+    const A = readSymbolTfFromSnap(snap);
+    const B = readSymbolTfFromSnap(ls);
+
+    const symOk = (A.symbol && B.symbol && A.symbol.toUpperCase() === B.symbol.toUpperCase());
+    const tfOk = (!A.tf || !B.tf) ? true : (A.tf === B.tf); // tf missing => allow, but prefer match
+    if (!symOk || !tfOk) return [];
+
+    let fb =
+      (Array.isArray(ls?.signals) && ls.signals) ||
+      (Array.isArray(ls?.sigs) && ls.sigs) ||
+      (Array.isArray(ls?.data?.signals) && ls.data.signals) ||
+      (Array.isArray(ls?.data?.sigs) && ls.data.sigs) ||
+      [];
+
+    return normalizeSigArray(fb);
+  }
+
+  // -----------------------------
   // BIG BADGE OVERLAY (anchored to candle high/low)
-  // ------------------------------------------------------------------
+  // -----------------------------
   const BigBadgeOverlay = (() => {
     let layer = null;
-    let mounted = false;
 
-    // 你可以微调这个值：徽章离K线 high/low 的像素偏移
     const OFFSET_Y = 12;
-
-    // 你可以微调：徽章大小
     const SIZE = 26;
 
-    const Z = 50; // above chart
-
     function ensureLayer() {
-      if (mounted && layer && layer.parentNode) return layer;
-
+      if (layer && layer.parentNode) return layer;
       const chartEl = document.getElementById('chart');
       if (!chartEl) return null;
 
-      // chart 容器一般是 position: relative 或者我们强制设置
       safe(() => {
         const cs = window.getComputedStyle(chartEl);
         if (cs.position === 'static') chartEl.style.position = 'relative';
@@ -287,27 +268,27 @@
       layer.style.right = '0';
       layer.style.bottom = '0';
       layer.style.pointerEvents = 'none';
-      layer.style.zIndex = String(Z);
-
+      layer.style.zIndex = '50';
       chartEl.appendChild(layer);
-      mounted = true;
       return layer;
     }
 
     function clear() {
-      if (!layer) return;
-      layer.innerHTML = '';
+      if (layer) layer.innerHTML = '';
     }
 
-    // Build time->bar map from snapshot bars
-    function buildBarIndex(snapshot) {
-      const bars =
-        (Array.isArray(snapshot?.bars) && snapshot.bars) ||
-        (Array.isArray(snapshot?.data?.bars) && snapshot.data.bars) ||
-        (Array.isArray(snapshot?.candles) && snapshot.candles) ||
-        (Array.isArray(snapshot?.ohlcv) && snapshot.ohlcv) ||
-        [];
+    function barsFromSnap(s) {
+      return (
+        (Array.isArray(s?.bars) && s.bars) ||
+        (Array.isArray(s?.data?.bars) && s.data.bars) ||
+        (Array.isArray(s?.candles) && s.candles) ||
+        (Array.isArray(s?.ohlcv) && s.ohlcv) ||
+        []
+      );
+    }
 
+    function buildBarIndex(snapshot) {
+      const bars = barsFromSnap(snapshot);
       const map = new Map();
       for (const b of bars) {
         const t = Number(b?.time);
@@ -317,66 +298,23 @@
       return map;
     }
 
-    function yNearCandle(DC, bar, side, H) {
-      if (!DC || typeof DC.priceToY !== 'function' || !bar) return null;
-
-      const isSell = (side === 'S' || side === 'eS');
-      const high = Number(bar.high);
-      const low  = Number(bar.low);
-
-      const anchorPrice = isSell
-        ? (Number.isFinite(high) ? high : Number(bar.close))
-        : (Number.isFinite(low)  ? low  : Number(bar.close));
-
-      if (!Number.isFinite(anchorPrice)) return null;
-
-      const y0 = DC.priceToY(anchorPrice);
-      if (!Number.isFinite(y0)) return null;
-
-      let y = isSell ? (y0 - OFFSET_Y) : (y0 + OFFSET_Y);
-
-      // clamp
-      y = Math.max(12, Math.min(H - 12, y));
-      return y;
-    }
-
     function styleFor(side) {
       const isBuy = (side === 'B' || side === 'eB');
       const isSell = (side === 'S' || side === 'eS');
 
       if (isBuy) {
-        // 黄底 + 白圈 + 黑字（你最新要求）
-        return {
-          bg: '#F5C542',
-          ring: 'rgba(255,255,255,0.95)',
-          text: '#000000',
-          glow: 'rgba(245,197,66,0.65)',
-        };
+        return { bg: '#F5C542', ring: 'rgba(255,255,255,0.95)', text: '#000', glow: 'rgba(245,197,66,0.65)' };
       }
       if (isSell) {
-        // 红底 + 白圈 + 白字
-        return {
-          bg: '#FF4757',
-          ring: 'rgba(255,255,255,0.95)',
-          text: '#FFFFFF',
-          glow: 'rgba(255,71,87,0.55)',
-        };
+        return { bg: '#FF4757', ring: 'rgba(255,255,255,0.95)', text: '#FFF', glow: 'rgba(255,71,87,0.55)' };
       }
-      return {
-        bg: '#888',
-        ring: 'rgba(255,255,255,0.8)',
-        text: '#000',
-        glow: 'rgba(255,255,255,0.2)',
-      };
+      return { bg: '#888', ring: 'rgba(255,255,255,0.8)', text: '#000', glow: 'rgba(255,255,255,0.2)' };
     }
 
     function makeBadge(side) {
       const st = styleFor(side);
-
       const d = document.createElement('div');
-      d.className = 'darrius-badge';
-      d.textContent = side; // B/S/eB/eS
-
+      d.textContent = side;
       d.style.position = 'absolute';
       d.style.width = `${SIZE}px`;
       d.style.height = `${SIZE}px`;
@@ -384,24 +322,35 @@
       d.style.display = 'flex';
       d.style.alignItems = 'center';
       d.style.justifyContent = 'center';
-
       d.style.background = st.bg;
       d.style.color = st.text;
       d.style.fontWeight = '800';
       d.style.fontSize = (side.length === 2 ? '12px' : '13px');
       d.style.lineHeight = '1';
-
-      // white ring
       d.style.boxSizing = 'border-box';
       d.style.border = `2px solid ${st.ring}`;
-
-      // glow
       d.style.boxShadow = `0 0 0 2px rgba(0,0,0,0.20), 0 0 16px ${st.glow}`;
-
-      // small text shadow for readability
       d.style.textShadow = '0 1px 0 rgba(0,0,0,0.35)';
-
       return d;
+    }
+
+    function yNearCandle(DC, bar, side, H) {
+      const isSell = (side === 'S' || side === 'eS');
+      const high = Number(bar.high);
+      const low  = Number(bar.low);
+
+      const anchor = isSell
+        ? (Number.isFinite(high) ? high : Number(bar.close))
+        : (Number.isFinite(low)  ? low  : Number(bar.close));
+
+      if (!Number.isFinite(anchor)) return null;
+
+      const y0 = DC.priceToY(anchor);
+      if (!Number.isFinite(y0)) return null;
+
+      let y = isSell ? (y0 - OFFSET_Y) : (y0 + OFFSET_Y);
+      y = Math.max(12, Math.min(H - 12, y));
+      return y;
     }
 
     function update(snapshot, sigArr) {
@@ -409,27 +358,16 @@
       if (!L) return;
 
       const DC = window.DarriusChart;
-      if (!DC) return;
+      if (!DC || typeof DC.timeToX !== 'function' || typeof DC.priceToY !== 'function') return;
 
-      // If user disabled overlay elsewhere, respect it
-      if (typeof window.__OVERLAY_BIG_SIGS__ === 'boolean' && window.__OVERLAY_BIG_SIGS__ === false) {
-        clear();
-        return;
-      }
-
-      // dimensions
-      const rect = L.getBoundingClientRect();
-      const W = rect.width;
-      const H = rect.height;
-      if (!W || !H) return;
-
-      // Build bar index once per update
-      const barIndex = buildBarIndex(snapshot);
-
-      // Clear then render
       clear();
 
-      // Dedup
+      const rect = L.getBoundingClientRect();
+      const W = rect.width, H = rect.height;
+      if (!W || !H) return;
+
+      const barIndex = buildBarIndex(snapshot);
+
       const seen = new Set();
 
       for (const s of (sigArr || [])) {
@@ -437,7 +375,6 @@
         const t = Number(s?.time);
         if (!side || !Number.isFinite(t)) continue;
 
-        // Only draw B/S/eB/eS
         if (!(side === 'B' || side === 'S' || side === 'eB' || side === 'eS')) continue;
 
         const key = `${t}:${side}`;
@@ -445,22 +382,20 @@
         seen.add(key);
 
         const bar = barIndex.get(t);
-        if (!bar) continue;
+        if (!bar) continue; // 必须在bars里找到同time的K线，否则不画（杜绝乱入）
 
-        // x: time->coordinate
-        const x = safe(() => DC.timeToX(t));
+        const x = Number(safe(() => DC.timeToX(t)));
         if (!Number.isFinite(x)) continue;
 
-        // y: candle high/low anchor
+        // x clamp：超出画布的不要画
+        if (x < -SIZE || x > (W + SIZE)) continue;
+
         const y = yNearCandle(DC, bar, side, H);
         if (!Number.isFinite(y)) continue;
 
         const b = makeBadge(side);
-
-        // center badge at (x,y)
         b.style.left = `${Math.round(x - SIZE / 2)}px`;
         b.style.top  = `${Math.round(y - SIZE / 2)}px`;
-
         L.appendChild(b);
       }
     }
@@ -469,7 +404,7 @@
   })();
 
   // -----------------------------
-  // Render (Market Pulse + Risk Copilot + Big Badges)
+  // Render
   // -----------------------------
   function renderFromSnapshot(s) {
     const sigStats = readSignalsStats(s);
@@ -480,11 +415,7 @@
     const sent = compute(sigStats);
     if (sent.total <= 0) {
       renderEmpty(mt);
-      // 即便统计为空，也尝试画徽章（徽章来自数组）
-      safe(() => {
-        const sigArr = pickSigArrayWithFallback(s);
-        BigBadgeOverlay.update(s, sigArr);
-      });
+      safe(() => BigBadgeOverlay.update(s, pickSigArray(s)));
       return;
     }
 
@@ -510,11 +441,8 @@
 
     scrubNaNText();
 
-    // ---- BIG BADGES (ONLY big, no tiny duplicates) ----
-    safe(() => {
-      const sigArr = pickSigArrayWithFallback(s);
-      BigBadgeOverlay.update(s, sigArr);
-    });
+    // BIG badges only
+    safe(() => BigBadgeOverlay.update(s, pickSigArray(s)));
   }
 
   // -----------------------------
@@ -533,14 +461,10 @@
       const s = getSnap();
       if (s) renderFromSnapshot(s);
     });
-
     window.addEventListener('darrius:chartUpdated', onUpdate);
-    safe(() => { scrubNaNText(); });
+    safe(() => scrubNaNText());
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();
