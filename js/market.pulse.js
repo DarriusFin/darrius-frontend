@@ -198,6 +198,54 @@
     scrubNaNText();
   }
 
+  // === HARDENED SIGNAL FALLBACK ===
+// 当 snapshot 里没有信号时，从 __LAST_SIG__ 兜底
+function pickSignalsWithLastSigFallback(snap) {
+  // 1) 先从 snapshot 里找
+  let arr =
+    (Array.isArray(snap?.signals) && snap.signals) ||
+    (Array.isArray(snap?.sigs) && snap.sigs) ||
+    (Array.isArray(snap?.data?.signals) && snap.data.signals) ||
+    (Array.isArray(snap?.data?.sigs) && snap.data.sigs) ||
+    [];
+
+  // 2) snapshot 没有 → 用 __LAST_SIG__
+  if (!arr.length) {
+    const ls = window.__LAST_SIG__;
+    arr =
+      (Array.isArray(ls?.signals) && ls.signals) ||
+      (Array.isArray(ls?.sigs) && ls.sigs) ||
+      (Array.isArray(ls?.data?.signals) && ls.data.signals) ||
+      (Array.isArray(ls?.data?.sigs) && ls.data.sigs) ||
+      [];
+  }
+
+  // 3) 统一字段 + 去重
+  const out = [];
+  const seen = new Set();
+  for (const x of arr) {
+    if (!x) continue;
+    const time = x.time ?? x.t ?? x.timestamp ?? x.ts;
+    let side = String(x.side ?? x.type ?? x.action ?? "").trim();
+    if (!time || !side) continue;
+
+    const U = side.toUpperCase();
+    if (U === "EB") side = "eB";
+    else if (U === "ES") side = "eS";
+    else if (U === "B" || U.includes("BUY")) side = "B";
+    else if (U === "S" || U.includes("SELL")) side = "S";
+    else continue;
+
+    const key = `${time}:${side}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    out.push({ time, side, price: Number(x.price ?? x.p ?? null) });
+  }
+
+  return out;
+}
+
   function renderFromSnapshot(s) {
     const sig = readSignals(s);
     const rk = readRisk(s);
