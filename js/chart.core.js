@@ -63,14 +63,14 @@
     sellText: "#ffffff",
     buyGlow: "rgba(245,197,66,.85)",
     sellGlow:"rgba(255,71,87,.85)",
-    sizeMain: 26,   // B / S
-    sizeEarly: 22,  // eB / eS
+    sizeMain: 30,   // B / S
+    sizeEarly: 26,  // eB / eS
   };
 
   // ✅ 位置微调：让它“贴近K线”但不压住
   // 你觉得还要更近：把 6 改 4；更远：改 8~12
-  const BADGE_OFFSET_ABOVE_PX = 10; // S/eS：在K线上方额外抬多少px（越小越贴近）
-  const BADGE_OFFSET_BELOW_PX = 10; // B/eB：在K线下方额外压多少px（越小越贴近）
+  const BADGE_OFFSET_ABOVE_PX = 12; // S/eS：在K线上方额外抬多少px（越小越贴近）
+  const BADGE_OFFSET_BELOW_PX = 12; // B/eB：在K线下方额外压多少px（越小越贴近）
 
   // -----------------------------
   // DOM helpers
@@ -407,7 +407,7 @@
         d.style.height = size + "px";
         d.style.left = x + "px";
         d.style.top = y + "px";
-        d.style.fontSize = it.isMain ? "14px" : "12px";
+        d.style.fontSize = it.isMain ? "16px" : "14px";
 
         const t = document.createElement("div");
         t.className = "t";
