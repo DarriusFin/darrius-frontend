@@ -178,31 +178,45 @@
   // -----------------------------
   // Signals -> markers (anchor only)
   // -----------------------------
-  function mapSignalsToMarkers(signals) {
-    // We keep tiny markers as "anchors" but hide text.
-    // Visual badge is rendered by DOM overlay (below).
-    const out = [];
-    (signals || []).forEach((s) => {
-      const side = normSide(s);
-      const t = Number(s?.time);
-      if (!t || !side) return;
+ function mapSignalsToMarkers(signals) {
+  const out = [];
+  const seen = new Set(); // key: `${time}:${side}`  防止同一时刻同一信号重复画两次
 
-      const isBuy = (side === "B" || side === "eB");
-      const isSell = (side === "S" || side === "eS");
-      if (!isBuy && !isSell) return;
+  (signals || []).forEach((s) => {
+    const side = String(s?.side || s?.label || "").trim(); // B/S/eB/eS
+    const t = Number(s?.time);
+    if (!t || !side) return;
 
-      out.push({
-        time: t,
-        position: isBuy ? "belowBar" : "aboveBar",
-        shape: "circle",
-        // anchor color (not the final look)
-        color: isBuy ? BADGE_STYLE.buyBg : BADGE_STYLE.sellBg,
-        text: "",                 // IMPORTANT: hide tiny text
-        size: (side === "B" || side === "S") ? 2 : 1, // tiny dot anchor
-      });
+    const isBuy = (side === "B" || side === "eB");
+    const isSell = (side === "S" || side === "eS");
+    if (!isBuy && !isSell) return;
+
+    const key = `${t}:${side}`;
+    if (seen.has(key)) return;   // ✅ 去重：避免叠圈
+    seen.add(key);
+
+    // ✅ 位置规则：卖在上，买在下
+    const position = isSell ? "aboveBar" : "belowBar";
+
+    // ✅ 你提的“改成箭头”方案：箭头比圆圈更不挡线
+    const shape = isSell ? "arrowDown" : "arrowUp";
+
+    // 颜色方案（你当前的配色逻辑不动，只做更醒目一点）
+    // 买：黄底更醒目；卖：红底
+    const color = isBuy ? "#FFD400" : "#FF4757";
+
+    out.push({
+      time: t,
+      position,
+      shape,
+      color,
+      text: side, // 仍显示 eB/eS
+      // 可选：如果你想更醒目，把文字去掉也行：text: ""
     });
-    return out;
-  }
+  });
+
+  return out;
+}
 
   // v4: series.setMarkers(markers)
   // v5: const m = LightweightCharts.createSeriesMarkers(series, markers); m.setMarkers(markers)
