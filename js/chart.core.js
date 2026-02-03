@@ -1,3 +1,6 @@
+console.log("=== chart.core.js ACTIVE BUILD: 2026-02-02-DEBUG ===");
+window.__CHART_CORE_ACTIVE__ = "2026-02-02-DEBUG";
+
 (() => {
   'use strict';
 
