@@ -69,8 +69,8 @@
 
   // ✅ 位置微调：让它“贴近K线”但不压住
   // 你觉得还要更近：把 6 改 4；更远：改 8~12
-  const BADGE_OFFSET_ABOVE_PX = 6; // S/eS：在K线上方额外抬多少px（越小越贴近）
-  const BADGE_OFFSET_BELOW_PX = 6; // B/eB：在K线下方额外压多少px（越小越贴近）
+  const BADGE_OFFSET_ABOVE_PX = 10; // S/eS：在K线上方额外抬多少px（越小越贴近）
+  const BADGE_OFFSET_BELOW_PX = 10; // B/eB：在K线下方额外压多少px（越小越贴近）
 
   // -----------------------------
   // DOM helpers
