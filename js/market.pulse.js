@@ -1,13 +1,11 @@
 /* =========================================================================
- * DarriusAI - market.pulse.js (FINAL FROZEN DISPLAY-ONLY)
- * v2026.02.02-PULSE-NAN-LOCK-R2
+ * DarriusAI - market.pulse.js (FINAL FROZEN DISPLAY-ONLY) v2026.02.02-PULSE-NAN-LOCK-R2
  *
  * Purpose:
  *  - UI-only layer. Reads window.__DARRIUS_CHART_STATE__ snapshot (multi schema)
  *  - Renders Market Pulse + Risk Copilot text fields WITHOUT producing NaN
- *  - Targets real DOM ids on darrius.ai (index.html):
- *      #pulseScore, #bullPct, #bearPct, #neuPct, #netInflow,
- *      #riskEntry, #riskStop, #riskTargets, #riskConf, #riskWR
+ *  - Targets real DOM ids on darrius.ai:
+ *      #pulseScore, #bullPct, #bearPct, #neuPct, #inSConf, #riskWR, .kv
  *  - Never touches billing/subscription/payment logic
  *  - Never mutates chart.core.js internals
  *
@@ -19,9 +17,9 @@
 (() => {
   'use strict';
 
-  // ---- build stamp (for verification) ----
-  console.log('[PULSE LOADED]', 'v2026.02.02-PULSE-NAN-LOCK-R2', Date.now());
-  window.__PULSE_LOADED__ = 'v2026.02.02-PULSE-NAN-LOCK-R2';
+  // ===== PROBE (to prove which file is running) =====
+  console.log('[PULSE LOADED]', 'v2026.02.02-R2', Date.now());
+  window.__PULSE_LOADED__ = 'v2026.02.02-R2';
 
   // -----------------------------
   // Safe zone
@@ -34,8 +32,8 @@
   const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
   const num = (v, fb = 0) => (isNum(v) ? v : fb);
   const nnull = (v) => (isNum(v) ? v : null);
+  const str = (v, fb = '') => (typeof v === 'string' && v.length ? v : fb);
 
-  // IMPORTANT: hard-stop on invalid denominator
   const safePct = (part, total) => {
     const p = Number(part);
     const t = Number(total);
@@ -55,7 +53,6 @@
   }
 
   function readSignals(s) {
-    // v2 contract
     if (s.signals && typeof s.signals === 'object') {
       const bullish = num(s.signals.bullish, 0);
       const bearish = num(s.signals.bearish, 0);
@@ -63,7 +60,6 @@
       const net = num(s.signals.net, bullish - bearish);
       return { bullish, bearish, neutral, net };
     }
-    // older shapes
     const stats = s.stats || s.signal_stats || s.signals || {};
     const bullish = num(stats.bullish, 0);
     const bearish = num(stats.bearish, 0);
@@ -73,7 +69,6 @@
   }
 
   function readRisk(s) {
-    // v2
     if (s.risk && typeof s.risk === 'object') {
       return {
         entry: nnull(s.risk.entry),
@@ -82,7 +77,6 @@
         confidence: nnull(s.risk.confidence)
       };
     }
-    // older
     const r = s.risk || s.copilot || {};
     return {
       entry: nnull(r.entry),
@@ -94,27 +88,46 @@
 
   function readBacktest(s) {
     const b = s.backtest || s.bt || {};
-    return { winRate: nnull(b.winRate) };
+    return {
+      winRate: nnull(b.winRate),
+      sampleSize: nnull(b.sampleSize)
+    };
+  }
+
+  function readMeta(s) {
+    const m = s.meta || {};
+    return {
+      ready: !!m.ready,
+      source: str(m.source, 'unknown')
+    };
   }
 
   // -----------------------------
-  // DOM (real ids)
+  // DOM: real ids first + flexible fallbacks
   // -----------------------------
-  const $ = (id) => document.getElementById(id);
+  const SEL = {
+    pulseScore: ['#pulseScore'],
+    bullPct: ['#bullPct', '[data-pulse="bullish"]', '#pulseBullish', '.pulse-bullish', '.mp-bullish'],
+    bearPct: ['#bearPct', '[data-pulse="bearish"]', '#pulseBearish', '.pulse-bearish', '.mp-bearish'],
+    neuPct:  ['#neuPct',  '[data-pulse="neutral"]', '#pulseNeutral', '.pulse-neutral', '.mp-neutral'],
+    confPct: ['#inSConf', '[data-risk="confidence"]', '#riskConfidence', '.risk-confidence'],
+    winRate: ['#riskWR',  '[data-risk="winRate"]', '#riskWinRate', '.risk-winrate', '.backtest-winrate'],
 
-  const DOM = {
-    pulseScore: () => $('pulseScore'),
-    bullPct: () => $('bullPct'),
-    bearPct: () => $('bearPct'),
-    neuPct: () => $('neuPct'),
-    netInflow: () => $('netInflow'),
+    entry:   ['#riskEntry', '[data-risk="entry"]', '.risk-entry'],
+    stop:    ['#riskStop', '[data-risk="stop"]', '.risk-stop'],
+    targets: ['#riskTargets', '[data-risk="targets"]', '.risk-targets'],
+    statusLine: ['#pulseStatus', '[data-pulse="status"]', '.pulse-status', '.mp-status'],
 
-    riskEntry: () => $('riskEntry'),
-    riskStop: () => $('riskStop'),
-    riskTargets: () => $('riskTargets'),
-    riskConf: () => $('riskConf'),
-    riskWR: () => $('riskWR')
+    kv: ['.kv']
   };
+
+  function qAny(list) {
+    for (const sel of list) {
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
+  }
 
   function setText(el, text) {
     if (!el) return;
@@ -122,8 +135,32 @@
   }
 
   // -----------------------------
-  // NaN scrub (last resort)
+  // Rendering rules (NO NaN)
   // -----------------------------
+  function compute(sentSig) {
+    const total = sentSig.bullish + sentSig.bearish + sentSig.neutral;
+
+    if (total <= 0) {
+      return { total: 0, bullPct: null, bearPct: null, neuPct: null, label: 'Warming up' };
+    }
+
+    const bullPct = safePct(sentSig.bullish, total);
+    const bearPct = safePct(sentSig.bearish, total);
+    const neuPct  = safePct(sentSig.neutral, total);
+
+    if ([bullPct, bearPct, neuPct].some(v => v === null)) {
+      return { total: 0, bullPct: null, bearPct: null, neuPct: null, label: 'Warming up' };
+    }
+
+    let label = 'Neutral';
+    if (sentSig.net > 0) label = 'Bullish';
+    else if (sentSig.net < 0) label = 'Bearish';
+    else if (sentSig.bullish > sentSig.bearish) label = 'Bullish';
+    else if (sentSig.bearish > sentSig.bullish) label = 'Bearish';
+
+    return { total, bullPct, bearPct, neuPct, label };
+  }
+
   function scrubNaNText() {
     safe(() => {
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -136,44 +173,27 @@
     });
   }
 
-  // -----------------------------
-  // Compute & Render
-  // -----------------------------
-  function compute(sig) {
-    const total = sig.bullish + sig.bearish + sig.neutral;
-    if (total <= 0) {
-      return { total: 0, bullPct: null, bearPct: null, neuPct: null, label: 'Warming up', net: 0 };
-    }
+  function renderEmpty(meta) {
+    setText(qAny(SEL.pulseScore), '—');
+    setText(qAny(SEL.bullPct), '—');
+    setText(qAny(SEL.bearPct), '—');
+    setText(qAny(SEL.neuPct), '—');
 
-    const bullPct = safePct(sig.bullish, total);
-    const bearPct = safePct(sig.bearish, total);
-    const neuPct  = safePct(sig.neutral, total);
+    setText(qAny(SEL.confPct), '—');
+    setText(qAny(SEL.winRate), '—');
+    setText(qAny(SEL.entry), '—');
+    setText(qAny(SEL.stop), '—');
+    setText(qAny(SEL.targets), '—');
 
-    if ([bullPct, bearPct, neuPct].some(v => v === null)) {
-      return { total: 0, bullPct: null, bearPct: null, neuPct: null, label: 'Warming up', net: 0 };
-    }
+    const status = !meta.ready ? 'Loading…' : 'Warming up';
+    setText(qAny(SEL.statusLine), status);
 
-    let label = 'Neutral';
-    if (sig.net > 0) label = 'Bullish';
-    else if (sig.net < 0) label = 'Bearish';
-    else if (sig.bullish > sig.bearish) label = 'Bullish';
-    else if (sig.bearish > sig.bullish) label = 'Bearish';
-
-    return { total, bullPct, bearPct, neuPct, label, net: sig.net };
-  }
-
-  function renderEmpty() {
-    setText(DOM.pulseScore(), '—');
-    setText(DOM.bullPct(), '—');
-    setText(DOM.bearPct(), '—');
-    setText(DOM.neuPct(), '—');
-    setText(DOM.netInflow(), '—');
-
-    setText(DOM.riskEntry(), '—');
-    setText(DOM.riskStop(), '—');
-    setText(DOM.riskTargets(), '—');
-    setText(DOM.riskConf(), '—');
-    setText(DOM.riskWR(), '—');
+    safe(() => {
+      const kv = qAny(SEL.kv);
+      if (!kv) return;
+      const t = (kv.textContent || '');
+      if (t.includes('NaN')) kv.textContent = 'Bullish —';
+    });
 
     scrubNaNText();
   }
@@ -182,36 +202,33 @@
     const sig = readSignals(s);
     const rk = readRisk(s);
     const bt = readBacktest(s);
+    const mt = readMeta(s);
 
     const sent = compute(sig);
-
     if (sent.total <= 0) {
-      renderEmpty();
+      renderEmpty(mt);
       return;
     }
 
-    setText(DOM.bullPct(), fmtPct0(sent.bullPct));
-    setText(DOM.bearPct(), fmtPct0(sent.bearPct));
-    setText(DOM.neuPct(),  fmtPct0(sent.neuPct));
+    setText(qAny(SEL.bullPct), fmtPct0(sent.bullPct));
+    setText(qAny(SEL.bearPct), fmtPct0(sent.bearPct));
+    setText(qAny(SEL.neuPct),  fmtPct0(sent.neuPct));
+    setText(qAny(SEL.pulseScore), sent.label);
 
-    // center score: show label (prevents NaN big text)
-    setText(DOM.pulseScore(), sent.label);
+    const status = (!mt.ready) ? 'Loading…' : (mt.source === 'delayed' ? 'Delayed data' : 'Ready');
+    setText(qAny(SEL.statusLine), status);
 
-    // net inflow: show signed number
-    setText(DOM.netInflow(), (sent.net > 0 ? `+${sent.net}` : `${sent.net}`));
-
-    // Risk Copilot
-    setText(DOM.riskEntry(), fmtPrice2(rk.entry));
-    setText(DOM.riskStop(), fmtPrice2(rk.stop));
+    setText(qAny(SEL.entry), fmtPrice2(rk.entry));
+    setText(qAny(SEL.stop), fmtPrice2(rk.stop));
 
     if (rk.targets && rk.targets.length) {
-      setText(DOM.riskTargets(), rk.targets.map(x => Number(x).toFixed(2)).join(' / '));
+      setText(qAny(SEL.targets), rk.targets.map(x => Number(x).toFixed(2)).join(' / '));
     } else {
-      setText(DOM.riskTargets(), '—');
+      setText(qAny(SEL.targets), '—');
     }
 
-    setText(DOM.riskConf(), rk.confidence === null ? '—' : fmtPct0(rk.confidence));
-    setText(DOM.riskWR(), bt.winRate === null ? '—' : fmtPct0(bt.winRate));
+    setText(qAny(SEL.confPct), rk.confidence === null ? '—' : fmtPct0(rk.confidence));
+    setText(qAny(SEL.winRate), bt.winRate === null ? '—' : fmtPct0(bt.winRate));
 
     scrubNaNText();
   }
@@ -231,12 +248,9 @@
     safe(() => {
       const s = getSnap();
       if (s) renderFromSnapshot(s);
-      else renderEmpty();
     });
 
     window.addEventListener('darrius:chartUpdated', onUpdate);
-
-    // keep clean even if snapshot never arrives
     safe(() => { scrubNaNText(); });
   }
 
