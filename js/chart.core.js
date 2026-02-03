@@ -189,6 +189,29 @@
     return out;
   }
 
+  function ymd(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function ensureFromTo(p) {
+  if (p.from && p.to) return p;
+
+  const toD = new Date();
+  // timespan: day / hour / minute 先按 day 处理（你现在就是 day）
+  const unitDays = (p.timespan === 'day') ? 1 : 1;
+
+  // bars * multiplier 天窗口（再多给一点 buffer）
+  const days = Math.max(5, Math.floor(p.bars * p.multiplier * unitDays));
+  const fromD = new Date(toD.getTime() - (days * 24 * 3600 * 1000));
+
+  p.to = ymd(toD);
+  p.from = ymd(fromD);
+  return p;
+}
+
   // -----------------------------
   // EMA (internal; does NOT produce signals)
   // -----------------------------
