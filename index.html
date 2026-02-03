@@ -915,23 +915,24 @@
      SCRIPTS (ORDER IS CRITICAL)
      ========================= -->
 
-<!-- 0) Chart lib MUST be first -->
+<!-- 0) lightweight-charts MUST be first -->
 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
-<!-- 1) Main chart engine -->
-<script src="js/chart.core.js?v=20260203_tsla"></script>
+<!-- 1) chart core -->
+<script src="js/chart.core.js?v=20260203_fix1"></script>
 
-<!-- 2) UI overlays (read-only) -->
+<!-- 2) overlays -->
 <script src="js/market.pulse.js?v=20260203a"></script>
 <script src="js/darrius.mutant.js?v=20260212"></script>
 
-<!-- 3) Subscription & referral (DO NOT TOUCH) -->
+<!-- 3) subscription/referral (保持不动) -->
 <script src="js/subscription.js?v=20260202"></script>
 <script src="js/referral.client.js?v=20260129"></script>
 <script src="js/referral.checkout.js?v=20260129"></script>
 
-<!-- 4) Boot MUST be last -->
-<script src="js/boot.js?v=20260203_tsla"></script>
+<!-- 4) boot MUST be last -->
+<script src="js/boot.js?v=20260203_fix1"></script>
+
 
   <!-- ✅ Affiliate card click -->
   <script>
