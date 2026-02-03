@@ -72,8 +72,12 @@
 
   // ---------- optional: share link ----------
   async function copyShareLink() {
-    const sym = ($("symbol")?.value || "BTCUSDT").trim().toUpperCase();
-    const tf = $("tf")?.value || "1d";
+    const DEFAULT_SYM = String(window.__DEFAULT_SYMBOL__ || "TSLA").trim().toUpperCase();
+    const DEFAULT_TF  = String(window.__DEFAULT_TF__ || "1d").trim();
+
+    const sym = ($("symbol")?.value || DEFAULT_SYM).trim().toUpperCase();
+    const tf = $("tf")?.value || DEFAULT_TF;
+
     const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -164,7 +168,7 @@
     applyQueryParamsToUI();
 
     // Quick TF buttons
-    syncTfQuick($("tf")?.value || "1d");
+    syncTfQuick($("tf")?.value || (window.__DEFAULT_TF__ || "1d"));
 
     // ---- ChartCore wiring ----
     const hasChartCore = !!window.ChartCore;
