@@ -1,244 +1,254 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (SERVER-SIGS-CLEAN, NO SECRETS)
- * Build: 2026-02-02 vNEXT (diagnostics + robust payload extract)
+ * DarriusAI - chart.core.js (FROZEN MAIN CHART) v2026.02.02-FINAL-AGG-SIGS-DIAG
  *
  * Role:
- *  - Render main chart (candles + optional EMA/AUX if backend provides series)
- *  - Fetch OHLCV via backend proxy
- *  - Fetch signals via backend (/api/market/sigs) ONLY
- *  - Output snapshot to window.__DARRIUS_CHART_STATE__
- *  - Provide bridge for overlay: DarriusChart.timeToX / priceToY / getSnapshot
+ *  - Render main chart (candles + EMA [+ AUX if enabled])
+ *  - Fetch OHLCV via backend proxy (aggregates)
+ *  - Fetch signals via backend (/api/market/sigs) optional
+ *  - Output read-only snapshot to window.__DARRIUS_CHART_STATE__
+ *  - Provide read-only bridge for UI overlay (market.pulse.js):
+ *      DarriusChart.timeToX / DarriusChart.priceToY / DarriusChart.getSnapshot()
+ *  - Emit event "darrius:chartUpdated" with snapshot detail
  *
- * Safety:
- *  - Never touches billing/subscription logic
+ * Guarantees:
+ *  1) Main chart render is highest priority and will not be broken by UI
+ *  2) Non-critical parts (snapshot/event/markers) are wrapped in no-throw safe zones
+ *  3) No billing/subscription logic touched
  * ========================================================================= */
-
-console.log("=== chart.core.js ACTIVE BUILD: 2026-02-02 vNEXT (NO-SECRETS) ===");
-window.__CHART_CORE_ACTIVE__ = "2026-02-02 vNEXT (NO-SECRETS)";
 
 (() => {
   "use strict";
 
   // -----------------------------
-  // Diagnostics (what you were checking in console)
+  // Global diagnostic (never throw)
   // -----------------------------
-  window.__LAST_AGG_URL__ = undefined;
-  window.__LAST_AGG_HTTP__ = undefined;
-  window.__LAST_AGG_TEXT_HEAD__ = undefined;
-  window.__LAST_AGG_ERR__ = undefined;
-  window.__LAST_AGG__ = undefined;
-  window.__LAST_SIGS__ = undefined;
+  const DIAG = (window.__DARRIUS_DIAG__ = window.__DARRIUS_DIAG__ || {
+    lastError: null,
+    chartError: null,
+    lastBarsUrl: null,
+    lastSigCount: null,
+  });
+
+  // Split AGG and SIGS diagnostics (DO NOT overwrite each other)
+  window.__LAST_AGG_URL__ = window.__LAST_AGG_URL__ || undefined;
+  window.__LAST_AGG_HTTP__ = window.__LAST_AGG_HTTP__ || undefined;
+  window.__LAST_AGG_TEXT_HEAD__ = window.__LAST_AGG_TEXT_HEAD__ || undefined;
+  window.__LAST_AGG_ERR__ = window.__LAST_AGG_ERR__ || undefined;
+  window.__LAST_AGG__ = window.__LAST_AGG__ || undefined;
+
+  window.__LAST_SIGS_URL__ = window.__LAST_SIGS_URL__ || undefined;
+  window.__LAST_SIGS_HTTP__ = window.__LAST_SIGS_HTTP__ || undefined;
+  window.__LAST_SIGS_TEXT_HEAD__ = window.__LAST_SIGS_TEXT_HEAD__ || undefined;
+  window.__LAST_SIGS_ERR__ = window.__LAST_SIGS_ERR__ || undefined;
+  window.__LAST_SIGS__ = window.__LAST_SIGS__ || undefined;
+
+  // Mark chart core active for quick console check
+  window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL (AGG/SIGS DIAG)";
+
+  function safeRun(tag, fn) {
+    try {
+      return fn();
+    } catch (e) {
+      DIAG.lastError = {
+        tag,
+        message: String(e?.message || e),
+        stack: String(e?.stack || ""),
+      };
+      return undefined;
+    }
+  }
+
+  // -----------------------------
+  // DOM helpers
+  // -----------------------------
+  const $ = (id) => document.getElementById(id);
+  const qs = (sel) => document.querySelector(sel);
 
   // -----------------------------
   // Config
   // -----------------------------
-  const POLL_INTERVAL = 15000;
+  const DEFAULT_API_BASE =
+    (window.DARRIUS_API_BASE && String(window.DARRIUS_API_BASE)) ||
+    (window._API_BASE_ && String(window._API_BASE_)) ||
+    (window.API_BASE && String(window.API_BASE)) ||
+    "https://darrius-api.onrender.com";
 
-  const API_BASE = String(
-    window.__DARRIUS_API_BASE__ ||
-    window.DARRIUS_API_BASE ||
-    window._API_BASE_ ||
-    window.API_BASE ||
-    "https://darrius-api.onrender.com"
-  ).replace(/\/+$/, "");
+  // Main aggregates path (your backend proxy)
+  const STOCKS_AGGS_PATH = "/api/data/stocks/aggregates";
+  // Optional crypto aggregates path (only if your backend supports)
+  const CRYPTO_AGGS_PATH = "/api/data/crypto/aggregates";
 
-  const API_AGG  = `${API_BASE}/api/data/stocks/aggregates`;
-  const API_SIGS = `${API_BASE}/api/market/sigs`;
+  // Optional backward compat fallback endpoints (if you had them)
+  const BARS_PATH_CANDIDATES = [
+    "/api/market/bars",
+    "/api/bars",
+    "/bars",
+    "/api/ohlcv",
+    "/ohlcv",
+    "/api/ohlc",
+    "/ohlc",
+    "/api/market/ohlcv",
+    "/market/ohlcv",
+    "/api/market/ohlc",
+    "/market/ohlc",
+  ];
+
+  // Signals (optional)
+  const SIGS_PATH = "/api/market/sigs";
 
   // -----------------------------
-  // Runtime state
+  // Parameters (internal)
   // -----------------------------
-  const R = (window.__DARRIUS_CHART_RUNTIME__ = window.__DARRIUS_CHART_RUNTIME__ || {});
-  if (!R.__ERR_HOOKED__) {
-    R.__ERR_HOOKED__ = true;
-    window.addEventListener("error", (e) => console.log("[window.onerror]", e.message));
-    window.addEventListener("unhandledrejection", (e) => console.log("[unhandledrejection]", e.reason));
-  }
+  const EMA_PERIOD = 14;
+  const AUX_PERIOD = 40;
+  const AUX_METHOD = "SMA";
+  const CONFIRM_WINDOW = 3;
 
   // -----------------------------
-  // Helpers
+  // Colors
   // -----------------------------
-  const $ = (id) => document.getElementById(id);
+  const COLOR_UP = "#2BE2A6";
+  const COLOR_DN = "#FF5A5A";
+  const COLOR_UP_WICK = "#2BE2A6";
+  const COLOR_DN_WICK = "#FF5A5A";
 
-  function findChartContainer() {
-    return (
-      document.querySelector("#chart") ||
-      document.querySelector(".chart-container") ||
-      document.querySelector(".tv-lightweight-chart") ||
-      document.querySelector(".tv-chart") ||
-      document.querySelector("[data-chart]")
-    );
+  const COLOR_EMA = "#FFD400";
+  const COLOR_AUX = "#FFFFFF";
+
+  // -----------------------------
+  // State
+  // -----------------------------
+  let containerEl = null;
+  let chart = null;
+  let candleSeries = null;
+  let emaSeries = null;
+  let auxSeries = null;
+
+  let showEMA = true;
+  let showAUX = true;
+
+  // -----------------------------
+  // UI readers
+  // -----------------------------
+  function getUiSymbol() {
+    const el =
+      $("symbolInput") ||
+      $("symInput") ||
+      $("symbol") ||
+      qs('input[name="symbol"]') ||
+      qs("#symbol") ||
+      qs("#sym");
+    const v = el && (el.value || el.textContent);
+    return (v || "AAPL").trim();
   }
 
-  function ensureSize(el) {
-    const r = el.getBoundingClientRect();
-    if (r.width === 0) el.style.width = "100%";
-    if (r.height === 0) el.style.minHeight = "420px";
-    return el.getBoundingClientRect();
+  function getUiTf() {
+    const el =
+      $("tfSelect") ||
+      $("timeframeSelect") ||
+      $("tf") ||
+      qs('select[name="timeframe"]') ||
+      qs("#timeframe");
+    const v = el && (el.value || el.textContent);
+    return (v || "1d").trim();
   }
 
-  function normalizeTimeToSec(t) {
-    if (t == null) return null;
-
-    // number: seconds or ms
-    if (typeof t === "number") {
-      if (t > 10_000_000_000) return Math.floor(t / 1000);
-      return Math.floor(t);
-    }
-
-    // string: ISO time (TwelveData datetime)
-    if (typeof t === "string") {
-      const ms = Date.parse(t);
-      if (!Number.isFinite(ms)) return null;
-      return Math.floor(ms / 1000);
-    }
-
-    return null;
+  // Try to read provider from page (optional)
+  function getUiProvider() {
+    // You may set these globals from index.html/control panel
+    const p =
+      window.__DATA_PROVIDER__ ||
+      window.__DATA_SOURCE_PROVIDER__ ||
+      window.__DATA_SOURCE__ ||
+      window.__DATA_SOURCE_NAME__ ||
+      window.__DATA_PROVIDER_NAME__;
+    if (!p) return "auto";
+    const s = String(p).trim().toLowerCase();
+    if (!s) return "auto";
+    // normalize a bit
+    if (s.includes("twelve")) return "twelve";
+    if (s.includes("polygon")) return "polygon";
+    if (s.includes("massive")) return "massive";
+    return "auto";
   }
 
-  // Extract array rows from many payload schemas
-  function extractRows(payload) {
-    if (!payload) return [];
-
-    // common direct
-    const direct = [
-      payload.results,
-      payload.candles,
-      payload.bars,
-      payload.data,
-      payload.values,            // TwelveData
-    ];
-    for (const x of direct) if (Array.isArray(x) && x.length) return x;
-
-    // nested
-    const nested = [
-      payload.data?.results,
-      payload.data?.candles,
-      payload.data?.bars,
-      payload.data?.values,      // TwelveData nested
-      payload.payload?.results,
-      payload.payload?.candles,
-      payload.payload?.bars,
-      payload.payload?.values,
-    ];
-    for (const x of nested) if (Array.isArray(x) && x.length) return x;
-
-    // last resort: scan first-level keys for array containing OHLC-like objects
-    for (const k of Object.keys(payload)) {
-      const v = payload[k];
-      if (Array.isArray(v) && v.length && typeof v[0] === "object") {
-        const r0 = v[0] || {};
-        const hasO = ("o" in r0) || ("open" in r0);
-        const hasC = ("c" in r0) || ("close" in r0);
-        if (hasO && hasC) return v;
-      }
+  function isProbablyCryptoSymbol(sym) {
+    const s = String(sym || "").trim().toUpperCase();
+    // Heuristic: BTCUSDT, ETHUSDT, BTC-USD, BTCUSD, X:BTCUSD etc.
+    if (s.includes("USDT") || s.includes("-USD") || s.includes("BTC") || s.includes("ETH")) {
+      // avoid false positives like "BETHESDA" - keep it minimal
+      if (s === "AAPL" || s === "SPY" || s === "TSLA") return false;
+      // if it contains ':' it's often Polygon crypto like X:BTCUSD
+      return true;
     }
-
-    return [];
+    return false;
   }
 
-  function normalizeCandles(rows) {
-    const candles = [];
+  // -----------------------------
+  // Fetch helpers (AGG/SIGS separated)
+  // -----------------------------
+  async function fetchText(url, tag = "AGG") {
+    const isAgg = (tag === "AGG");
 
-    for (const r of rows) {
-      // Polygon/Massive: t,o,h,l,c
-      // TwelveData: datetime, open, high, low, close (often strings)
-      const tRaw =
-        r.t ?? r.time ?? r.timestamp ?? r.ts ?? r.date ??
-        r.datetime ?? r.dateTime ?? r.DateTime ?? r.Datetime;
-
-      const time = normalizeTimeToSec(tRaw);
-      if (!time) continue;
-
-      const o = Number(r.o ?? r.open ?? r.Open);
-      const h = Number(r.h ?? r.high ?? r.High);
-      const l = Number(r.l ?? r.low  ?? r.Low);
-      const c = Number(r.c ?? r.close ?? r.Close);
-
-      if (![o, h, l, c].every(Number.isFinite)) continue;
-
-      candles.push({ time, open: o, high: h, low: l, close: c });
+    if (isAgg) {
+      window.__LAST_AGG_URL__ = url;
+      window.__LAST_AGG_ERR__ = undefined;
+    } else {
+      window.__LAST_SIGS_URL__ = url;
+      window.__LAST_SIGS_ERR__ = undefined;
     }
-
-    candles.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
-
-    // de-dupe by time
-    const out = [];
-    let lastT = null;
-    for (const b of candles) {
-      if (b.time === lastT) continue;
-      lastT = b.time;
-      out.push(b);
-    }
-    return out;
-  }
-
-  // Optional lines if backend provides them
-  function normalizeLine(rows, keyCandidates) {
-    const pts = [];
-    for (const r of rows) {
-      const tRaw =
-        r.t ?? r.time ?? r.timestamp ?? r.ts ?? r.date ??
-        r.datetime ?? r.dateTime ?? r.DateTime ?? r.Datetime;
-
-      const time = normalizeTimeToSec(tRaw);
-      if (!time) continue;
-
-      let v = null;
-      for (const k of keyCandidates) {
-        if (typeof r[k] === "number") { v = r[k]; break; }
-        if (r[k] != null && Number.isFinite(Number(r[k]))) { v = Number(r[k]); break; }
-      }
-      if (!Number.isFinite(v)) continue;
-      pts.push({ time, value: v });
-    }
-    pts.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
-    return pts;
-  }
-
-  async function fetchText(url) {
-    window.__LAST_AGG_URL__ = url;
-    window.__LAST_AGG_ERR__ = undefined;
 
     let res, text;
     try {
-      res = await fetch(url, { cache: "no-store" });
+      res = await fetch(url, { method: "GET", cache: "no-store", credentials: "omit" });
       text = await res.text();
     } catch (e) {
-      window.__LAST_AGG_ERR__ = String(e?.message || e);
+      const msg = String(e?.message || e);
+      if (isAgg) window.__LAST_AGG_ERR__ = msg;
+      else window.__LAST_SIGS_ERR__ = msg;
       throw e;
     }
 
-    window.__LAST_AGG_HTTP__ = res.status;
-    window.__LAST_AGG_TEXT_HEAD__ = (text || "").slice(0, 200);
+    if (isAgg) {
+      window.__LAST_AGG_HTTP__ = res.status;
+      window.__LAST_AGG_TEXT_HEAD__ = (text || "").slice(0, 300);
+    } else {
+      window.__LAST_SIGS_HTTP__ = res.status;
+      window.__LAST_SIGS_TEXT_HEAD__ = (text || "").slice(0, 300);
+    }
 
     if (!res.ok) {
       const err = new Error(`HTTP ${res.status}`);
       err.status = res.status;
       err.body = text;
-      window.__LAST_AGG_ERR__ = `${err.message}`;
+      if (isAgg) window.__LAST_AGG_ERR__ = err.message;
+      else window.__LAST_SIGS_ERR__ = err.message;
       throw err;
     }
 
     return text;
   }
 
-  async function fetchJSON(url, isAgg = false) {
-    const text = await fetchText(url);
+  async function fetchJSON(url, tag = "AGG") {
+    const text = await fetchText(url, tag);
+
     let json = null;
     try { json = JSON.parse(text); } catch (_) {}
 
     if (!json) {
       const err = new Error("JSON parse failed");
-      window.__LAST_AGG_ERR__ = err.message;
+      if (tag === "AGG") window.__LAST_AGG_ERR__ = err.message;
+      else window.__LAST_SIGS_ERR__ = err.message;
       throw err;
     }
 
-    if (isAgg) window.__LAST_AGG__ = json;
+    if (tag === "AGG") window.__LAST_AGG__ = json;
     return json;
   }
 
-  // ---- timeframe -> multiplier/timespan + range (same as your 1/23 logic) ----
+  // -----------------------------
+  // tf -> multiplier/timespan + history window
+  // -----------------------------
   function tfToAggParams(tf) {
     const m = String(tf || "1d").trim();
     const map = {
@@ -267,69 +277,387 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 vNEXT (NO-SECRETS)";
     return { from: toYMD(from), to: toYMD(to) };
   }
 
-  // -----------------------------
-  // Chart init
-  // -----------------------------
-  function canInitNow() {
-    return !!(window.LightweightCharts && typeof window.LightweightCharts.createChart === "function");
+  function toUnixSec(t) {
+    if (t == null) return null;
+
+    if (typeof t === "number") {
+      // ms -> s
+      if (t > 2e10) return Math.floor(t / 1000);
+      // already sec
+      return t;
+    }
+
+    if (typeof t === "string") {
+      const s = t.trim();
+      // Twelve Data often uses "YYYY-MM-DD HH:mm:ss"
+      // Replace space with 'T' to improve parse robustness
+      const normalized = s.includes("T") ? s : s.replace(" ", "T");
+      const ms = Date.parse(normalized);
+      if (!Number.isFinite(ms)) return null;
+      return Math.floor(ms / 1000);
+    }
+
+    // LightweightCharts business day object support
+    if (typeof t === "object" && t.year && t.month && t.day) return t;
+
+    return null;
   }
 
-  function initChart() {
-    const container = findChartContainer();
-    if (!container) { console.error("[chart.core] #chart container NOT FOUND"); return false; }
-    if (!canInitNow()) { console.error("[chart.core] LightweightCharts NOT READY"); return false; }
+  // -----------------------------
+  // Normalizers (Bars / Signals)
+  // -----------------------------
+  function normalizeBars(payload) {
+    // Accept many schemas:
+    // - Polygon/Massive: { results:[{t,o,h,l,c,...}] }
+    // - Nested: { data:{ results:[...] } } or { data:{ values:[...] } }
+    // - Generic: { bars:[...] } / { data:[...] }
+    // - Twelve Data: { values:[{datetime,open,high,low,close}] }
+    const raw =
+      Array.isArray(payload) ? payload :
+      Array.isArray(payload?.results) ? payload.results :
+      Array.isArray(payload?.bars) ? payload.bars :
+      Array.isArray(payload?.ohlcv) ? payload.ohlcv :
+      Array.isArray(payload?.data) ? payload.data :
+      Array.isArray(payload?.values) ? payload.values :
+      Array.isArray(payload?.data?.results) ? payload.data.results :
+      Array.isArray(payload?.data?.bars) ? payload.data.bars :
+      Array.isArray(payload?.data?.ohlcv) ? payload.data.ohlcv :
+      Array.isArray(payload?.data?.values) ? payload.data.values :
+      Array.isArray(payload?.data?.data) ? payload.data.data :
+      [];
 
-    const rect = ensureSize(container);
-    console.log("[chart.core] init container:", { w: rect.width, h: rect.height, id: container.id, cls: container.className });
+    const bars = (raw || [])
+      .map((b) => {
+        // time fields
+        const tRaw =
+          b.time ?? b.t ?? b.timestamp ?? b.ts ?? b.date ??
+          b.datetime ?? b.dateTime ?? b.Datetime ?? b.DateTime;
 
-    try { if (R.chart && R.chart.remove) R.chart.remove(); } catch (_) {}
+        const time = toUnixSec(tRaw);
 
-    const chart = window.LightweightCharts.createChart(container, {
-      layout: { background: { color: "#0b1220" }, textColor: "#cfd8dc" },
-      grid: { vertLines: { color: "#1f2a38" }, horzLines: { color: "#1f2a38" } },
-      timeScale: { timeVisible: true, secondsVisible: false },
-      rightPriceScale: { borderColor: "#263238" },
-      crosshair: { mode: window.LightweightCharts.CrosshairMode.Normal },
-    });
+        // OHLC fields (support both numeric and string)
+        const open  = Number(b.open  ?? b.o ?? b.Open);
+        const high  = Number(b.high  ?? b.h ?? b.High);
+        const low   = Number(b.low   ?? b.l ?? b.Low);
+        const close = Number(b.close ?? b.c ?? b.Close);
 
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: "#26a69a",
-      downColor: "#ef5350",
-      wickUpColor: "#26a69a",
-      wickDownColor: "#ef5350",
-      borderVisible: false,
-    });
+        if (!time) return null;
+        if (![open, high, low, close].every(Number.isFinite)) return null;
 
-    const emaSeries = chart.addLineSeries({ color: "#fdd835", lineWidth: 2, visible: true });
-    const auxSeries = chart.addLineSeries({ color: "#ffffff", lineWidth: 2, visible: true });
+        return { time, open, high, low, close };
+      })
+      .filter(Boolean);
 
-    R.chart = chart;
-    R.candleSeries = candleSeries;
-    R.emaSeries = emaSeries;
-    R.auxSeries = auxSeries;
+    bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
 
-    // bridge for overlay
-    window.DarriusChart = window.DarriusChart || {};
-    window.DarriusChart.timeToX = (t) => { try { return chart.timeScale().timeToCoordinate(t); } catch (_) { return null; } };
-    window.DarriusChart.priceToY = (p) => { try { return candleSeries.priceToCoordinate(p); } catch (_) { return null; } };
-    window.DarriusChart.getSnapshot = () => { try { return window.__DARRIUS_CHART_STATE__ || null; } catch (_) { return null; } };
+    // de-dupe by time
+    const out = [];
+    let lastT = null;
+    for (const b of bars) {
+      if (b.time === lastT) continue;
+      lastT = b.time;
+      out.push(b);
+    }
+    return out;
+  }
 
-    window.addEventListener("resize", () => {
+  function normalizeSignals(payload) {
+    const raw =
+      payload?.sigs ||
+      payload?.signals ||
+      payload?.data?.sigs ||
+      payload?.data?.signals ||
+      payload?.data ||
+      [];
+
+    if (!Array.isArray(raw)) return [];
+
+    const out = raw
+      .map((s) => {
+        const time = toUnixSec(s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date);
+        const sideRaw = String(s.side ?? s.type ?? s.action ?? s.text ?? "").trim();
+        const sideUp = sideRaw.toUpperCase();
+
+        let side = "";
+        if (sideRaw === "eB" || sideUp === "EB") side = "eB";
+        else if (sideRaw === "eS" || sideUp === "ES") side = "eS";
+        else if (sideUp.includes("BUY")) side = "B";
+        else if (sideUp.includes("SELL")) side = "S";
+        else if (sideUp === "B" || sideUp === "S") side = sideUp;
+
+        if (!time || !side) return null;
+        return { time, side };
+      })
+      .filter(Boolean)
+      .sort((x, y) => (x.time > y.time ? 1 : x.time < y.time ? -1 : 0));
+
+    // de-dupe by (time, side)
+    const used = new Set();
+    const dedup = [];
+    for (const s of out) {
+      const k = `${s.time}:${s.side}`;
+      if (used.has(k)) continue;
+      used.add(k);
+      dedup.push(s);
+    }
+    return dedup;
+  }
+
+  // -----------------------------
+  // Prefer aggregates endpoint(s)
+  // -----------------------------
+  async function fetchBarsPack(sym, tf) {
+    const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
+    const cfg = tfToAggParams(tf);
+    const { from, to } = rangeByDaysBack(cfg.daysBack);
+
+    const symbol = String(sym || "AAPL").trim().toUpperCase();
+    const provider = getUiProvider(); // "auto" | "twelve" | ...
+
+    // build URL helper
+    function makeAggUrl(path) {
+      const url = new URL(apiBase + path);
+      url.searchParams.set("ticker", symbol);
+      url.searchParams.set("multiplier", String(cfg.multiplier));
+      url.searchParams.set("timespan", String(cfg.timespan));
+      url.searchParams.set("from", from);
+      url.searchParams.set("to", to);
+      // optional provider hint (if your backend supports)
+      url.searchParams.set("provider", provider || "auto");
+      return url.toString();
+    }
+
+    // Strategy:
+    // 1) If symbol looks crypto, try CRYPTO_AGGS_PATH first (optional)
+    // 2) Always try STOCKS_AGGS_PATH
+    // 3) Fallback candidates (older endpoints)
+    let lastErr = null;
+
+    const tryUrls = [];
+    if (isProbablyCryptoSymbol(symbol)) tryUrls.push(makeAggUrl(CRYPTO_AGGS_PATH));
+    tryUrls.push(makeAggUrl(STOCKS_AGGS_PATH));
+
+    for (const urlStr of tryUrls) {
       try {
-        const rr = container.getBoundingClientRect();
-        chart.applyOptions({ width: rr.width, height: rr.height });
+        DIAG.lastBarsUrl = urlStr;
+        const payload = await fetchJSON(urlStr, "AGG");
+        const bars = normalizeBars(payload);
+        if (bars.length) {
+          return { payload, bars, urlUsed: urlStr, aggCfg: cfg, range: { from, to } };
+        }
+        lastErr = new Error(`Aggs returned empty results (normalized=0) from ${urlStr}`);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    // Optional fallback endpoints
+    const q = `symbol=${encodeURIComponent(symbol)}&tf=${encodeURIComponent(tf)}&provider=${encodeURIComponent(provider || "auto")}`;
+    for (const p of BARS_PATH_CANDIDATES) {
+      const u = `${apiBase}${p}?${q}`;
+      try {
+        DIAG.lastBarsUrl = u;
+        const pl = await fetchJSON(u, "AGG");
+        const bs = normalizeBars(pl);
+        if (bs.length) return { payload: pl, bars: bs, urlUsed: u, aggCfg: cfg, range: { from, to } };
+        lastErr = new Error(`bars empty from ${u}`);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    throw new Error(`All bars endpoints failed. Last error: ${lastErr?.message || lastErr}`);
+  }
+
+  async function fetchOptionalSignals(sym, tf) {
+    const apiBase = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
+    const provider = getUiProvider();
+
+    const url = new URL(apiBase + SIGS_PATH);
+    url.searchParams.set("symbol", String(sym || "").trim());
+    url.searchParams.set("tf", String(tf || "").trim());
+    url.searchParams.set("provider", provider || "auto");
+
+    try {
+      const payload = await fetchJSON(url.toString(), "SIGS");
+      window.__LAST_SIGS__ = payload;
+      const sigs = normalizeSignals(payload);
+      return sigs;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // -----------------------------
+  // Math
+  // -----------------------------
+  function ema(values, period) {
+    const k = 2 / (period + 1);
+    let e = null;
+    const out = new Array(values.length);
+    for (let i = 0; i < values.length; i++) {
+      const v = values[i];
+      if (!Number.isFinite(v)) { out[i] = NaN; continue; }
+      e = e == null ? v : v * k + e * (1 - k);
+      out[i] = e;
+    }
+    return out;
+  }
+
+  function wmaAt(values, endIdx, period) {
+    const start = endIdx - period + 1;
+    if (start < 0) return NaN;
+    let num = 0, den = 0;
+    for (let i = start; i <= endIdx; i++) {
+      const v = values[i];
+      if (!Number.isFinite(v)) return NaN;
+      const w = i - start + 1;
+      num += v * w;
+      den += w;
+    }
+    return den ? (num / den) : NaN;
+  }
+
+  function smaAt(values, endIdx, period) {
+    const start = endIdx - period + 1;
+    if (start < 0) return NaN;
+    let sum = 0;
+    for (let i = start; i <= endIdx; i++) {
+      const v = values[i];
+      if (!Number.isFinite(v)) return NaN;
+      sum += v;
+    }
+    return sum / period;
+  }
+
+  function maOnArray(values, period, method) {
+    const m = String(method || "SMA").toUpperCase();
+    const out = new Array(values.length).fill(NaN);
+
+    if (period <= 1) {
+      for (let i = 0; i < values.length; i++) out[i] = values[i];
+      return out;
+    }
+
+    if (m === "EMA") {
+      const k = 2 / (period + 1);
+      let e = null;
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (!Number.isFinite(v)) { out[i] = NaN; continue; }
+        e = e == null ? v : v * k + e * (1 - k);
+        out[i] = e;
+      }
+      return out;
+    }
+
+    if (m === "WMA") {
+      for (let i = 0; i < values.length; i++) out[i] = wmaAt(values, i, period);
+      return out;
+    }
+
+    for (let i = 0; i < values.length; i++) out[i] = smaAt(values, i, period);
+    return out;
+  }
+
+  function computeAuxByYourAlgo(closes, period, method) {
+    const n = Math.max(2, Math.floor(period || 40));
+    const half = Math.max(1, Math.floor(n / 2));
+    const p = Math.max(1, Math.round(Math.sqrt(n)));
+
+    const vect = new Array(closes.length).fill(NaN);
+    for (let i = 0; i < closes.length; i++) {
+      const w1 = wmaAt(closes, i, half);
+      const w2 = wmaAt(closes, i, n);
+      vect[i] = (Number.isFinite(w1) && Number.isFinite(w2)) ? (2 * w1 - w2) : NaN;
+    }
+    return maOnArray(vect, p, method || "SMA");
+  }
+
+  function buildLinePoints(bars, values) {
+    const pts = new Array(bars.length);
+    for (let i = 0; i < bars.length; i++) {
+      pts[i] = { time: bars[i].time, value: Number.isFinite(values[i]) ? values[i] : null };
+    }
+    return pts;
+  }
+
+  function colorCandlesByEMATrend(bars, emaVals) {
+    const out = new Array(bars.length);
+    let lastSlope = 0;
+
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i];
+      const e0 = emaVals[i - 1];
+      const e1 = emaVals[i];
+      let slope = 0;
+
+      if (i >= 1 && Number.isFinite(e0) && Number.isFinite(e1)) {
+        slope = e1 - e0;
+        if (slope !== 0) lastSlope = slope;
+        else slope = lastSlope;
+      }
+
+      const isUp = slope > 0;
+      const isDn = slope < 0;
+      const fallbackUp = (b.close >= b.open);
+      const useUp = isUp ? true : isDn ? false : fallbackUp;
+
+      out[i] = {
+        ...b,
+        color: useUp ? COLOR_UP : COLOR_DN,
+        wickColor: useUp ? COLOR_UP_WICK : COLOR_DN_WICK,
+        borderColor: useUp ? COLOR_UP : COLOR_DN,
+      };
+    }
+    return out;
+  }
+
+  // -----------------------------
+  // Markers (small). Overlay uses big markers.
+  // -----------------------------
+  function applyMarkers(sigs) {
+    safeRun("applyMarkers", () => {
+      if (!candleSeries) return;
+
+      if (window.__OVERLAY_BIG_SIGS__ === true) {
+        candleSeries.setMarkers([]);
+        return;
+      }
+
+      const arr = (Array.isArray(sigs) ? sigs : []).filter(s => s && (s.side === "B" || s.side === "S"));
+
+      candleSeries.setMarkers(
+        arr.map((s) => ({
+          time: s.time,
+          position: s.side === "B" ? "belowBar" : "aboveBar",
+          color: s.side === "B" ? "#FFD400" : "#FF5A5A",
+          shape: s.side === "B" ? "arrowUp" : "arrowDown",
+          text: s.side,
+        }))
+      );
+    });
+  }
+
+  // -----------------------------
+  // Snapshot output (read-only)
+  // -----------------------------
+  function publishSnapshot(snapshot) {
+    safeRun("publishSnapshot", () => {
+      const frozen = Object.freeze(snapshot);
+      window.__DARRIUS_CHART_STATE__ = frozen;
+
+      try {
+        window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: frozen }));
       } catch (_) {}
     });
-
-    console.log("[chart.core] chart init OK");
-    return true;
   }
 
   // -----------------------------
-  // Update series + publish snapshot
+  // Toggles
   // -----------------------------
   function applyToggles() {
-    try {
+    safeRun("applyToggles", () => {
       const emaChecked =
         $("toggleEMA")?.checked ??
         $("emaToggle")?.checked ??
@@ -342,122 +670,256 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 vNEXT (NO-SECRETS)";
         $("tgAux")?.checked ??
         $("auxCheck")?.checked;
 
-      if (typeof emaChecked === "boolean") R.emaSeries?.applyOptions({ visible: !!emaChecked });
-      if (typeof auxChecked === "boolean") R.auxSeries?.applyOptions({ visible: !!auxChecked });
-    } catch (_) {}
+      if (typeof emaChecked === "boolean") showEMA = emaChecked;
+      if (typeof auxChecked === "boolean") showAUX = auxChecked;
+
+      if (emaSeries) emaSeries.applyOptions({ visible: !!showEMA });
+      if (auxSeries) auxSeries.applyOptions({ visible: !!showAUX });
+    });
   }
 
-  function publishSnapshot(snap) {
+  // -----------------------------
+  // Core load (MAIN FIRST)
+  // -----------------------------
+  async function load() {
+    if (!chart || !candleSeries) return;
+
+    const sym = getUiSymbol();
+    const tf = getUiTf();
+    const provider = getUiProvider();
+
+    safeRun("hintLoading", () => {
+      if ($("hintText")) $("hintText").textContent = "Loading...";
+    });
+
+    let pack;
     try {
-      const frozen = Object.freeze(snap);
-      window.__DARRIUS_CHART_STATE__ = frozen;
-      window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: frozen }));
-    } catch (_) {}
-  }
+      pack = await fetchBarsPack(sym, tf);
+    } catch (e) {
+      safeRun("hintFail", () => {
+        if ($("hintText")) $("hintText").textContent = `加载失败：${e.message || e}`;
+      });
 
-  function updateFromAggPayload(payload, meta) {
-    const rows = extractRows(payload);
-    const candles = normalizeCandles(rows);
+      // publish an error snapshot so UI doesn't stay undefined
+      publishSnapshot({
+        version: "2026.02.02-FINAL-AGG-SIGS-DIAG",
+        ts: Date.now(),
+        symbol: sym,
+        tf,
+        provider,
+        error: String(e?.message || e),
+        urlUsed: window.__LAST_AGG_URL__ || null,
+      });
 
-    if (!candles.length) {
-      console.error("[chart.core] Error: bars empty after normalization");
-      throw new Error("bars empty after normalization");
+      throw e;
     }
 
-    // Optional: if backend provides ema/aux fields per row
-    const emaPts = normalizeLine(rows, ["ema_fast", "ema", "ema14", "EMA"]);
-    const auxPts = normalizeLine(rows, ["aux", "aux40", "AUX"]);
+    const { payload, bars, urlUsed } = pack;
+    DIAG.lastBarsUrl = urlUsed;
 
-    // Render
-    try { R.candleSeries.setData(candles); } catch (e) { console.error("[chart.core] setData candles error", e); }
+    if (!bars.length) {
+      const err = new Error("bars empty after normalization");
+      window.__LAST_AGG_ERR__ = err.message;
 
-    try { if (emaPts.length) R.emaSeries.setData(emaPts); else R.emaSeries.setData([]); } catch (_) {}
-    try { if (auxPts.length) R.auxSeries.setData(auxPts); else R.auxSeries.setData([]); } catch (_) {}
+      publishSnapshot({
+        version: "2026.02.02-FINAL-AGG-SIGS-DIAG",
+        ts: Date.now(),
+        symbol: sym,
+        tf,
+        provider,
+        error: err.message,
+        urlUsed,
+        rawKeys: payload ? Object.keys(payload) : null,
+      });
 
-    try { R.chart.timeScale().fitContent(); } catch (_) {}
+      throw err;
+    }
+
+    // -------- MAIN CHART --------
+    const closes = bars.map((b) => b.close);
+    const emaVals = ema(closes, EMA_PERIOD);
+    const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
+
+    const coloredBars = colorCandlesByEMATrend(bars, emaVals);
+    candleSeries.setData(coloredBars);
+
+    const emaPts = buildLinePoints(bars, emaVals);
+    const auxPts = buildLinePoints(bars, auxVals);
+    if (emaSeries) emaSeries.setData(emaPts);
+    if (auxSeries) auxSeries.setData(auxPts);
+
+    // Signals (optional, non-blocking)
+    let sigs = [];
+    safeRun("signalsFetch", async () => {
+      const s = await fetchOptionalSignals(sym, tf);
+      sigs = Array.isArray(s) ? s : [];
+      DIAG.lastSigCount = sigs.length;
+      applyMarkers(sigs);
+    });
+
+    safeRun("fitContent", () => chart.timeScale().fitContent());
+
+    safeRun("topText", () => {
+      const last = bars[bars.length - 1];
+      if ($("symText")) $("symText").textContent = sym;
+      if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
+      if ($("hintText")) {
+        const rawLen =
+          Array.isArray(payload?.results) ? payload.results.length :
+          Array.isArray(payload?.values) ? payload.values.length :
+          Array.isArray(payload?.data?.results) ? payload.data.results.length :
+          Array.isArray(payload?.data?.values) ? payload.data.values.length :
+          null;
+
+        $("hintText").textContent =
+          `Loaded · provider=${provider} · TF=${tf} · bars=${bars.length}` +
+          (rawLen != null ? ` · raw=${rawLen}` : "") +
+          (sigs?.length ? ` · sigs=${sigs.length}` : "");
+      }
+    });
+
+    // Snapshot for UI overlay
+    safeRun("snapshot", () => {
+      window.DarriusChart = window.DarriusChart || {};
+
+      const snap = {
+        version: "2026.02.02-FINAL-AGG-SIGS-DIAG",
+        ts: Date.now(),
+        apiBase: DEFAULT_API_BASE,
+        urlUsed: urlUsed || null,
+        symbol: sym,
+        tf,
+        provider,
+        barsCount: bars.length,
+        bars: bars.slice(Math.max(0, bars.length - 600)),
+        ema: emaVals.slice(Math.max(0, bars.length - 600)),
+        aux: auxVals.slice(Math.max(0, bars.length - 600)),
+        sigs: (Array.isArray(sigs) ? sigs.slice(Math.max(0, sigs.length - 300)) : []),
+        signals: (Array.isArray(sigs) ? sigs.slice(Math.max(0, sigs.length - 300)) : []),
+        lastClose: bars[bars.length - 1].close,
+      };
+
+      window.DarriusChart.getSnapshot = () => {
+        try { return JSON.parse(JSON.stringify(snap)); } catch (_) { return snap; }
+      };
+
+      publishSnapshot(snap);
+    });
 
     applyToggles();
-
-    const snap = {
-      version: "2026-02-02-vNEXT-no-secrets",
-      ts: Date.now(),
-      meta: meta || {},
-      candles,
-      ema: emaPts,
-      aux: auxPts,
-      signals: Array.isArray(window.__LAST_SIGS__) ? window.__LAST_SIGS__ : [],
-      lastBar: candles[candles.length - 1],
-      count: candles.length,
-      urlUsed: window.__LAST_AGG_URL__ || null,
-    };
-
-    publishSnapshot(snap);
+    return { urlUsed, bars: bars.length, sigs: sigs.length };
   }
 
   // -----------------------------
-  // Poll
+  // Init
   // -----------------------------
-  async function pollOnce() {
-    const symbol = (window.__CURRENT_SYMBOL__ || window.__UI_SYMBOL__ || "BTCUSDT").toString().trim();
-    const tf     = (window.__CURRENT_TIMEFRAME__ || window.__UI_TIMEFRAME__ || "1d").toString().trim();
+  function init(opts) {
+    opts = opts || {};
+    const containerId = opts.containerId || "chart";
 
-    // Build aggregate URL in the most compatible way (ticker/multiplier/timespan/from/to)
-    const cfg = tfToAggParams(tf);
-    const { from, to } = rangeByDaysBack(cfg.daysBack);
+    containerEl = $(containerId);
+    if (!containerEl) throw new Error("Chart container missing: #" + containerId);
+    if (!window.LightweightCharts) throw new Error("LightweightCharts missing");
+    if (chart) return;
 
-    // IMPORTANT: backend might accept ticker= (old) or symbol= (new). We try ticker first.
-    const url1 = new URL(API_AGG);
-    url1.searchParams.set("ticker", symbol.toUpperCase());
-    url1.searchParams.set("multiplier", String(cfg.multiplier));
-    url1.searchParams.set("timespan", String(cfg.timespan));
-    url1.searchParams.set("from", from);
-    url1.searchParams.set("to", to);
+    chart = window.LightweightCharts.createChart(containerEl, {
+      layout: { background: { color: "transparent" }, textColor: "#EAF0F7" },
+      grid: {
+        vertLines: { color: "rgba(255,255,255,.04)" },
+        horzLines: { color: "rgba(255,255,255,.04)" },
+      },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { timeVisible: true, secondsVisible: false, borderVisible: false },
+      crosshair: { mode: 1 },
+    });
 
-    let aggPayload = null;
-    try {
-      aggPayload = await fetchJSON(url1.toString(), true);
-    } catch (e1) {
-      // fallback: symbol/timeframe
-      const url2 = new URL(API_AGG);
-      url2.searchParams.set("symbol", symbol);
-      url2.searchParams.set("timeframe", tf);
-      aggPayload = await fetchJSON(url2.toString(), true);
+    candleSeries = chart.addCandlestickSeries({
+      upColor: COLOR_UP,
+      downColor: COLOR_DN,
+      wickUpColor: COLOR_UP_WICK,
+      wickDownColor: COLOR_DN_WICK,
+      borderVisible: false,
+    });
+
+    emaSeries = chart.addLineSeries({
+      color: COLOR_EMA,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+
+    auxSeries = chart.addLineSeries({
+      color: COLOR_AUX,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+
+    // Read-only coordinate bridge (for market.pulse.js overlay)
+    safeRun("bridgeExpose", () => {
+      window.DarriusChart = window.DarriusChart || {};
+
+      window.DarriusChart.timeToX = (t) =>
+        safeRun("timeToX", () => {
+          if (!chart || !chart.timeScale) return null;
+          return chart.timeScale().timeToCoordinate(t);
+        });
+
+      window.DarriusChart.priceToY = (p) =>
+        safeRun("priceToY", () => {
+          if (!candleSeries || !candleSeries.priceToCoordinate) return null;
+          return candleSeries.priceToCoordinate(p);
+        });
+
+      window.DarriusChart.__hostId = containerId || "chart";
+    });
+
+    const resize = () =>
+      safeRun("resize", () => {
+        const r = containerEl.getBoundingClientRect();
+        chart.applyOptions({
+          width: Math.max(1, Math.floor(r.width)),
+          height: Math.max(1, Math.floor(r.height)),
+        });
+      });
+
+    safeRun("observeResize", () => {
+      try {
+        new ResizeObserver(resize).observe(containerEl);
+      } catch (_) {
+        window.addEventListener("resize", resize);
+      }
+    });
+    resize();
+
+    // Toggles
+    $("toggleEMA")?.addEventListener("change", applyToggles);
+    $("emaToggle")?.addEventListener("change", applyToggles);
+    $("tgEMA")?.addEventListener("change", applyToggles);
+    $("emaCheck")?.addEventListener("change", applyToggles);
+
+    $("toggleAUX")?.addEventListener("change", applyToggles);
+    $("auxToggle")?.addEventListener("change", applyToggles);
+    $("tgAux")?.addEventListener("change", applyToggles);
+    $("auxCheck")?.addEventListener("change", applyToggles);
+
+    if (opts.autoLoad !== false) {
+      load().catch((e) => {
+        DIAG.chartError = { message: String(e?.message || e), stack: String(e?.stack || "") };
+      });
     }
+  }
 
-    // signals: best-effort only
+  function getSnapshot() {
     try {
-      const uS = new URL(API_SIGS);
-      uS.searchParams.set("symbol", symbol);
-      uS.searchParams.set("tf", tf);
-      uS.searchParams.set("timeframe", tf);
-      window.__LAST_SIGS__ = await fetchJSON(uS.toString(), false);
+      if (window.DarriusChart && typeof window.DarriusChart.getSnapshot === "function") {
+        return window.DarriusChart.getSnapshot();
+      }
+      return window.__DARRIUS_CHART_STATE__ || null;
     } catch (_) {
-      // keep silent
+      return null;
     }
-
-    updateFromAggPayload(aggPayload, { symbol, tf, provider: "auto", apiBase: API_BASE });
   }
 
-  function startPolling() {
-    if (R.pollingTimer) return;
-    pollOnce().catch((e) => console.error("[chart.core] pollOnce error", e));
-    R.pollingTimer = setInterval(() => {
-      pollOnce().catch((e) => console.error("[chart.core] poll tick error", e));
-    }, POLL_INTERVAL);
-  }
-
-  // -----------------------------
-  // Boot loop
-  // -----------------------------
-  let tries = 0;
-  const t = setInterval(() => {
-    tries += 1;
-
-    if (!R.candleSeries) initChart();
-
-    if (R.candleSeries) startPolling();
-
-    if (R.candleSeries || tries > 200) clearInterval(t);
-  }, 50);
-
+  window.ChartCore = { init, load, applyToggles, getSnapshot };
 })();
