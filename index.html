@@ -752,8 +752,9 @@
           <div class="cardTitle"><b>Market · 品种与周期</b><span class="small">Chart</span></div>
 
           <div class="field">
-            <div class="label"><span>Symbol · 品种</span><span class="small">(如 BTCUSDT)</span></div>
-            <input id="symbol" value="BTCUSDT"/>
+            <div class="label"><span>Symbol · 品种</span><span class="small">(如 TSLA / AAPL)</span></div>
+            <!-- ✅ 默认 BTCUSDT -> TSLA -->
+            <input id="symbol" value="TSLA"/>
           </div>
 
           <div class="field">
@@ -849,6 +850,11 @@
   <script>
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
+
+    // ✅ SINGLE SOURCE OF TRUTH: 默认 Symbol/TF 以后只改这里
+    window.__DEFAULT_SYMBOL__ = "TSLA";
+    window.__DEFAULT_TF__ = "1d";
+
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
     // ✅ load logo (fallback list)
@@ -867,6 +873,16 @@
         if (idx < candidates.length) img.src = candidates[idx];
       };
       img.src = candidates[0];
+    })();
+
+    // ✅ ensure default symbol/tf applied if input exists and blank (best-effort)
+    (function(){
+      try{
+        const symEl = document.getElementById("symbol");
+        const tfEl  = document.getElementById("tf");
+        if (symEl && !String(symEl.value || "").trim()) symEl.value = window.__DEFAULT_SYMBOL__ || "TSLA";
+        if (tfEl && !String(tfEl.value || "").trim()) tfEl.value = window.__DEFAULT_TF__ || "1d";
+      }catch(_){}
     })();
   </script>
 
@@ -899,13 +915,13 @@
        SCRIPTS (ORDER IS CRITICAL)
        不动订阅/支付：subscription.js + boot.js 保持原
        ========================= -->
-  <script src="js/chart.core.js?v=20260202b"></script>
+  <script src="js/chart.core.js?v=20260203_tsla"></script>
   <script src="js/market.pulse.js?v=20260203a"></script>
   <script src="js/darrius.mutant.js?v=20260122"></script>
   <script src="js/subscription.js?v=20260122"></script>
   <script src="js/referral.client.js?v=20260129"></script>
   <script src="js/referral.checkout.js?v=20260129"></script>
-  <script src="js/boot.js?v=20260122"></script>
+  <script src="js/boot.js?v=20260203_tsla"></script>
 
   <!-- ✅ Affiliate card click -->
   <script>
