@@ -306,60 +306,92 @@
   // -----------------------------
   // Normalizers (Bars / Signals)
   // -----------------------------
-  function normalizeBars(payload) {
-    // Accept many schemas:
-    // - Polygon/Massive: { results:[{t,o,h,l,c,...}] }
-    // - Nested: { data:{ results:[...] } } or { data:{ values:[...] } }
-    // - Generic: { bars:[...] } / { data:[...] }
-    // - Twelve Data: { values:[{datetime,open,high,low,close}] }
-    const raw =
-      Array.isArray(payload) ? payload :
-      Array.isArray(payload?.results) ? payload.results :
-      Array.isArray(payload?.bars) ? payload.bars :
-      Array.isArray(payload?.ohlcv) ? payload.ohlcv :
-      Array.isArray(payload?.data) ? payload.data :
-      Array.isArray(payload?.values) ? payload.values :
-      Array.isArray(payload?.data?.results) ? payload.data.results :
-      Array.isArray(payload?.data?.bars) ? payload.data.bars :
-      Array.isArray(payload?.data?.ohlcv) ? payload.data.ohlcv :
-      Array.isArray(payload?.data?.values) ? payload.data.values :
-      Array.isArray(payload?.data?.data) ? payload.data.data :
-      [];
 
-    const bars = (raw || [])
-      .map((b) => {
-        // time fields
-        const tRaw =
-          b.time ?? b.t ?? b.timestamp ?? b.ts ?? b.date ??
-          b.datetime ?? b.dateTime ?? b.Datetime ?? b.DateTime;
+function normalizeBars(payload) {
+  // 兼容多种 schema（Twelve Data / Polygon / Massive / 自建后端包裹）
+  // 支持路径：
+  // - payload.results
+  // - payload.bars
+  // - payload.data.results
+  // - payload.data.bars
+  // - payload.values
+  // - payload.data.values
+  // - payload.data.data.values（有些后端会双层包裹）
+  const raw =
+    Array.isArray(payload) ? payload :
+    Array.isArray(payload?.results) ? payload.results :
+    Array.isArray(payload?.bars) ? payload.bars :
+    Array.isArray(payload?.data?.results) ? payload.data.results :
+    Array.isArray(payload?.data?.bars) ? payload.data.bars :
+    Array.isArray(payload?.values) ? payload.values :
+    Array.isArray(payload?.data?.values) ? payload.data.values :
+    Array.isArray(payload?.data?.data?.values) ? payload.data.data.values :
+    [];
 
-        const time = toUnixSec(tRaw);
+  // 时间解析：支持
+  // - 秒/毫秒 number
+  // - "1700000000" / "1700000000000" 这种数字字符串
+  // - "2026-02-01 00:00:00" / ISO string
+  function toUnixSecAny(t) {
+    if (t == null) return null;
 
-        // OHLC fields (support both numeric and string)
-        const open  = Number(b.open  ?? b.o ?? b.Open);
-        const high  = Number(b.high  ?? b.h ?? b.High);
-        const low   = Number(b.low   ?? b.l ?? b.Low);
-        const close = Number(b.close ?? b.c ?? b.Close);
-
-        if (!time) return null;
-        if (![open, high, low, close].every(Number.isFinite)) return null;
-
-        return { time, open, high, low, close };
-      })
-      .filter(Boolean);
-
-    bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
-
-    // de-dupe by time
-    const out = [];
-    let lastT = null;
-    for (const b of bars) {
-      if (b.time === lastT) continue;
-      lastT = b.time;
-      out.push(b);
+    // number
+    if (typeof t === "number" && Number.isFinite(t)) {
+      return (t > 2e10) ? Math.floor(t / 1000) : Math.floor(t);
     }
-    return out;
+
+    // numeric string
+    if (typeof t === "string") {
+      const s = t.trim();
+      if (/^\d+$/.test(s)) {
+        const n = Number(s);
+        if (!Number.isFinite(n)) return null;
+        return (n > 2e10) ? Math.floor(n / 1000) : Math.floor(n);
+      }
+      const ms = Date.parse(s);
+      if (Number.isFinite(ms)) return Math.floor(ms / 1000);
+      return null;
+    }
+
+    // business day object (LightweightCharts supports {year,month,day})
+    if (typeof t === "object" && t.year && t.month && t.day) return t;
+
+    return null;
   }
+
+  const bars = (raw || [])
+    .map((b) => {
+      // time字段兜底：t / time / timestamp / ts / date / datetime / candleTime
+      const tRaw =
+        b?.time ?? b?.t ?? b?.timestamp ?? b?.ts ?? b?.date ?? b?.datetime ?? b?.candleTime ?? b?.start ?? b?.end;
+
+      const time = toUnixSecAny(tRaw);
+
+      // OHLC 兜底：支持 Polygon/Massive 的 o/h/l/c，也支持 TwelveData 的 open/high/low/close（通常为字符串）
+      const open  = Number(b?.open  ?? b?.o ?? b?.Open);
+      const high  = Number(b?.high  ?? b?.h ?? b?.High);
+      const low   = Number(b?.low   ?? b?.l ?? b?.Low);
+      const close = Number(b?.close ?? b?.c ?? b?.Close);
+
+      if (!time) return null;
+      if (![open, high, low, close].every(Number.isFinite)) return null;
+
+      return { time, open, high, low, close };
+    })
+    .filter(Boolean);
+
+  // 排序 + 去重
+  bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+
+  const out = [];
+  let lastT = null;
+  for (const b of bars) {
+    if (b.time === lastT) continue;
+    lastT = b.time;
+    out.push(b);
+  }
+  return out;
+}
 
   function normalizeSignals(payload) {
     const raw =
