@@ -1,10 +1,12 @@
 /* =========================================================================
- * DarriusAI - market.pulse.js (FINAL FROZEN DISPLAY-ONLY) v2026.02.02-PULSE-NAN-LOCK-R2 + BIG-BADGE-TOPBOT
+ * DarriusAI - market.pulse.js (FINAL FROZEN DISPLAY-ONLY) v2026.02.03-BADGE-ANCHOR-HILO
  *
  * Purpose:
  *  - UI-only layer. Reads window.__DARRIUS_CHART_STATE__ snapshot (multi schema)
  *  - Renders Market Pulse + Risk Copilot text fields WITHOUT producing NaN
- *  - OPTIONAL: Renders BIG glowing badges (B/S/eB/eS) as overlay (DOM), fixed at TOP/BOTTOM
+ *  - Renders BIG glowing B/S/eB/eS badges (overlay) anchored to candle high/low
+ *  - Targets real DOM ids on darrius.ai:
+ *      #pulseScore, #bullPct, #bearPct, #neuPct, #inSConf, #riskWR, .kv
  *  - Never touches billing/subscription/payment logic
  *  - Never mutates chart.core.js internals
  *
@@ -17,8 +19,8 @@
   'use strict';
 
   // ===== PROBE (to prove which file is running) =====
-  console.log('[PULSE LOADED]', 'v2026.02.02-R2 + BIG-BADGE-TOPBOT', Date.now());
-  window.__PULSE_LOADED__ = 'v2026.02.02-R2 + BIG-BADGE-TOPBOT';
+  console.log('[PULSE LOADED]', 'v2026.02.03-BADGE-ANCHOR-HILO', Date.now());
+  window.__PULSE_LOADED__ = 'v2026.02.03-BADGE-ANCHOR-HILO';
 
   // -----------------------------
   // Safe zone
@@ -49,6 +51,23 @@
   function getSnap() {
     const s = window.__DARRIUS_CHART_STATE__;
     return (s && typeof s === 'object') ? s : null;
+  }
+
+  // NOTE: 这里用于“Market Pulse统计”，不是B/S徽章数组
+  function readSignalsStats(s) {
+    if (s.signals && typeof s.signals === 'object' && !Array.isArray(s.signals)) {
+      const bullish = num(s.signals.bullish, 0);
+      const bearish = num(s.signals.bearish, 0);
+      const neutral = num(s.signals.neutral, 0);
+      const net = num(s.signals.net, bullish - bearish);
+      return { bullish, bearish, neutral, net };
+    }
+    const stats = s.stats || s.signal_stats || {};
+    const bullish = num(stats.bullish, 0);
+    const bearish = num(stats.bearish, 0);
+    const neutral = num(stats.neutral, 0);
+    const net = num(stats.net, bullish - bearish);
+    return { bullish, bearish, neutral, net };
   }
 
   function readRisk(s) {
@@ -120,41 +139,28 @@
   // -----------------------------
   // Rendering rules (NO NaN)
   // -----------------------------
-  // ✅ FIX: 你现在的 sig 是数组（[{time,side,price}...]），compute 以前误当对象用，会导致 NaN。
-  // 这里按数组计算 bull/bear/neutral counts。
-  function computeFromSigArray(sigArr) {
-    const arr = Array.isArray(sigArr) ? sigArr : [];
-    let bullish = 0, bearish = 0, neutral = 0;
+  function compute(sentSig) {
+    const total = sentSig.bullish + sentSig.bearish + sentSig.neutral;
 
-    for (const x of arr) {
-      const side = String(x && x.side || '').trim();
-      if (side === 'B' || side === 'eB') bullish++;
-      else if (side === 'S' || side === 'eS') bearish++;
-      else neutral++;
-    }
-
-    const total = bullish + bearish + neutral;
     if (total <= 0) {
-      return { total: 0, bullPct: null, bearPct: null, neuPct: null, label: 'Warming up', net: 0, bullish, bearish, neutral };
+      return { total: 0, bullPct: null, bearPct: null, neuPct: null, label: 'Warming up' };
     }
 
-    const bullPct = safePct(bullish, total);
-    const bearPct = safePct(bearish, total);
-    const neuPct  = safePct(neutral, total);
+    const bullPct = safePct(sentSig.bullish, total);
+    const bearPct = safePct(sentSig.bearish, total);
+    const neuPct  = safePct(sentSig.neutral, total);
 
     if ([bullPct, bearPct, neuPct].some(v => v === null)) {
-      return { total: 0, bullPct: null, bearPct: null, neuPct: null, label: 'Warming up', net: 0, bullish, bearish, neutral };
+      return { total: 0, bullPct: null, bearPct: null, neuPct: null, label: 'Warming up' };
     }
 
-    const net = bullish - bearish;
-
     let label = 'Neutral';
-    if (net > 0) label = 'Bullish';
-    else if (net < 0) label = 'Bearish';
-    else if (bullish > bearish) label = 'Bullish';
-    else if (bearish > bullish) label = 'Bearish';
+    if (sentSig.net > 0) label = 'Bullish';
+    else if (sentSig.net < 0) label = 'Bearish';
+    else if (sentSig.bullish > sentSig.bearish) label = 'Bullish';
+    else if (sentSig.bearish > sentSig.bullish) label = 'Bearish';
 
-    return { total, bullPct, bearPct, neuPct, label, net, bullish, bearish, neutral };
+    return { total, bullPct, bearPct, neuPct, label };
   }
 
   function scrubNaNText() {
@@ -194,10 +200,10 @@
     scrubNaNText();
   }
 
-  // === HARDENED SIGNAL FALLBACK ===
-  // 当 snapshot 里没有信号时，从 __LAST_SIG__ 兜底
-  function pickSignalsWithLastSigFallback(snap) {
-    // 1) 先从 snapshot 里找
+  // ------------------------------------------------------------------
+  // HARDENED SIGNAL ARRAY FALLBACK (徽章用的 B/S/eB/eS 数组)
+  // ------------------------------------------------------------------
+  function pickSigArrayWithFallback(snap) {
     let arr =
       (Array.isArray(snap?.signals) && snap.signals) ||
       (Array.isArray(snap?.sigs) && snap.sigs) ||
@@ -205,7 +211,6 @@
       (Array.isArray(snap?.data?.sigs) && snap.data.sigs) ||
       [];
 
-    // 2) snapshot 没有 → 用 __LAST_SIG__
     if (!arr.length) {
       const ls = window.__LAST_SIG__;
       arr =
@@ -216,14 +221,18 @@
         [];
     }
 
-    // 3) 统一字段 + 去重
+    // normalize + dedupe
     const out = [];
     const seen = new Set();
+
     for (const x of arr) {
       if (!x) continue;
-      const time = x.time ?? x.t ?? x.timestamp ?? x.ts;
+
+      const time = Number(x.time ?? x.t ?? x.timestamp ?? x.ts);
+      if (!Number.isFinite(time) || time <= 0) continue;
+
       let side = String(x.side ?? x.type ?? x.action ?? '').trim();
-      if (!time || !side) continue;
+      if (!side) continue;
 
       const U = side.toUpperCase();
       if (U === 'EB') side = 'eB';
@@ -236,257 +245,277 @@
       if (seen.has(key)) continue;
       seen.add(key);
 
-      out.push({ time: Number(time), side, price: Number(x.price ?? x.p ?? null) });
+      const price = Number(x.price ?? x.p ?? NaN);
+      out.push({ time, side, price: Number.isFinite(price) ? price : null });
     }
 
-    // time 升序（方便 overlay 稳定）
-    out.sort((a, b) => (a.time || 0) - (b.time || 0));
     return out;
   }
 
+  // ------------------------------------------------------------------
+  // BIG BADGE OVERLAY (anchored to candle high/low)
+  // ------------------------------------------------------------------
+  const BigBadgeOverlay = (() => {
+    let layer = null;
+    let mounted = false;
+
+    // 你可以微调这个值：徽章离K线 high/low 的像素偏移
+    const OFFSET_Y = 12;
+
+    // 你可以微调：徽章大小
+    const SIZE = 26;
+
+    const Z = 50; // above chart
+
+    function ensureLayer() {
+      if (mounted && layer && layer.parentNode) return layer;
+
+      const chartEl = document.getElementById('chart');
+      if (!chartEl) return null;
+
+      // chart 容器一般是 position: relative 或者我们强制设置
+      safe(() => {
+        const cs = window.getComputedStyle(chartEl);
+        if (cs.position === 'static') chartEl.style.position = 'relative';
+      });
+
+      layer = document.createElement('div');
+      layer.id = 'darrius-big-badges';
+      layer.style.position = 'absolute';
+      layer.style.left = '0';
+      layer.style.top = '0';
+      layer.style.right = '0';
+      layer.style.bottom = '0';
+      layer.style.pointerEvents = 'none';
+      layer.style.zIndex = String(Z);
+
+      chartEl.appendChild(layer);
+      mounted = true;
+      return layer;
+    }
+
+    function clear() {
+      if (!layer) return;
+      layer.innerHTML = '';
+    }
+
+    // Build time->bar map from snapshot bars
+    function buildBarIndex(snapshot) {
+      const bars =
+        (Array.isArray(snapshot?.bars) && snapshot.bars) ||
+        (Array.isArray(snapshot?.data?.bars) && snapshot.data.bars) ||
+        (Array.isArray(snapshot?.candles) && snapshot.candles) ||
+        (Array.isArray(snapshot?.ohlcv) && snapshot.ohlcv) ||
+        [];
+
+      const map = new Map();
+      for (const b of bars) {
+        const t = Number(b?.time);
+        if (!Number.isFinite(t)) continue;
+        map.set(t, b);
+      }
+      return map;
+    }
+
+    function yNearCandle(DC, bar, side, H) {
+      if (!DC || typeof DC.priceToY !== 'function' || !bar) return null;
+
+      const isSell = (side === 'S' || side === 'eS');
+      const high = Number(bar.high);
+      const low  = Number(bar.low);
+
+      const anchorPrice = isSell
+        ? (Number.isFinite(high) ? high : Number(bar.close))
+        : (Number.isFinite(low)  ? low  : Number(bar.close));
+
+      if (!Number.isFinite(anchorPrice)) return null;
+
+      const y0 = DC.priceToY(anchorPrice);
+      if (!Number.isFinite(y0)) return null;
+
+      let y = isSell ? (y0 - OFFSET_Y) : (y0 + OFFSET_Y);
+
+      // clamp
+      y = Math.max(12, Math.min(H - 12, y));
+      return y;
+    }
+
+    function styleFor(side) {
+      const isBuy = (side === 'B' || side === 'eB');
+      const isSell = (side === 'S' || side === 'eS');
+
+      if (isBuy) {
+        // 黄底 + 白圈 + 黑字（你最新要求）
+        return {
+          bg: '#F5C542',
+          ring: 'rgba(255,255,255,0.95)',
+          text: '#000000',
+          glow: 'rgba(245,197,66,0.65)',
+        };
+      }
+      if (isSell) {
+        // 红底 + 白圈 + 白字
+        return {
+          bg: '#FF4757',
+          ring: 'rgba(255,255,255,0.95)',
+          text: '#FFFFFF',
+          glow: 'rgba(255,71,87,0.55)',
+        };
+      }
+      return {
+        bg: '#888',
+        ring: 'rgba(255,255,255,0.8)',
+        text: '#000',
+        glow: 'rgba(255,255,255,0.2)',
+      };
+    }
+
+    function makeBadge(side) {
+      const st = styleFor(side);
+
+      const d = document.createElement('div');
+      d.className = 'darrius-badge';
+      d.textContent = side; // B/S/eB/eS
+
+      d.style.position = 'absolute';
+      d.style.width = `${SIZE}px`;
+      d.style.height = `${SIZE}px`;
+      d.style.borderRadius = '999px';
+      d.style.display = 'flex';
+      d.style.alignItems = 'center';
+      d.style.justifyContent = 'center';
+
+      d.style.background = st.bg;
+      d.style.color = st.text;
+      d.style.fontWeight = '800';
+      d.style.fontSize = (side.length === 2 ? '12px' : '13px');
+      d.style.lineHeight = '1';
+
+      // white ring
+      d.style.boxSizing = 'border-box';
+      d.style.border = `2px solid ${st.ring}`;
+
+      // glow
+      d.style.boxShadow = `0 0 0 2px rgba(0,0,0,0.20), 0 0 16px ${st.glow}`;
+
+      // small text shadow for readability
+      d.style.textShadow = '0 1px 0 rgba(0,0,0,0.35)';
+
+      return d;
+    }
+
+    function update(snapshot, sigArr) {
+      const L = ensureLayer();
+      if (!L) return;
+
+      const DC = window.DarriusChart;
+      if (!DC) return;
+
+      // If user disabled overlay elsewhere, respect it
+      if (typeof window.__OVERLAY_BIG_SIGS__ === 'boolean' && window.__OVERLAY_BIG_SIGS__ === false) {
+        clear();
+        return;
+      }
+
+      // dimensions
+      const rect = L.getBoundingClientRect();
+      const W = rect.width;
+      const H = rect.height;
+      if (!W || !H) return;
+
+      // Build bar index once per update
+      const barIndex = buildBarIndex(snapshot);
+
+      // Clear then render
+      clear();
+
+      // Dedup
+      const seen = new Set();
+
+      for (const s of (sigArr || [])) {
+        const side = String(s?.side || '').trim();
+        const t = Number(s?.time);
+        if (!side || !Number.isFinite(t)) continue;
+
+        // Only draw B/S/eB/eS
+        if (!(side === 'B' || side === 'S' || side === 'eB' || side === 'eS')) continue;
+
+        const key = `${t}:${side}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const bar = barIndex.get(t);
+        if (!bar) continue;
+
+        // x: time->coordinate
+        const x = safe(() => DC.timeToX(t));
+        if (!Number.isFinite(x)) continue;
+
+        // y: candle high/low anchor
+        const y = yNearCandle(DC, bar, side, H);
+        if (!Number.isFinite(y)) continue;
+
+        const b = makeBadge(side);
+
+        // center badge at (x,y)
+        b.style.left = `${Math.round(x - SIZE / 2)}px`;
+        b.style.top  = `${Math.round(y - SIZE / 2)}px`;
+
+        L.appendChild(b);
+      }
+    }
+
+    return { update, clear };
+  })();
+
+  // -----------------------------
+  // Render (Market Pulse + Risk Copilot + Big Badges)
+  // -----------------------------
   function renderFromSnapshot(s) {
-    const sigArr = pickSignalsWithLastSigFallback(s);
+    const sigStats = readSignalsStats(s);
     const rk = readRisk(s);
     const bt = readBacktest(s);
     const mt = readMeta(s);
 
-    const sent = computeFromSigArray(sigArr);
+    const sent = compute(sigStats);
     if (sent.total <= 0) {
       renderEmpty(mt);
-      // 即使文字 empty，也允许 overlay 尝试（不强制 return）
-    } else {
-      setText(qAny(SEL.bullPct), fmtPct0(sent.bullPct));
-      setText(qAny(SEL.bearPct), fmtPct0(sent.bearPct));
-      setText(qAny(SEL.neuPct),  fmtPct0(sent.neuPct));
-      setText(qAny(SEL.pulseScore), sent.label);
-
-      const status = (!mt.ready) ? 'Loading…' : (mt.source === 'delayed' ? 'Delayed data' : 'Ready');
-      setText(qAny(SEL.statusLine), status);
-
-      setText(qAny(SEL.entry), fmtPrice2(rk.entry));
-      setText(qAny(SEL.stop), fmtPrice2(rk.stop));
-
-      if (rk.targets && rk.targets.length) {
-        setText(qAny(SEL.targets), rk.targets.map(x => Number(x).toFixed(2)).join(' / '));
-      } else {
-        setText(qAny(SEL.targets), '—');
-      }
-
-      setText(qAny(SEL.confPct), rk.confidence === null ? '—' : fmtPct0(rk.confidence));
-      setText(qAny(SEL.winRate), bt.winRate === null ? '—' : fmtPct0(bt.winRate));
-
-      scrubNaNText();
-    }
-
-    // ✅ Big badges overlay (TOP/BOTTOM)
-    safe(() => BigBadgeOverlay.update(s, sigArr));
-  }
-
-  // =========================================================================
-  // BIG BADGE OVERLAY (DOM) - TOP/BOTTOM FORCED
-  // =========================================================================
-  const BigBadgeOverlay = (() => {
-    const ID_STYLE = 'darrius-bigbadge-style';
-    const ID_LAYER = 'darrius-bigbadge-layer';
-
-    // 你要的固定规则：
-    // S/eS -> TOP, B/eB -> BOTTOM
-    const PAD_TOP = 14;
-    const PAD_BOT = 18;
-
-    // 同一根K线多徽章，做轻微横向错位，避免完全重叠
-    const JITTER_X = 10;
-
-    function injectStyleOnce() {
-      if (document.getElementById(ID_STYLE)) return;
-      const st = document.createElement('style');
-      st.id = ID_STYLE;
-      st.textContent = `
-        #${ID_LAYER}{
-          position:absolute; inset:0;
-          pointer-events:none;
-          z-index: 50;
-        }
-        .d-badge{
-          position:absolute;
-          transform: translate(-50%, -50%);
-          width: 30px; height: 30px;
-          border-radius: 999px;
-          display:flex; align-items:center; justify-content:center;
-          font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-          font-weight: 800;
-          letter-spacing: -0.2px;
-          user-select:none;
-          box-sizing:border-box;
-        }
-        .d-badge.buy{
-          background: #f5c542; /* 黄底 */
-          border: 2px solid rgba(255,255,255,0.95); /* 白环 */
-          color: #0b0f17; /* 黑字 */
-          box-shadow:
-            0 0 0 2px rgba(245,197,66,0.18),
-            0 0 18px rgba(245,197,66,0.55),
-            0 0 32px rgba(245,197,66,0.22);
-        }
-        .d-badge.sell{
-          background: #ff4757; /* 红底 */
-          border: 2px solid rgba(255,255,255,0.95); /* 白环 */
-          color: #ffffff; /* 白字 */
-          box-shadow:
-            0 0 0 2px rgba(255,71,87,0.18),
-            0 0 18px rgba(255,71,87,0.55),
-            0 0 32px rgba(255,71,87,0.22);
-        }
-        .d-badge.small{
-          width: 26px; height: 26px;
-          font-weight: 800;
-        }
-        .d-badge .t{
-          font-size: 14px;
-          line-height: 1;
-        }
-      `;
-      document.head.appendChild(st);
-    }
-
-    function ensureLayer() {
-      injectStyleOnce();
-      const chartEl =
-        document.getElementById('chart') ||
-        document.getElementById('mainChart') ||
-        document.querySelector('.chart') ||
-        null;
-
-      if (!chartEl) return null;
-
-      // chartEl 需要相对定位，layer 才能 absolute 覆盖
-      const cs = window.getComputedStyle(chartEl);
-      if (cs.position === 'static') chartEl.style.position = 'relative';
-
-      let layer = document.getElementById(ID_LAYER);
-      if (!layer) {
-        layer = document.createElement('div');
-        layer.id = ID_LAYER;
-        chartEl.appendChild(layer);
-      }
-      return layer;
-    }
-
-    function topOrBottomY(side, layerH) {
-      const isSell = (side === 'S' || side === 'eS');
-      return isSell ? PAD_TOP : Math.max(PAD_TOP, layerH - PAD_BOT);
-    }
-
-    function labelForSide(side) {
-      // 保留 eB/eS 字样（你旧图就是这样）
-      return side;
-    }
-
-    function buildKey(sig) {
-      return `${sig.time}:${sig.side}`;
-    }
-
-    function update(snapshot, sigArr) {
-      const layer = ensureLayer();
-      if (!layer) return;
-
-      const DC = window.DarriusChart;
-      if (!DC || typeof DC.timeToX !== 'function') {
-        // 没有 bridge 时，不画（不报错）
-        layer.innerHTML = '';
-        return;
-      }
-
-      const W = layer.clientWidth || 0;
-      const H = layer.clientHeight || 0;
-      if (W <= 0 || H <= 0) return;
-
-      // 只画这四类
-      const arr = (Array.isArray(sigArr) ? sigArr : []).filter(x => {
-        const s = String(x?.side || '');
-        return (s === 'B' || s === 'eB' || s === 'S' || s === 'eS');
+      // 即便统计为空，也尝试画徽章（徽章来自数组）
+      safe(() => {
+        const sigArr = pickSigArrayWithFallback(s);
+        BigBadgeOverlay.update(s, sigArr);
       });
-
-      // 轻去重（保险）
-      const seen = new Set();
-      const uniq = [];
-      for (const x of arr) {
-        const k = buildKey(x);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        uniq.push(x);
-      }
-
-      // 计算同一 time 的序号，用来 jitter
-      const timeIndex = new Map(); // time -> count used
-      function nextJitter(t) {
-        const n = (timeIndex.get(t) || 0);
-        timeIndex.set(t, n + 1);
-        // 0,1,2 -> 0, +1, -1 (交错)
-        if (n === 0) return 0;
-        return (n % 2 === 1) ? (Math.ceil(n / 2) * JITTER_X) : (-Math.ceil(n / 2) * JITTER_X);
-      }
-
-      // 用 fragment 重建（简单、稳定）
-      const frag = document.createDocumentFragment();
-
-      for (const sig of uniq) {
-        const side = sig.side;
-        const t = Number(sig.time);
-        if (!Number.isFinite(t)) continue;
-
-        const x = safe(() => DC.timeToX(t));
-        if (!Number.isFinite(x)) continue;
-
-        // 过滤掉画布外的点
-        if (x < -50 || x > W + 50) continue;
-
-        const y = topOrBottomY(side, H);
-        const jitter = nextJitter(t);
-
-        const isBuy = (side === 'B' || side === 'eB');
-        const badge = document.createElement('div');
-        badge.className = `d-badge ${isBuy ? 'buy' : 'sell'} ${side.startsWith('e') ? 'small' : ''}`;
-
-        badge.style.left = `${x + jitter}px`;
-        badge.style.top = `${y}px`;
-
-        const span = document.createElement('span');
-        span.className = 't';
-        span.textContent = labelForSide(side);
-        badge.appendChild(span);
-
-        frag.appendChild(badge);
-      }
-
-      // 替换
-      layer.innerHTML = '';
-      layer.appendChild(frag);
+      return;
     }
 
-    function hardRefresh() {
-      const s = getSnap();
-      if (!s) return;
-      const sigArr = pickSignalsWithLastSigFallback(s);
-      update(s, sigArr);
+    setText(qAny(SEL.bullPct), fmtPct0(sent.bullPct));
+    setText(qAny(SEL.bearPct), fmtPct0(sent.bearPct));
+    setText(qAny(SEL.neuPct),  fmtPct0(sent.neuPct));
+    setText(qAny(SEL.pulseScore), sent.label);
+
+    const status = (!mt.ready) ? 'Loading…' : (mt.source === 'delayed' ? 'Delayed data' : 'Ready');
+    setText(qAny(SEL.statusLine), status);
+
+    setText(qAny(SEL.entry), fmtPrice2(rk.entry));
+    setText(qAny(SEL.stop), fmtPrice2(rk.stop));
+
+    if (rk.targets && rk.targets.length) {
+      setText(qAny(SEL.targets), rk.targets.map(x => Number(x).toFixed(2)).join(' / '));
+    } else {
+      setText(qAny(SEL.targets), '—');
     }
 
-    // 监听窗口尺寸变化（chart.core.js 自己会 resize chart，这里跟着 overlay 重画）
-    let _ro = null;
-    function bindResize() {
-      const layer = ensureLayer();
-      if (!layer) return;
-      const chartEl = layer.parentElement;
-      if (!chartEl) return;
+    setText(qAny(SEL.confPct), rk.confidence === null ? '—' : fmtPct0(rk.confidence));
+    setText(qAny(SEL.winRate), bt.winRate === null ? '—' : fmtPct0(bt.winRate));
 
-      if (_ro) return;
-      _ro = new ResizeObserver(() => safe(() => hardRefresh()));
-      _ro.observe(chartEl);
-      window.addEventListener('resize', () => safe(() => hardRefresh()));
-    }
+    scrubNaNText();
 
-    return { update, bindResize, hardRefresh };
-  })();
+    // ---- BIG BADGES (ONLY big, no tiny duplicates) ----
+    safe(() => {
+      const sigArr = pickSigArrayWithFallback(s);
+      BigBadgeOverlay.update(s, sigArr);
+    });
+  }
 
   // -----------------------------
   // Event wiring
@@ -504,9 +533,6 @@
       const s = getSnap();
       if (s) renderFromSnapshot(s);
     });
-
-    // overlay resize support
-    safe(() => BigBadgeOverlay.bindResize());
 
     window.addEventListener('darrius:chartUpdated', onUpdate);
     safe(() => { scrubNaNText(); });
