@@ -1,25 +1,29 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (FINAL STABLE)
- * Purpose:
- *  - Chart initializes ONCE
- *  - Polling only updates data
- *  - Loading shows ONCE
- *  - Never re-create chart instance
+ * DarriusAI - chart.core.js
+ * FINAL + DOM AUTO ADAPTIVE VERSION
  * ========================================================================= */
 
 (() => {
   'use strict';
 
   /* ---------------------------------------------------------
-   * HARD GUARD: prevent re-initialization
+   * HARD STOP: prevent re-init
    * --------------------------------------------------------- */
-  if (window.__DARRIUS_CHART_ENGINE__) {
-    console.warn('[chart.core] engine already initialized, skip');
+  if (window.__DARRIUS_CHART_ENGINE_FINAL__) {
+    console.warn('[chart.core] already initialized, skip');
     return;
   }
-  window.__DARRIUS_CHART_ENGINE__ = true;
+  window.__DARRIUS_CHART_ENGINE_FINAL__ = true;
 
-  console.log('[chart.core] FINAL STABLE loaded');
+  console.log('[chart.core] FINAL DOM-AUTO version loaded');
+
+  /* ---------------------------------------------------------
+   * Guard: LightweightCharts
+   * --------------------------------------------------------- */
+  if (!window.LightweightCharts) {
+    console.error('[chart.core] LightweightCharts NOT loaded');
+    return;
+  }
 
   /* ---------------------------------------------------------
    * Config
@@ -37,40 +41,61 @@
   let emaSlowSeries = null;
 
   let pollingTimer = null;
-  let loadingClosed = false;
   let initialized = false;
+  let loadingClosed = false;
 
   /* ---------------------------------------------------------
    * DOM helpers
    * --------------------------------------------------------- */
-  function $(id) {
-    return document.getElementById(id);
+  function findChartContainer() {
+    const selectors = [
+      '#chart',
+      '.chart',
+      '.chart-container',
+      '.tv-lightweight-chart',
+      '.tv-chart',
+      '[data-chart]',
+    ];
+
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  function ensureContainerSize(el) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0) el.style.width = '100%';
+    if (rect.height === 0) el.style.minHeight = '420px';
   }
 
   function showLoading() {
-    const el = $('chart-loading');
+    const el = document.getElementById('chart-loading');
     if (el) el.style.display = 'block';
   }
 
   function hideLoadingOnce() {
     if (loadingClosed) return;
     loadingClosed = true;
-    const el = $('chart-loading');
+    const el = document.getElementById('chart-loading');
     if (el) el.style.display = 'none';
   }
 
   /* ---------------------------------------------------------
-   * Chart Init (ONLY ONCE)
+   * Init Chart (ONLY ONCE)
    * --------------------------------------------------------- */
   function initChartOnce() {
     if (initialized) return;
     initialized = true;
 
-    const container = $('chart');
+    const container = findChartContainer();
     if (!container) {
-      console.error('[chart.core] chart container not found');
+      console.error('[chart.core] chart container NOT FOUND');
       return;
     }
+
+    ensureContainerSize(container);
 
     chart = LightweightCharts.createChart(container, {
       layout: {
@@ -112,21 +137,19 @@
     });
 
     window.addEventListener('resize', () => {
-      chart.applyOptions({
-        width: container.clientWidth,
-        height: container.clientHeight,
-      });
+      const r = container.getBoundingClientRect();
+      chart.applyOptions({ width: r.width, height: r.height });
     });
   }
 
   /* ---------------------------------------------------------
-   * Data Fetch
+   * Fetch
    * --------------------------------------------------------- */
   async function fetchAggregates() {
     const symbol = window.__CURRENT_SYMBOL__ || 'TSLA';
     const timeframe = window.__CURRENT_TIMEFRAME__ || '1D';
-
     const url = `${API_AGG}?symbol=${symbol}&timeframe=${timeframe}`;
+
     const res = await fetch(url);
     if (!res.ok) throw new Error('aggregates fetch failed');
     return res.json();
@@ -135,63 +158,59 @@
   async function fetchSigs() {
     const symbol = window.__CURRENT_SYMBOL__ || 'TSLA';
     const timeframe = window.__CURRENT_TIMEFRAME__ || '1D';
-
     const url = `${API_SIGS}?symbol=${symbol}&timeframe=${timeframe}`;
+
     const res = await fetch(url);
     if (!res.ok) throw new Error('sigs fetch failed');
     return res.json();
   }
 
   /* ---------------------------------------------------------
-   * Data Update (NO REINIT)
+   * Update Series (NO REINIT)
    * --------------------------------------------------------- */
   function updateSeries(payload) {
-    const candles = payload?.candles || payload?.results || [];
-    if (!Array.isArray(candles) || candles.length === 0) {
-      console.warn('[chart.core] empty candles');
+    if (!candleSeries) return;
+
+    const rows = payload?.candles || payload?.results || [];
+    if (!Array.isArray(rows) || rows.length === 0) {
+      console.warn('[chart.core] empty data');
       return;
     }
 
-    const candleData = [];
+    const candles = [];
     const emaFast = [];
     const emaSlow = [];
 
-    for (const c of candles) {
-      const t = c.t || c.timestamp;
+    for (const r of rows) {
+      const t = r.t || r.timestamp;
       if (!t) continue;
 
-      candleData.push({
-        time: Math.floor(t / 1000),
-        open: c.o ?? c.open,
-        high: c.h ?? c.high,
-        low: c.l ?? c.low,
-        close: c.c ?? c.close,
+      const time = Math.floor(t / 1000);
+
+      candles.push({
+        time,
+        open: r.o ?? r.open,
+        high: r.h ?? r.high,
+        low: r.l ?? r.low,
+        close: r.c ?? r.close,
       });
 
-      if (c.ema_fast != null) {
-        emaFast.push({
-          time: Math.floor(t / 1000),
-          value: c.ema_fast,
-        });
-      }
-      if (c.ema_slow != null) {
-        emaSlow.push({
-          time: Math.floor(t / 1000),
-          value: c.ema_slow,
-        });
-      }
+      if (r.ema_fast != null)
+        emaFast.push({ time, value: r.ema_fast });
+
+      if (r.ema_slow != null)
+        emaSlow.push({ time, value: r.ema_slow });
     }
 
-    candleSeries.setData(candleData);
+    candleSeries.setData(candles);
     if (emaFast.length) emaFastSeries.setData(emaFast);
     if (emaSlow.length) emaSlowSeries.setData(emaSlow);
 
     hideLoadingOnce();
 
-    // snapshot (read-only)
     window.__DARRIUS_CHART_STATE__ = {
-      lastBar: candleData[candleData.length - 1],
-      count: candleData.length,
+      lastBar: candles[candles.length - 1],
+      count: candles.length,
     };
 
     window.dispatchEvent(
@@ -202,17 +221,17 @@
   }
 
   /* ---------------------------------------------------------
-   * Polling Loop
+   * Polling
    * --------------------------------------------------------- */
   async function pollOnce() {
     try {
-      const agg = await fetchAggregates();
-      updateSeries(agg);
+      const data = await fetchAggregates();
+      updateSeries(data);
     } catch (e) {
       console.error('[chart.core] poll error', e);
     }
 
-    // sigs 是辅助，不允许影响主图
+    // sigs 不影响主图
     fetchSigs().catch(() => null);
   }
 
@@ -226,7 +245,15 @@
    * Boot
    * --------------------------------------------------------- */
   showLoading();
-  initChartOnce();
-  startPolling();
+
+  // 等 DOM 真正 ready（防止你页面是异步 layout）
+  const bootTimer = setInterval(() => {
+    const el = findChartContainer();
+    if (el && window.LightweightCharts) {
+      clearInterval(bootTimer);
+      initChartOnce();
+      startPolling();
+    }
+  }, 100);
 
 })();
