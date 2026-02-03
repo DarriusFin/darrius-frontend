@@ -1,77 +1,158 @@
 /* =========================================================================
- * darrius-frontend/js/chart.core.js
- * ChartCore (RENDER-ONLY) v2026.02.03b-LW4+LW5-COMPAT
+ * FILE: darrius-frontend/js/chart.core.js
+ * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.03c
+ *
+ * Goals (NO-SECRETS):
+ *  - NO EMA/AUX/signal algorithm in frontend.
+ *  - Frontend ONLY fetches snapshot from backend and renders:
+ *      - candles
+ *      - ema_series / aux_series (optional)
+ *      - markers from signals (B/S/eB/eS)
+ *
+ * Key fixes in this version:
+ *  1) Absolute URL fetch + strong network error print
+ *  2) Snapshot schema compatibility
+ *  3) LightweightCharts v4/v5 series API compatibility
+ *  4) Trend coloring: up-trend => green, down-trend => red (by close vs prevClose)
+ *  5) EMA/AUX distinct colors
+ *  6) Markers compatibility: v4 setMarkers() / v5 createSeriesMarkers()
  * ========================================================================= */
 
 (function () {
   "use strict";
 
-  const API_BASE = "https://darrius-api.onrender.com";
-  const SNAPSHOT_PATH = "/api/market/snapshot";
-  const DEFAULTS = { symbol: "TSLA", tf: "1d", limit: 600 };
+  // -----------------------------
+  // Config
+  // -----------------------------
+  const API_BASE = (window.API_BASE || "https://darrius-api.onrender.com").replace(/\/+$/, "");
 
-  const IDS = {
-    chart: "chart",
-    symbolPrimary: "symbol",
-    symbolFallback: "symbo1",
-    tf: "tf",
-    hintText: "hintText",
-    symText: "symText",
-    priceText: "priceText",
-    tgEMA: "tgEMA",
-    tgAux: "tgAux",
+  const DEFAULTS = {
+    symbol: "TSLA",
+    tf: "1d",
+    limit: 600,
   };
 
+  // NOTE: 你要求“上涨趋势全绿/下跌趋势全红”
+  // 这里用最小定义：close >= prevClose => UP(绿)，否则 DOWN(红)
+  const TREND_COLORS = {
+    up:   { body: "#00ff88", wick: "#00ff88", border: "#00ff88" },
+    down: { body: "#ff4757", wick: "#ff4757", border: "#ff4757" },
+  };
+
+  // EMA/AUX 两条线区分颜色（可随时换）
+  const LINE_COLORS = {
+    ema: "#ffffff",   // 白
+    aux: "#f5c542",   // 金黄
+  };
+
+  // -----------------------------
+  // DOM helpers
+  // -----------------------------
   const $ = (id) => document.getElementById(id);
 
-  function setHint(msg) {
-    const el = $(IDS.hintText);
-    if (el) el.textContent = msg;
+  function safeRun(tag, fn) {
+    try { return fn(); }
+    catch (e) {
+      console.warn("[ChartCore]", tag, e);
+      return null;
+    }
   }
 
-  function safeRun(tag, fn) {
-    try { return fn(); } catch (e) { console.warn("[ChartCore]", tag, e); return null; }
+  function getElBy2(primaryId, fallbackId) {
+    return $(primaryId) || $(fallbackId) || null;
   }
 
   function normSymbol(s) {
     return String(s || "").trim().toUpperCase() || DEFAULTS.symbol;
   }
 
-  function readSymbolFromUI() {
-    const el = $(IDS.symbolPrimary) || $(IDS.symbolFallback);
-    return normSymbol(el ? el.value : DEFAULTS.symbol);
+  function getTF(tfElId) {
+    return (($(tfElId)?.value || DEFAULTS.tf) + "").trim();
   }
 
-  function readTF() {
-    const el = $(IDS.tf);
-    return String((el && el.value) || DEFAULTS.tf).trim() || DEFAULTS.tf;
-  }
-
-  function readToggles() {
-    const tgE = $(IDS.tgEMA);
-    const tgA = $(IDS.tgAux);
-    return { ema: tgE ? !!tgE.checked : true, aux: tgA ? !!tgA.checked : true };
+  function setHint(msg) {
+    safeRun("hint", () => {
+      if ($("hintText")) $("hintText").textContent = msg;
+    });
   }
 
   function setTopText(sym, lastClose) {
     safeRun("topText", () => {
-      if ($(IDS.symText)) $(IDS.symText).textContent = sym;
-      if ($(IDS.priceText) && lastClose != null && isFinite(lastClose)) {
-        $(IDS.priceText).textContent = Number(lastClose).toFixed(2);
-      }
+      if ($("symText")) $("symText").textContent = sym;
+      if ($("priceText") && lastClose != null) $("priceText").textContent = Number(lastClose).toFixed(2);
       setHint("Market snapshot loaded · 已加载市场快照");
     });
   }
 
+  // -----------------------------
+  // Snapshot schema compatibility
+  // -----------------------------
+  function normalizeSnapshot(raw) {
+    // Accept different shapes:
+    // { ok, bars, ema_series?, aux_series?, signals? }
+    // { ok, data: { bars... } }  etc.
+    const snap = raw && raw.data ? raw.data : raw;
+
+    const ok = (snap && snap.ok === true) || (snap && snap.ok === 1);
+    const bars = snap?.bars || snap?.candles || snap?.ohlcv || [];
+
+    // allow ema/aux series
+    const ema_series = snap?.ema_series || snap?.ema || [];
+    const aux_series = snap?.aux_series || snap?.aux || snap?.aux_series_fast || [];
+
+    // allow signals keys
+    const signals = snap?.signals || snap?.sigs || snap?.markers || [];
+
+    const meta = snap?.meta || {};
+    const source = snap?.source || meta?.source || "backend";
+
+    return { ok, bars, ema_series, aux_series, signals, meta, source };
+  }
+
+  // -----------------------------
+  // Trend coloring for candles
+  // -----------------------------
+  function applyTrendColorsToBars(bars) {
+    // LightweightCharts supports per-bar colors:
+    // { time, open, high, low, close, color?, wickColor?, borderColor? }
+    if (!Array.isArray(bars) || bars.length === 0) return bars;
+
+    let prevClose = null;
+    const out = [];
+
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i] || {};
+      const close = Number(b.close);
+
+      // if malformed, keep as-is
+      if (!Number.isFinite(close)) { out.push(b); continue; }
+
+      const isUpTrend = (prevClose == null) ? true : (close >= prevClose);
+      const c = isUpTrend ? TREND_COLORS.up : TREND_COLORS.down;
+
+      out.push(Object.assign({}, b, {
+        color: c.body,
+        wickColor: c.wick,
+        borderColor: c.border,
+      }));
+
+      prevClose = close;
+    }
+    return out;
+  }
+
+  // -----------------------------
+  // Signals -> markers
+  // -----------------------------
   function mapSignalsToMarkers(signals) {
     const out = [];
     (signals || []).forEach((s) => {
-      const side = String(s.side || "").trim();
-      const t = Number(s.time);
+      const side = String(s?.side || s?.label || "").trim(); // keep B/S/eB/eS
+      const t = Number(s?.time);
       if (!t || !side) return;
 
-      const isBuy = side === "B" || side === "eB";
-      const isSell = side === "S" || side === "eS";
+      const isBuy = (side === "B" || side === "eB");
+      const isSell = (side === "S" || side === "eS");
       if (!isBuy && !isSell) return;
 
       out.push({
@@ -85,30 +166,32 @@
     return out;
   }
 
-  function normalizeSnapshot(raw) {
-    const ok = raw && (raw.ok === true || raw.ok === 1 || raw.success === true);
-    const bars = (raw && (raw.bars || raw.data || raw.ohlcv)) || [];
-    const ema_series = (raw && (raw.ema_series || raw.ema || raw.emaSeries)) || [];
-    const aux_series = (raw && (raw.aux_series || raw.aux || raw.auxSeries)) || [];
-    const signals = (raw && (raw.signals || raw.sigs || raw.markers || raw.signal_list)) || [];
-    const meta = (raw && (raw.meta || raw.metadata)) || {};
-    const source = (raw && (raw.source || (meta && meta.source))) || "backend";
-    return { ok: !!ok, bars, ema_series, aux_series, signals, meta, source };
-  }
+  // v4: series.setMarkers(markers)
+  // v5: const m = LightweightCharts.createSeriesMarkers(series, markers); m.setMarkers(markers)
+  function setSeriesMarkersCompat(series, markers) {
+    const LW = window.LightweightCharts;
 
-  function waitForLightweightCharts({ timeoutMs = 12000, pollMs = 50 } = {}) {
-    return new Promise((resolve, reject) => {
-      const t0 = Date.now();
-      (function tick() {
-        if (window.LightweightCharts && typeof window.LightweightCharts.createChart === "function") return resolve(true);
-        if (Date.now() - t0 > timeoutMs) return reject(new Error("LightweightCharts_not_ready_timeout"));
-        setTimeout(tick, pollMs);
-      })();
-    });
+    if (series && typeof series.setMarkers === "function") {
+      series.setMarkers(markers || []);
+      return;
+    }
+
+    if (LW && typeof LW.createSeriesMarkers === "function") {
+      // cache handle on series for reuse
+      if (!series.__markersHandle) {
+        series.__markersHandle = LW.createSeriesMarkers(series, markers || []);
+      } else if (typeof series.__markersHandle.setMarkers === "function") {
+        series.__markersHandle.setMarkers(markers || []);
+      }
+      return;
+    }
+
+    // If we reach here, markers API not available
+    throw new Error("markers_api_missing (no setMarkers/createSeriesMarkers)");
   }
 
   // -----------------------------
-  // Internal state
+  // ChartCore internal state
   // -----------------------------
   const S = {
     chart: null,
@@ -116,77 +199,45 @@
     ema: null,
     aux: null,
     ro: null,
+
+    opts: {
+      chartElId: "chart",
+      symbolElIdPrimary: "symbol",
+      symbolElIdFallback: "symbo1",
+      tfElId: "tf",
+      defaultSymbol: "TSLA",
+    },
+
+    toggles: {
+      ema: true,
+      aux: true,
+    },
+
     lastSnapshot: null,
-    inFlight: false,
-    lwMode: null, // "v4" | "v5"
+    pollInFlight: false,
   };
 
-  function detectLWMode(chart) {
-    // v4 chart: addCandlestickSeries exists
-    if (chart && typeof chart.addCandlestickSeries === "function") return "v4";
-
-    // v5 chart: addSeries exists and global constructors exist
-    const LW = window.LightweightCharts;
-    if (chart && typeof chart.addSeries === "function" && LW && (LW.CandlestickSeries || LW.LineSeries)) return "v5";
-
-    return null;
-  }
-
-  function addCandles(chart) {
-    const LW = window.LightweightCharts;
-
-    // v4
-    if (typeof chart.addCandlestickSeries === "function") {
-      S.lwMode = "v4";
-      return chart.addCandlestickSeries({
-        upColor: "#00ff88",
-        downColor: "#ff4757",
-        wickUpColor: "#00ff88",
-        wickDownColor: "#ff4757",
-        borderVisible: false,
-      });
-    }
-
-    // v5
-    if (typeof chart.addSeries === "function" && LW && LW.CandlestickSeries) {
-      S.lwMode = "v5";
-      return chart.addSeries(LW.CandlestickSeries, {
-        upColor: "#00ff88",
-        downColor: "#ff4757",
-        wickUpColor: "#00ff88",
-        wickDownColor: "#ff4757",
-        borderVisible: false,
-      });
-    }
-
-    throw new Error("LW_candles_api_missing");
-  }
-
-  function addLine(chart, opts) {
-    const LW = window.LightweightCharts;
-
-    // v4
-    if (typeof chart.addLineSeries === "function") {
-      S.lwMode = S.lwMode || "v4";
-      return chart.addLineSeries(opts || { lineWidth: 2 });
-    }
-
-    // v5
-    if (typeof chart.addSeries === "function" && LW && LW.LineSeries) {
-      S.lwMode = "v5";
-      return chart.addSeries(LW.LineSeries, opts || { lineWidth: 2 });
-    }
-
-    throw new Error("LW_line_api_missing");
-  }
-
+  // -----------------------------
+  // Ensure chart (v4/v5 compatible)
+  // -----------------------------
   function ensureChart() {
     if (S.chart && S.candle) return true;
 
-    const el = $(IDS.chart);
-    if (!el) throw new Error("Missing_chart_container_#" + IDS.chart);
+    const LW = window.LightweightCharts;
+    if (!LW) {
+      console.error("[ChartCore] LightweightCharts missing. Add CDN script before chart.core.js");
+      return false;
+    }
 
-    const chart = window.LightweightCharts.createChart(el, {
+    const el = $(S.opts.chartElId);
+    if (!el) {
+      console.error("[ChartCore] Missing chart container #" + S.opts.chartElId);
+      return false;
+    }
+
+    // v4: LW.createChart
+    // v5: LW.createChart (still exists), but series API differs
+    const chart = LW.createChart(el, {
       layout: { background: { color: "transparent" }, textColor: "#d1d4dc" },
       grid: { vertLines: { color: "transparent" }, horzLines: { color: "transparent" } },
       timeScale: { timeVisible: true, secondsVisible: false },
@@ -194,12 +245,46 @@
       crosshair: { mode: 1 },
     });
 
-    // detect (helps debug)
-    S.lwMode = detectLWMode(chart);
+    // Candles (v4/v5)
+    let candle;
+    if (typeof chart.addCandlestickSeries === "function") {
+      // v4
+      candle = chart.addCandlestickSeries({
+        upColor: TREND_COLORS.up.body,
+        downColor: TREND_COLORS.down.body,
+        wickUpColor: TREND_COLORS.up.wick,
+        wickDownColor: TREND_COLORS.down.wick,
+        borderVisible: false,
+      });
+    } else if (typeof chart.addSeries === "function" && LW.CandlestickSeries) {
+      // v5
+      candle = chart.addSeries(LW.CandlestickSeries, {
+        upColor: TREND_COLORS.up.body,
+        downColor: TREND_COLORS.down.body,
+        wickUpColor: TREND_COLORS.up.wick,
+        wickDownColor: TREND_COLORS.down.wick,
+        borderVisible: false,
+      });
+    } else {
+      console.error("[ChartCore] Candlestick series API missing");
+      return false;
+    }
 
-    const candle = addCandles(chart);
-    const ema = addLine(chart, { lineWidth: 2 });
-    const aux = addLine(chart, { lineWidth: 2 });
+    // Lines (v4/v5)
+    function addLine(opts) {
+      if (typeof chart.addLineSeries === "function") return chart.addLineSeries(opts);                 // v4
+      if (typeof chart.addSeries === "function" && LW.LineSeries) return chart.addSeries(LW.LineSeries, opts); // v5
+      throw new Error("line_api_missing");
+    }
+
+    const ema = addLine({ lineWidth: 2, color: LINE_COLORS.ema });
+    const aux = addLine({ lineWidth: 2, color: LINE_COLORS.aux });
+
+    // In case some builds use lineColor instead of color, enforce via applyOptions
+    safeRun("applyLineColors", () => {
+      ema.applyOptions ? ema.applyOptions({ color: LINE_COLORS.ema }) : null;
+      aux.applyOptions ? aux.applyOptions({ color: LINE_COLORS.aux }) : null;
+    });
 
     function fit() {
       const r = el.getBoundingClientRect();
@@ -210,63 +295,72 @@
       chart.timeScale().fitContent();
     }
 
-    S.ro = new ResizeObserver(() => safeRun("resizeObserver", fit));
+    S.ro = new ResizeObserver(() => fit());
     S.ro.observe(el);
-    window.addEventListener("resize", () => safeRun("windowResize", fit));
-    safeRun("fitNow", fit);
+    window.addEventListener("resize", fit);
 
     S.chart = chart;
     S.candle = candle;
     S.ema = ema;
     S.aux = aux;
 
-    console.info("[ChartCore] LightweightCharts mode:", S.lwMode || "unknown");
     return true;
   }
 
+  function readSymbolFromUI() {
+    const symEl = getElBy2(S.opts.symbolElIdPrimary, S.opts.symbolElIdFallback);
+    const v = symEl ? symEl.value : "";
+    return normSymbol(v || S.opts.defaultSymbol || DEFAULTS.symbol);
+  }
+
+  // -----------------------------
+  // Network: fetch snapshot (absolute URL + strong error print)
+  // -----------------------------
   async function fetchSnapshot(symbol, tf, limit) {
     const url =
-      `${API_BASE}${SNAPSHOT_PATH}` +
-      `?symbol=${encodeURIComponent(symbol)}` +
+      `${API_BASE}/api/market/snapshot?symbol=${encodeURIComponent(symbol)}` +
       `&tf=${encodeURIComponent(tf)}` +
-      `&limit=${encodeURIComponent(String(limit || DEFAULTS.limit))}` +
-      `&_ts=${Date.now()}`;
+      `&limit=${encodeURIComponent(String(limit || DEFAULTS.limit))}`;
 
-    console.groupCollapsed("[ChartCore] snapshot fetch");
-    console.log("URL:", url);
-    console.log("Origin:", window.location.origin);
-    console.groupEnd();
+    console.log("[ChartCore] FETCH", url);
 
-    let resp;
+    let resp, text;
     try {
-      resp = await fetch(url, { method: "GET", mode: "cors", credentials: "omit", cache: "no-store" });
+      resp = await fetch(url, { method: "GET", mode: "cors", cache: "no-store" });
+      const ct = (resp.headers.get("content-type") || "").toLowerCase();
+      text = await resp.text();
+
+      if (!resp.ok) {
+        console.error("[ChartCore] HTTP", resp.status, resp.statusText, "BODY:", text.slice(0, 500));
+        throw new Error(`snapshot_http_${resp.status}`);
+      }
+
+      // try json
+      if (ct.includes("application/json") || text.trim().startsWith("{") || text.trim().startsWith("[")) {
+        return JSON.parse(text);
+      }
+
+      console.error("[ChartCore] Non-JSON response:", ct, text.slice(0, 300));
+      throw new Error("snapshot_non_json");
     } catch (e) {
-      throw new Error(`fetch_failed:${e && e.message ? e.message : String(e)}`);
+      console.error("[ChartCore] FETCH_FAIL", e && e.message ? e.message : e, "URL:", url);
+      // helpful CORS hint
+      if (String(e && e.message || "").toLowerCase().includes("failed to fetch")) {
+        console.error("[ChartCore] Tip: If Postman works but browser fails => likely CORS. Check response headers: access-control-allow-origin");
+      }
+      throw e;
     }
-
-    const allowOrigin = resp.headers.get("access-control-allow-origin");
-    console.groupCollapsed(`[ChartCore] snapshot response ${resp.status}`);
-    console.log("access-control-allow-origin:", allowOrigin);
-    console.groupEnd();
-
-    const text = await resp.text();
-    if (!resp.ok) throw new Error(`http_${resp.status}:${text.slice(0, 300)}`);
-
-    let json;
-    try { json = JSON.parse(text); }
-    catch { throw new Error(`json_parse_failed:${text.slice(0, 300)}`); }
-
-    return json;
   }
 
   function renderSnapshot(symbol, tf, rawSnap) {
     const snap = normalizeSnapshot(rawSnap);
     if (!snap.ok) throw new Error("snapshot_not_ok");
 
-    const bars = Array.isArray(snap.bars) ? snap.bars : [];
+    let bars = snap.bars || [];
     if (!bars.length) throw new Error("no_bars");
 
-    const toggles = readToggles();
+    // Trend coloring
+    bars = applyTrendColorsToBars(bars);
 
     // candles
     S.candle.setData(bars);
@@ -275,33 +369,43 @@
     const last = bars[bars.length - 1];
     setTopText(symbol, last && last.close);
 
-    // EMA/AUX
-    if (toggles.ema && Array.isArray(snap.ema_series) && snap.ema_series.length) S.ema.setData(snap.ema_series);
+    // toggles
+    const tgEMA = $("tgEMA");
+    const tgAux = $("tgAux");
+    if (tgEMA) S.toggles.ema = !!tgEMA.checked;
+    if (tgAux) S.toggles.aux = !!tgAux.checked;
+
+    const emaSeries = snap.ema_series || [];
+    const auxSeries = snap.aux_series || [];
+
+    if (S.toggles.ema && emaSeries.length) S.ema.setData(emaSeries);
     else S.ema.setData([]);
 
-    if (toggles.aux && Array.isArray(snap.aux_series) && snap.aux_series.length) S.aux.setData(snap.aux_series);
+    if (S.toggles.aux && auxSeries.length) S.aux.setData(auxSeries);
     else S.aux.setData([]);
 
-    // markers (small)
-    S.candle.setMarkers(mapSignalsToMarkers(snap.signals));
+    // markers (B/S/eB/eS)
+    const markers = mapSignalsToMarkers(snap.signals || []);
+    setSeriesMarkersCompat(S.candle, markers);
 
-    // publish snapshot
-    const out = {
+    // snapshot for overlay UI
+    const snapshot = {
       ok: true,
       symbol,
       tf,
       bars,
-      ema_series: snap.ema_series || [],
-      aux_series: snap.aux_series || [],
+      ema_series: emaSeries,
+      aux_series: auxSeries,
       signals: snap.signals || [],
       meta: snap.meta || {},
       source: snap.source || "backend",
       ts: Date.now(),
     };
 
-    S.lastSnapshot = out;
-    window.__DARRIUS_CHART_STATE__ = out;
+    S.lastSnapshot = snapshot;
+    window.__DARRIUS_CHART_STATE__ = snapshot;
 
+    // bridge
     window.DarriusChart = {
       timeToX: (t) => safeRun("timeToX", () => S.chart.timeScale().timeToCoordinate(t)),
       priceToY: (p) => safeRun("priceToY", () => S.candle.priceToCoordinate(p)),
@@ -309,57 +413,58 @@
     };
 
     safeRun("emit", () => {
-      window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: out }));
+      window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: snapshot }));
     });
   }
 
   async function load() {
-    if (S.inFlight) return;
-    S.inFlight = true;
+    if (S.pollInFlight) return;
+    if (!ensureChart()) return;
 
-    const symbol = readSymbolFromUI();
-    const tf = readTF();
-    const limit = DEFAULTS.limit;
-
-    setHint("Loading snapshot… / 加载中…");
-
+    S.pollInFlight = true;
     try {
-      await waitForLightweightCharts();
-      ensureChart();
+      const symbol = readSymbolFromUI();
+      const tf = getTF(S.opts.tfElId);
+      const limit = DEFAULTS.limit;
 
-      const json = await fetchSnapshot(symbol, tf, limit);
-      renderSnapshot(symbol, tf, json);
+      setHint("Loading snapshot… / 加载中…");
 
-      console.info("[ChartCore] LOAD OK", { symbol, tf, bars: (json && json.bars && json.bars.length) || "?" });
+      const raw = await fetchSnapshot(symbol, tf, limit);
+      renderSnapshot(symbol, tf, raw);
+
+      return true;
     } catch (e) {
-      const msg = e && e.message ? e.message : String(e);
-      console.error("[ChartCore] LOAD FAILED:", msg, e);
+      const msg = (e && e.message) ? e.message : String(e);
+      console.error("[ChartCore] LOAD_FAIL", msg, e);
       setHint(`Snapshot failed · ${msg}`);
-      window.__CHARTCORE_LAST_ERROR__ = { at: Date.now(), message: msg };
+      return false;
     } finally {
-      S.inFlight = false;
+      S.pollInFlight = false;
     }
   }
 
   function applyToggles() {
-    if (S.lastSnapshot && S.lastSnapshot.ok && S.lastSnapshot.bars) {
-      safeRun("applyToggles", () => renderSnapshot(S.lastSnapshot.symbol, S.lastSnapshot.tf, S.lastSnapshot));
+    if (S.lastSnapshot && S.lastSnapshot.bars) {
+      // re-render using stored snapshot (no extra network)
+      renderSnapshot(S.lastSnapshot.symbol || readSymbolFromUI(), S.lastSnapshot.tf || getTF(S.opts.tfElId), S.lastSnapshot);
     } else {
       load();
     }
   }
 
   function exportPNG() {
-    alert("导出 PNG：建议用浏览器截图；如需可后续加入 html2canvas。");
+    alert("导出 PNG：建议用浏览器截图或后续加入 html2canvas。");
   }
 
-  function init() {
-    const go = () => load();
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go, { once: true });
-    else go();
+  function init(opts) {
+    S.opts = Object.assign({}, S.opts, (opts || {}));
+    if (!S.opts.defaultSymbol) S.opts.defaultSymbol = DEFAULTS.symbol;
+
+    ensureChart();
+    load();
   }
 
+  // expose
   window.ChartCore = { init, load, applyToggles, exportPNG };
-  init();
 
 })();
