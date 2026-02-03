@@ -69,8 +69,13 @@
 
   // ✅ 位置微调：让它“贴近K线”但不压住
   // 你觉得还要更近：把 6 改 4；更远：改 8~12
-  const BADGE_OFFSET_ABOVE_PX = 12; // S/eS：在K线上方额外抬多少px（越小越贴近）
-  const BADGE_OFFSET_BELOW_PX = 12; // B/eB：在K线下方额外压多少px（越小越贴近）
+ // 卖出（S/eS）在K线上方：更高一点
+const BADGE_OFFSET_ABOVE_MAIN_PX  = 18; // S
+const BADGE_OFFSET_ABOVE_EARLY_PX = 16; // eS
+
+// 买入（B/eB）在K线下方：更低一点
+const BADGE_OFFSET_BELOW_MAIN_PX  = 18; // B
+const BADGE_OFFSET_BELOW_EARLY_PX = 16; // eB
 
   // -----------------------------
   // DOM helpers
@@ -397,9 +402,12 @@
         // - Sell (S/eS): place ABOVE candle, closer: y0 - halfSize - offset
         // - Buy  (B/eB): place BELOW candle, closer: y0 + halfSize + offset
         const half = size * 0.5;
-        const y = it.isSell
-          ? (y0 - half - BADGE_OFFSET_ABOVE_PX)
-          : (y0 + half + BADGE_OFFSET_BELOW_PX);
+const offAbove = it.isMain ? BADGE_OFFSET_ABOVE_MAIN_PX : BADGE_OFFSET_ABOVE_EARLY_PX;
+const offBelow = it.isMain ? BADGE_OFFSET_BELOW_MAIN_PX : BADGE_OFFSET_BELOW_EARLY_PX;
+
+const y = it.isSell
+  ? (y0 - half - offAbove)   // S/eS：更高
+  : (y0 + half + offBelow);  // B/eB：更低
 
         const d = document.createElement("div");
         d.className = "darrius-badge " + (it.isBuy ? "buy" : "sell") + (it.isLastTwo ? " pulse" : "");
