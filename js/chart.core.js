@@ -1,46 +1,94 @@
 /* =========================================================================
  * FILE: darrius-frontend/js/chart.core.js
- * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.03-RETRY-BASE-FIX
+ * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.03a-HARDENED
+ *
+ * Goals (MUST):
+ *  - NO EMA/AUX/signal algorithm in frontend.
+ *  - Fetch ONE endpoint snapshot and render:
+ *      - candles (bars)
+ *      - ema_series / aux_series (optional)
+ *      - markers from signals (B/S/eB/eS)
+ *
+ * Hardening:
+ *  - Force ABSOLUTE backend URL (no relative confusion)
+ *  - Wait for LightweightCharts even if script order is wrong
+ *  - Print network / CORS errors loudly (no silent loading)
+ *  - Schema compatibility block for backend variations
  * ========================================================================= */
 
 (function () {
   "use strict";
 
-  // ---- hard shims ----
-  try {
-    if (!window.__PATHS__ || typeof window.__PATHS__ !== "object") window.__PATHS__ = {};
-    if (typeof window.__PATHS__.js !== "string") window.__PATHS__.js = "js/";
-  } catch (e) {}
+  // -----------------------------
+  // CONFIG
+  // -----------------------------
+  const API_BASE = "https://darrius-api.onrender.com"; // FORCE absolute
+  const SNAPSHOT_PATH = "/api/market/snapshot";
+  const DEFAULTS = { symbol: "TSLA", tf: "1d", limit: 600 };
 
-  const DEFAULT_API_BASE = "https://darrius-api.onrender.com";
+  // DOM ids (DO NOT change HTML structure; just be tolerant)
+  const IDS = {
+    chart: "chart",
+    symbolPrimary: "symbol",
+    symbolFallback: "symbo1", // your legacy typo fallback
+    tf: "tf",
+    hintText: "hintText",
+    symText: "symText",
+    priceText: "priceText",
+    tgEMA: "tgEMA",
+    tgAux: "tgAux",
+  };
 
-  function cleanBase(x) {
-    const s = String(x || "").trim();
-    if (!s) return "";
-    // only accept absolute http(s) base; otherwise ignore (prevents "/api" or "" breaking)
-    if (!/^https?:\/\//i.test(s)) return "";
-    return s.replace(/\/+$/, "");
+  // -----------------------------
+  // Helpers
+  // -----------------------------
+  const $ = (id) => document.getElementById(id);
+
+  function nowISO() {
+    try { return new Date().toISOString(); } catch { return ""; }
   }
 
-  // Collect candidate bases (first valid wins; failures will auto-try next)
-  const CANDIDATE_BASES = [];
-  const b1 = cleanBase(window.API_BASE);
-  const b2 = cleanBase(DEFAULT_API_BASE);
-  if (b1) CANDIDATE_BASES.push(b1);
-  if (b2 && b2 !== b1) CANDIDATE_BASES.push(b2);
-
-  const DEFAULTS = { symbol: "TSLA", tf: "1d", limit: 600 };
-  const $ = (id) => document.getElementById(id);
+  function setHint(msg) {
+    const el = $(IDS.hintText);
+    if (el) el.textContent = msg;
+  }
 
   function safeRun(tag, fn) {
     try { return fn(); } catch (e) { console.warn("[ChartCore]", tag, e); return null; }
   }
-  function setHintText(msg) {
-    safeRun("hintText", () => { const el = $("hintText"); if (el) el.textContent = msg; });
+
+  function normSymbol(s) {
+    return String(s || "").trim().toUpperCase() || DEFAULTS.symbol;
   }
-  function normSymbol(s) { return String(s || "").trim().toUpperCase() || DEFAULTS.symbol; }
-  function getTF(tfElId) { return (($(tfElId)?.value || DEFAULTS.tf) + "").trim(); }
-  function getElBy2(primaryId, fallbackId) { return $(primaryId) || $(fallbackId) || null; }
+
+  function readSymbolFromUI() {
+    const el = $(IDS.symbolPrimary) || $(IDS.symbolFallback);
+    return normSymbol(el ? el.value : DEFAULTS.symbol);
+  }
+
+  function readTF() {
+    const el = $(IDS.tf);
+    return String((el && el.value) || DEFAULTS.tf).trim() || DEFAULTS.tf;
+  }
+
+  function readToggles() {
+    const tgE = $(IDS.tgEMA);
+    const tgA = $(IDS.tgAux);
+    return {
+      ema: tgE ? !!tgE.checked : true,
+      aux: tgA ? !!tgA.checked : true,
+    };
+  }
+
+  function setTopText(sym, lastClose) {
+    safeRun("topText", () => {
+      if ($(IDS.symText)) $(IDS.symText).textContent = sym;
+      if ($(IDS.priceText) && lastClose != null && isFinite(lastClose)) {
+        $(IDS.priceText).textContent = Number(lastClose).toFixed(2);
+      }
+      setHint("Market snapshot loaded · 已加载市场快照");
+    });
+  }
 
   function mapSignalsToMarkers(signals) {
     const out = [];
@@ -48,13 +96,16 @@
       const side = String(s.side || "").trim();
       const t = Number(s.time);
       if (!t || !side) return;
-      const isBuy = (side === "B" || side === "eB");
-      const isSell = (side === "S" || side === "eS");
+
+      const isBuy = side === "B" || side === "eB";
+      const isSell = side === "S" || side === "eS";
       if (!isBuy && !isSell) return;
+
       out.push({
         time: t,
         position: isBuy ? "belowBar" : "aboveBar",
         shape: isBuy ? "arrowUp" : "arrowDown",
+        // keep your colors
         color: isBuy ? "#00ff88" : "#ff4757",
         text: side,
       });
@@ -62,63 +113,62 @@
     return out;
   }
 
+  // -----------------------------
+  // Schema compatibility
+  // -----------------------------
+  function normalizeSnapshot(raw) {
+    // Accept: { ok, bars, ema_series?, aux_series?, signals? }
+    // Also accept: { bars:..., sigs:... } etc.
+    const ok = raw && (raw.ok === true || raw.ok === 1 || raw.success === true);
+    const bars = (raw && (raw.bars || raw.data || raw.ohlcv)) || [];
+    const ema_series = (raw && (raw.ema_series || raw.ema || raw.emaSeries)) || [];
+    const aux_series = (raw && (raw.aux_series || raw.aux || raw.auxSeries)) || [];
+    const signals = (raw && (raw.signals || raw.sigs || raw.markers || raw.signal_list)) || [];
+    const meta = (raw && (raw.meta || raw.metadata)) || {};
+    const source = (raw && (raw.source || (meta && meta.source))) || "backend";
+
+    return { ok: !!ok, bars, ema_series, aux_series, signals, meta, source };
+  }
+
+  // -----------------------------
+  // Wait for LightweightCharts (fix script order without touching HTML)
+  // -----------------------------
+  function waitForLightweightCharts({ timeoutMs = 8000, pollMs = 50 } = {}) {
+    return new Promise((resolve, reject) => {
+      const t0 = Date.now();
+      (function tick() {
+        if (window.LightweightCharts && typeof window.LightweightCharts.createChart === "function") {
+          return resolve(true);
+        }
+        if (Date.now() - t0 > timeoutMs) {
+          return reject(new Error("LightweightCharts_not_ready_timeout"));
+        }
+        setTimeout(tick, pollMs);
+      })();
+    });
+  }
+
+  // -----------------------------
+  // Internal state
+  // -----------------------------
   const S = {
     chart: null,
     candle: null,
     ema: null,
     aux: null,
     ro: null,
-    _lwcLoading: false,
-    opts: {
-      chartElId: "chart",
-      symbolElIdPrimary: "symbol",
-      symbolElIdFallback: "symbo1",
-      tfElId: "tf",
-      defaultSymbol: "TSLA",
-      limit: DEFAULTS.limit,
-      lwcCdn: "https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js",
-      fetchTimeoutMs: 20000, // 给 Render 冷启动更宽松一点
-    },
-    toggles: { ema: true, aux: true },
     lastSnapshot: null,
+    lastError: null,
+    inFlight: false,
   };
 
-  function loadLWCIfNeeded() {
-    if (window.LightweightCharts) return Promise.resolve(true);
-    if (S._lwcLoading) {
-      return new Promise((resolve) => {
-        const t0 = Date.now();
-        const timer = setInterval(() => {
-          if (window.LightweightCharts) { clearInterval(timer); resolve(true); }
-          if (Date.now() - t0 > 15000) { clearInterval(timer); resolve(false); }
-        }, 80);
-      });
-    }
-    S._lwcLoading = true;
-    return new Promise((resolve) => {
-      try {
-        const src = S.opts.lwcCdn;
-        if (!src) return resolve(false);
-        const exists = Array.from(document.scripts || []).some((sc) => (sc.src || "").includes("lightweight-charts"));
-        if (exists) return resolve(true);
-        const s = document.createElement("script");
-        s.src = src; s.async = true;
-        s.onload = () => resolve(!!window.LightweightCharts);
-        s.onerror = () => resolve(false);
-        document.head.appendChild(s);
-      } catch (e) { resolve(false); }
-    }).finally(() => { S._lwcLoading = false; });
-  }
-
-  async function ensureChart() {
+  function ensureChart() {
     if (S.chart && S.candle) return true;
-    const ok = await loadLWCIfNeeded();
-    if (!ok || !window.LightweightCharts) {
-      setHintText("Chart lib missing · 缺少 lightweight-charts");
-      return false;
+
+    const el = $(IDS.chart);
+    if (!el) {
+      throw new Error("Missing_chart_container_#" + IDS.chart);
     }
-    const el = $(S.opts.chartElId);
-    if (!el) { setHintText("Missing chart container #chart"); return false; }
 
     const chart = window.LightweightCharts.createChart(el, {
       layout: { background: { color: "transparent" }, textColor: "#d1d4dc" },
@@ -129,116 +179,152 @@
     });
 
     const candle = chart.addCandlestickSeries({
-      upColor: "#00ff88", downColor: "#ff4757",
-      wickUpColor: "#00ff88", wickDownColor: "#ff4757",
+      upColor: "#00ff88",
+      downColor: "#ff4757",
+      wickUpColor: "#00ff88",
+      wickDownColor: "#ff4757",
       borderVisible: false,
     });
+
     const ema = chart.addLineSeries({ lineWidth: 2 });
     const aux = chart.addLineSeries({ lineWidth: 2 });
 
     function fit() {
       const r = el.getBoundingClientRect();
-      chart.applyOptions({ width: Math.max(1, r.width | 0), height: Math.max(1, r.height | 0) });
+      chart.applyOptions({
+        width: Math.max(1, Math.floor(r.width)),
+        height: Math.max(1, Math.floor(r.height)),
+      });
       chart.timeScale().fitContent();
     }
-    try { S.ro = new ResizeObserver(fit); S.ro.observe(el); } catch (e) {}
-    window.addEventListener("resize", fit);
 
-    S.chart = chart; S.candle = candle; S.ema = ema; S.aux = aux;
+    S.ro = new ResizeObserver(() => safeRun("resizeObserver", fit));
+    S.ro.observe(el);
+    window.addEventListener("resize", () => safeRun("windowResize", fit));
+    safeRun("fitNow", fit);
 
-    // legacy globals (avoid "chart is not defined")
-    try { window.chart = S.chart; } catch (e) {}
-    try { window.candleSeries = S.candle; } catch (e) {}
-    try { window.emaSeries = S.ema; } catch (e) {}
-    try { window.auxSeries = S.aux; } catch (e) {}
+    S.chart = chart;
+    S.candle = candle;
+    S.ema = ema;
+    S.aux = aux;
 
     return true;
   }
 
-  function readSymbolFromUI() {
-    const symEl = getElBy2(S.opts.symbolElIdPrimary, S.opts.symbolElIdFallback);
-    const v = symEl ? symEl.value : "";
-    return normSymbol(v || S.opts.defaultSymbol || DEFAULTS.symbol);
-  }
-
-  async function fetchJsonWithTimeout(url) {
-    const controller = new AbortController();
-    const to = setTimeout(() => controller.abort(), Number(S.opts.fetchTimeoutMs || 20000));
-    try {
-      const resp = await fetch(url, { method: "GET", cache: "no-store", signal: controller.signal });
-      const ct = (resp.headers.get("content-type") || "").toLowerCase();
-      if (!resp.ok) throw new Error(`http_${resp.status}`);
-      if (!ct.includes("application/json")) {
-        // very common when hitting wrong host: returns HTML
-        throw new Error("non_json_response");
-      }
-      return await resp.json();
-    } finally {
-      clearTimeout(to);
-    }
-  }
-
+  // -----------------------------
+  // Network with loud logs
+  // -----------------------------
   async function fetchSnapshot(symbol, tf, limit) {
-    const paths = CANDIDATE_BASES.length ? CANDIDATE_BASES : [DEFAULT_API_BASE];
-    let lastErr = null;
+    const url =
+      `${API_BASE}${SNAPSHOT_PATH}` +
+      `?symbol=${encodeURIComponent(symbol)}` +
+      `&tf=${encodeURIComponent(tf)}` +
+      `&limit=${encodeURIComponent(String(limit || DEFAULTS.limit))}` +
+      `&_ts=${Date.now()}`; // cache-bust
 
-    for (const base of paths) {
-      const url =
-        `${base}/api/market/snapshot?symbol=${encodeURIComponent(symbol)}` +
-        `&tf=${encodeURIComponent(tf)}` +
-        `&limit=${encodeURIComponent(String(limit || DEFAULTS.limit))}`;
+    // Loud log
+    console.groupCollapsed(`[ChartCore] snapshot fetch @ ${nowISO()}`);
+    console.log("URL:", url);
+    console.log("Origin:", window.location.origin);
+    console.groupEnd();
 
-      // expose for debugging
-      window.__CHARTCORE_LAST_URL__ = url;
-
-      try {
-        setHintText(`Loading… ${symbol} ${tf}  (api: ${base.replace("https://", "")})`);
-        const data = await fetchJsonWithTimeout(url);
-        return { data, url, base };
-      } catch (e) {
-        lastErr = e;
-        // try next base
-      }
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "GET",
+        mode: "cors",
+        credentials: "omit",
+        cache: "no-store",
+      });
+    } catch (e) {
+      // Typical CORS / network error shows as TypeError: Failed to fetch
+      throw new Error(`fetch_failed:${e && e.message ? e.message : String(e)}`);
     }
 
-    throw lastErr || new Error("snapshot_failed");
+    const contentType = resp.headers.get("content-type") || "";
+    const allowOrigin = resp.headers.get("access-control-allow-origin");
+
+    // Print key headers for CORS diagnosis
+    console.groupCollapsed(`[ChartCore] snapshot response ${resp.status}`);
+    console.log("status:", resp.status, resp.statusText);
+    console.log("content-type:", contentType);
+    console.log("access-control-allow-origin:", allowOrigin);
+    console.groupEnd();
+
+    const text = await resp.text();
+
+    if (!resp.ok) {
+      // include body snippet
+      const snip = text.slice(0, 300);
+      throw new Error(`http_${resp.status}:${snip}`);
+    }
+
+    // parse json
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (e) {
+      const snip = text.slice(0, 300);
+      throw new Error(`json_parse_failed:${snip}`);
+    }
+
+    return { url, json };
   }
 
-  function renderSnapshot(symbol, tf, snap) {
-    if (!snap || snap.ok !== true) throw new Error("snapshot_not_ok");
-    const bars = snap.bars || [];
+  // -----------------------------
+  // Render
+  // -----------------------------
+  function renderSnapshot(symbol, tf, rawSnap) {
+    const snap = normalizeSnapshot(rawSnap);
+    if (!snap.ok) throw new Error("snapshot_not_ok");
+
+    const bars = Array.isArray(snap.bars) ? snap.bars : [];
     if (!bars.length) throw new Error("no_bars");
 
+    const toggles = readToggles();
+
+    // candles
     S.candle.setData(bars);
 
+    // top text
     const last = bars[bars.length - 1];
-    safeRun("top", () => {
-      if ($("symText")) $("symText").textContent = symbol;
-      if ($("priceText") && last && last.close != null) $("priceText").textContent = Number(last.close).toFixed(2);
-    });
+    setTopText(symbol, last && last.close);
 
-    const emaSeries = snap.ema_series || [];
-    const auxSeries = snap.aux_series || [];
+    // EMA/AUX
+    if (toggles.ema && Array.isArray(snap.ema_series) && snap.ema_series.length) {
+      S.ema.setData(snap.ema_series);
+    } else {
+      S.ema.setData([]);
+    }
 
-    if (S.toggles.ema && emaSeries.length) S.ema.setData(emaSeries); else S.ema.setData([]);
-    if (S.toggles.aux && auxSeries.length) S.aux.setData(auxSeries); else S.aux.setData([]);
+    if (toggles.aux && Array.isArray(snap.aux_series) && snap.aux_series.length) {
+      S.aux.setData(snap.aux_series);
+    } else {
+      S.aux.setData([]);
+    }
 
-    const markers = mapSignalsToMarkers(snap.signals || snap.sigs || []);
+    // markers (small markers)
+    const markers = mapSignalsToMarkers(snap.signals);
     S.candle.setMarkers(markers);
 
-    const snapshot = {
-      ok: true, symbol, tf, bars,
-      ema_series: emaSeries,
-      aux_series: auxSeries,
-      signals: (snap.signals || snap.sigs || []),
-      meta: (snap.meta || {}),
-      source: snap.source || (snap.meta && snap.meta.source) || "backend",
+    // snapshot for other UI (market.pulse.js)
+    const out = {
+      ok: true,
+      symbol,
+      tf,
+      bars,
+      ema_series: snap.ema_series || [],
+      aux_series: snap.aux_series || [],
+      signals: snap.signals || [],
+      meta: snap.meta || {},
+      source: snap.source || "backend",
       ts: Date.now(),
     };
 
-    S.lastSnapshot = snapshot;
-    window.__DARRIUS_CHART_STATE__ = snapshot;
+    S.lastSnapshot = out;
+    window.__DARRIUS_CHART_STATE__ = out;
 
+    // Read-only bridge
     window.DarriusChart = {
       timeToX: (t) => safeRun("timeToX", () => S.chart.timeScale().timeToCoordinate(t)),
       priceToY: (p) => safeRun("priceToY", () => S.candle.priceToCoordinate(p)),
@@ -246,50 +332,82 @@
     };
 
     safeRun("emit", () => {
-      window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: snapshot }));
+      window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: out }));
     });
-
-    setHintText("Market snapshot loaded · 已加载市场快照");
   }
 
+  // -----------------------------
+  // Public API
+  // -----------------------------
   async function load() {
-    const ok = await ensureChart();
-    if (!ok) return;
+    if (S.inFlight) return;
+    S.inFlight = true;
+    S.lastError = null;
 
     const symbol = readSymbolFromUI();
-    const tf = getTF(S.opts.tfElId);
-    const limit = Number(S.opts.limit || DEFAULTS.limit);
+    const tf = readTF();
+    const limit = DEFAULTS.limit;
+
+    setHint("Loading snapshot… / 加载中…");
 
     try {
-      const { data, url } = await fetchSnapshot(symbol, tf, limit);
-      renderSnapshot(symbol, tf, data);
-      // expose last good
-      window.__CHARTCORE_LAST_OK_URL__ = url;
+      // Wait LW charts (fix wrong script order)
+      await waitForLightweightCharts({ timeoutMs: 12000, pollMs: 50 });
+
+      // Create chart if needed
+      ensureChart();
+
+      // Fetch
+      const { url, json } = await fetchSnapshot(symbol, tf, limit);
+
+      // Render
+      renderSnapshot(symbol, tf, json);
+
+      console.info("[ChartCore] snapshot OK:", { symbol, tf, url, bars: (json && json.bars && json.bars.length) || "?" });
     } catch (e) {
+      S.lastError = e;
       const msg = (e && e.message) ? e.message : String(e);
-      const url = window.__CHARTCORE_LAST_URL__ || "(unknown)";
-      console.warn("[ChartCore] snapshot failed:", msg, "url=", url);
-      setHintText(`Snapshot failed: ${msg} · ${url}`);
+
+      // Loud console
+      console.error("[ChartCore] LOAD FAILED:", msg, e);
+
+      // UI hint
+      setHint(`Snapshot failed · ${msg}`);
+
+      // Also expose for debug
+      window.__CHARTCORE_LAST_ERROR__ = { at: Date.now(), message: msg };
+    } finally {
+      S.inFlight = false;
     }
   }
 
   function applyToggles() {
-    const tgEMA = $("tgEMA");
-    const tgAux = $("tgAux");
-    if (tgEMA) S.toggles.ema = !!tgEMA.checked;
-    if (tgAux) S.toggles.aux = !!tgAux.checked;
-
-    if (S.lastSnapshot && S.lastSnapshot.ok && (S.lastSnapshot.bars || []).length) {
-      renderSnapshot(S.lastSnapshot.symbol, S.lastSnapshot.tf, S.lastSnapshot);
+    // Re-render using cached snapshot quickly
+    if (S.lastSnapshot && S.lastSnapshot.ok && S.lastSnapshot.bars) {
+      safeRun("applyToggles", () => renderSnapshot(S.lastSnapshot.symbol, S.lastSnapshot.tf, S.lastSnapshot));
+    } else {
+      load();
     }
   }
 
-  function init(opts) {
-    S.opts = Object.assign({}, S.opts, (opts || {}));
-    if (!S.opts.defaultSymbol) S.opts.defaultSymbol = "TSLA";
-    if (!S.opts.limit) S.opts.limit = DEFAULTS.limit;
-    load();
+  function exportPNG() {
+    alert("导出 PNG：建议用浏览器截图；如需可后续加入 html2canvas。");
   }
 
-  window.ChartCore = { init, load, applyToggles, exportPNG: () => alert("PNG：建议截图或后续加 html2canvas") };
+  function init() {
+    // Auto-load after DOM ready (without depending on boot.js)
+    const go = () => load();
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", go, { once: true });
+    } else {
+      go();
+    }
+  }
+
+  // Expose
+  window.ChartCore = { init, load, applyToggles, exportPNG };
+
+  // IMPORTANT: self-init (so even if boot.js doesn't call init, it still runs)
+  init();
+
 })();
