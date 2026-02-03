@@ -1,333 +1,634 @@
 /* =========================================================================
  * DarriusAI - chart.core.js
- * FULL REPLACEABLE v2026.02.02-FINAL-V7 (CORS-SAFE + HARDER DIAGNOSTICS)
+ * FINAL-STABLE v2026.02.02-TD-PROXY-V1
+ *
+ * Goals:
+ *  1) Main chart ALWAYS renders (candles + EMA + AUX optional)
+ *  2) Use backend aggregates endpoint with correct params:
+ *      /api/data/stocks/aggregates?ticker=...&multiplier=...&timespan=...&from=...&to=...
+ *  3) Publish snapshot for UI overlay:
+ *      window.__DARRIUS_CHART_STATE__
+ *      window.DarriusChart.timeToX / priceToY / getSnapshot
+ *      dispatch "darrius:chartUpdated"
+ *  4) HARD DIAGNOSTICS:
+ *      __LAST_AGG_URL__ __LAST_AGG_HTTP__ __LAST_AGG_TEXT_HEAD__ __LAST_AGG_ERR__
+ *  5) NEVER touch billing/subscription logic
  * ========================================================================= */
 
-console.log("=== chart.core.js ACTIVE BUILD: 2026-02-02 FINAL-V7 ===");
-window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V7";
+console.log("=== chart.core.js ACTIVE BUILD: 2026-02-02 TD-PROXY-V1 ===");
+window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V1";
 
 (() => {
-  'use strict';
+  "use strict";
 
-  const POLL_INTERVAL = 15000;
+  // -----------------------------
+  // Global diagnostic (never throw)
+  // -----------------------------
+  const DIAG = (window.__DARRIUS_DIAG__ = window.__DARRIUS_DIAG__ || {
+    lastError: null,
+    chartError: null,
+    lastBarsUrl: null,
+    lastSigCount: null,
+  });
 
-  const API_BASE = String(window.__DARRIUS_API_BASE__ || "https://darrius-api.onrender.com")
-    .replace(/\/+$/, "");
+  // hard debug vars (you check in console)
+  window.__LAST_AGG_URL__ = window.__LAST_AGG_URL__ || "";
+  window.__LAST_AGG_HTTP__ = window.__LAST_AGG_HTTP__ || null;
+  window.__LAST_AGG_TEXT_HEAD__ = window.__LAST_AGG_TEXT_HEAD__ || "";
+  window.__LAST_AGG_ERR__ = window.__LAST_AGG_ERR__ || "";
 
-  const API_AGG  = `${API_BASE}/api/data/stocks/aggregates`;
-  const API_SIGS = `${API_BASE}/api/market/sigs`;
-
-  window.__DARRIUS_CHART_RUNTIME__ = window.__DARRIUS_CHART_RUNTIME__ || {};
-  const R = window.__DARRIUS_CHART_RUNTIME__;
-
-  if (!R.__ERR_HOOKED__) {
-    R.__ERR_HOOKED__ = true;
-    window.addEventListener('error', (e) => console.log('[window.onerror]', e && e.message));
-    window.addEventListener('unhandledrejection', (e) => console.log('[unhandledrejection]', e && e.reason));
+  function safeRun(tag, fn) {
+    try { return fn(); }
+    catch (e) {
+      DIAG.lastError = { tag, message: String(e?.message || e), stack: String(e?.stack || "") };
+      return undefined;
+    }
   }
+
+  // -----------------------------
+  // DOM helpers
+  // -----------------------------
+  const $ = (id) => document.getElementById(id);
+  const qs = (sel) => document.querySelector(sel);
 
   function writeMutant(msg) {
-    try {
+    safeRun("mutant", () => {
       const el =
-        document.querySelector('#darrius-mutant') ||
-        document.querySelector('.darrius-mutant') ||
-        document.querySelector('[data-mutant]') ||
-        document.querySelector('.mutant') ||
+        qs("#darrius-mutant") ||
+        qs(".darrius-mutant") ||
+        qs("[data-mutant]") ||
         null;
-      if (el) el.textContent = String(msg || '');
-    } catch (_) {}
+      if (el) el.textContent = String(msg || "");
+    });
   }
 
-  function findChartContainer() {
-    return (
-      document.querySelector('#chart') ||
-      document.querySelector('#main-chart') ||
-      document.querySelector('.chart-container') ||
-      document.querySelector('.tv-lightweight-chart') ||
-      document.querySelector('.tv-chart') ||
-      document.querySelector('[data-chart]')
-    );
+  // -----------------------------
+  // Config
+  // -----------------------------
+  const API_BASE = String(
+    window.__DARRIUS_API_BASE__ ||
+    window.DARRIUS_API_BASE ||
+    window._API_BASE_ ||
+    window.API_BASE ||
+    "https://darrius-api.onrender.com"
+  ).replace(/\/+$/, "");
+
+  const AGGS_PATH = "/api/data/stocks/aggregates";
+
+  // optional (best-effort)
+  const SIGS_PATH_CANDIDATES = [
+    "/api/market/sigs",
+    "/api/market/signals",
+    "/api/sigs",
+    "/api/signals",
+    "/sigs",
+    "/signals",
+  ];
+
+  // -----------------------------
+  // Preset params (same as old)
+  // -----------------------------
+  const EMA_PERIOD = 14;
+  const AUX_PERIOD = 40;
+  const AUX_METHOD = "SMA";
+  const CONFIRM_WINDOW = 3;
+
+  // -----------------------------
+  // Colors (same feel as brand)
+  // -----------------------------
+  const COLOR_UP = "#2BE2A6";
+  const COLOR_DN = "#FF5A5A";
+  const COLOR_EMA = "#FFD400";
+  const COLOR_AUX = "#FFFFFF";
+
+  // -----------------------------
+  // State
+  // -----------------------------
+  let containerEl = null;
+  let chart = null;
+  let candleSeries = null;
+  let emaSeries = null;
+  let auxSeries = null;
+  let showEMA = true;
+  let showAUX = true;
+
+  // -----------------------------
+  // UI readers (keep old behavior)
+  // -----------------------------
+  function getUiSymbol() {
+    const el =
+      $("symbolInput") ||
+      $("symInput") ||
+      $("symbol") ||
+      qs('input[name="symbol"]') ||
+      qs("#symbol") ||
+      qs("#sym");
+    const v = el && (el.value || el.textContent);
+    return (v || window.__CURRENT_SYMBOL__ || "BTCUSDT").trim();
   }
 
-  function ensureSize(el) {
-    const r = el.getBoundingClientRect();
-    if (r.width === 0) el.style.width = '100%';
-    if (r.height === 0) el.style.minHeight = '420px';
-    return el.getBoundingClientRect();
+  function getUiTf() {
+    const el =
+      $("tfSelect") ||
+      $("timeframeSelect") ||
+      $("tf") ||
+      qs('select[name="timeframe"]') ||
+      qs("#timeframe");
+    const v = el && (el.value || el.textContent);
+    return (v || window.__CURRENT_TIMEFRAME__ || "1d").trim();
   }
 
-  function canInitNow() {
-    return !!(window.LightweightCharts && typeof window.LightweightCharts.createChart === 'function');
-  }
-
-  function initChart() {
-    const container = findChartContainer();
-    if (!container) {
-      writeMutant('Darrius Mutant\nERROR: chart container NOT FOUND (#chart / .chart-container / [data-chart])');
-      console.error('[chart.core] container not found');
-      return false;
+  // -----------------------------
+  // Fetch helper (CORS safe)
+  // -----------------------------
+  async function fetchText(url) {
+    const r = await fetch(url, { method: "GET", cache: "no-store", credentials: "omit" });
+    const text = await r.text().catch(() => "");
+    window.__LAST_AGG_HTTP__ = r.status;
+    window.__LAST_AGG_TEXT_HEAD__ = String(text || "").slice(0, 400);
+    if (!r.ok) {
+      const err = new Error(`HTTP ${r.status}`);
+      err.status = r.status;
+      err.body = text;
+      throw err;
     }
-    if (!canInitNow()) {
-      writeMutant('Darrius Mutant\nERROR: LightweightCharts NOT READY (script not loaded?)');
-      console.error('[chart.core] LightweightCharts not ready');
-      return false;
-    }
-
-    const rect = ensureSize(container);
-    console.log('[chart.core] init container:', { w: rect.width, h: rect.height, id: container.id, cls: container.className });
-
-    try { if (R.chart && R.chart.remove) R.chart.remove(); } catch (_) {}
-
-    const chart = LightweightCharts.createChart(container, {
-      layout: { background: { color: '#0b1220' }, textColor: '#cfd8dc' },
-      grid: { vertLines: { color: '#1f2a38' }, horzLines: { color: '#1f2a38' } },
-      timeScale: { timeVisible: true, secondsVisible: false },
-      rightPriceScale: { borderColor: '#263238' },
-      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    });
-
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: '#26a69a',
-      downColor: '#ef5350',
-      wickUpColor: '#26a69a',
-      wickDownColor: '#ef5350',
-      borderVisible: false,
-    });
-
-    const emaFastSeries = chart.addLineSeries({ color: '#fdd835', lineWidth: 2 });
-    const emaSlowSeries = chart.addLineSeries({ color: '#42a5f5', lineWidth: 2 });
-
-    R.chart = chart;
-    R.candleSeries = candleSeries;
-    R.emaFastSeries = emaFastSeries;
-    R.emaSlowSeries = emaSlowSeries;
-
-    window.addEventListener('resize', () => {
-      const rr = container.getBoundingClientRect();
-      try { chart.applyOptions({ width: rr.width, height: rr.height }); } catch (_) {}
-    });
-
-    return true;
+    return text;
   }
 
-  // ---------- tolerant parsing ----------
-  function num(x) {
-    if (typeof x === 'number' && Number.isFinite(x)) return x;
-    if (typeof x === 'string' && x.trim() !== '') {
-      const v = Number(x);
-      if (Number.isFinite(v)) return v;
+  async function fetchJson(url) {
+    const text = await fetchText(url);
+    try { return JSON.parse(text); }
+    catch (e) {
+      const err = new Error("JSON parse failed");
+      err.body = text;
+      throw err;
+    }
+  }
+
+  // -----------------------------
+  // tf -> agg params (use OLD mapping)
+  // -----------------------------
+  function tfToAggParams(tf) {
+    const m = String(tf || "1d").trim();
+    const map = {
+      "5m":  { multiplier: 5,   timespan: "minute", daysBack: 20 },
+      "15m": { multiplier: 15,  timespan: "minute", daysBack: 35 },
+      "30m": { multiplier: 30,  timespan: "minute", daysBack: 60 },
+      "1h":  { multiplier: 60,  timespan: "minute", daysBack: 90 },
+      "4h":  { multiplier: 240, timespan: "minute", daysBack: 180 },
+      "1d":  { multiplier: 1,   timespan: "day",    daysBack: 700 },
+      "1w":  { multiplier: 1,   timespan: "week",   daysBack: 1800 },
+      "1M":  { multiplier: 1,   timespan: "month",  daysBack: 3600 },
+      "1m":  { multiplier: 1,   timespan: "month",  daysBack: 3600 }, // tolerate lower-case
+    };
+    return map[m] || map["1d"];
+  }
+
+  function toYMD(d) {
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${da}`;
+  }
+
+  function rangeByDaysBack(daysBack) {
+    const to = new Date();
+    const from = new Date(Date.now() - (daysBack * 24 * 3600 * 1000));
+    return { from: toYMD(from), to: toYMD(to) };
+  }
+
+  // -----------------------------
+  // Normalize bars: accept Polygon/Massive/TwelveData-proxy shapes
+  // -----------------------------
+  function toUnixSec(t) {
+    if (t == null) return null;
+    if (typeof t === "number") {
+      if (t > 2e10) return Math.floor(t / 1000); // ms -> s
+      return Math.floor(t);
+    }
+    if (typeof t === "string") {
+      // string may be ms number
+      const n = Number(t);
+      if (Number.isFinite(n)) return toUnixSec(n);
+      const ms = Date.parse(t);
+      if (!Number.isFinite(ms)) return null;
+      return Math.floor(ms / 1000);
     }
     return null;
   }
 
-  function normalizeTime(t) {
-    const tt = num(t);
-    if (tt === null) return null;
-    if (tt > 10_000_000_000) return Math.floor(tt / 1000); // ms -> s
-    return Math.floor(tt);
+  function normalizeBars(payload) {
+    const raw =
+      Array.isArray(payload) ? payload :
+      Array.isArray(payload?.results) ? payload.results :
+      Array.isArray(payload?.bars) ? payload.bars :
+      Array.isArray(payload?.data) ? payload.data :
+      [];
+
+    const bars = (raw || [])
+      .map((b) => {
+        const time = toUnixSec(b.time ?? b.t ?? b.timestamp ?? b.ts ?? b.date);
+        const open  = Number(b.open  ?? b.o ?? b.Open);
+        const high  = Number(b.high  ?? b.h ?? b.High);
+        const low   = Number(b.low   ?? b.l ?? b.Low);
+        const close = Number(b.close ?? b.c ?? b.Close);
+        if (!time) return null;
+        if (![open, high, low, close].every(Number.isFinite)) return null;
+        return { time, open, high, low, close };
+      })
+      .filter(Boolean);
+
+    bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+
+    // de-dupe by time
+    const out = [];
+    let lastT = null;
+    for (const b of bars) {
+      if (b.time === lastT) continue;
+      lastT = b.time;
+      out.push(b);
+    }
+    return out;
   }
 
-  function extractRows(payload) {
-    if (!payload) return [];
+  // -----------------------------
+  // Math (EMA + your AUX)
+  // -----------------------------
+  function ema(values, period) {
+    const k = 2 / (period + 1);
+    let e = null;
+    const out = new Array(values.length);
+    for (let i = 0; i < values.length; i++) {
+      const v = values[i];
+      if (!Number.isFinite(v)) { out[i] = NaN; continue; }
+      e = e == null ? v : v * k + e * (1 - k);
+      out[i] = e;
+    }
+    return out;
+  }
 
-    const direct = [payload.candles, payload.results, payload.bars, payload.data];
-    for (const x of direct) if (Array.isArray(x) && x.length) return x;
+  function wmaAt(values, endIdx, period) {
+    const start = endIdx - period + 1;
+    if (start < 0) return NaN;
+    let num = 0, den = 0;
+    for (let i = start; i <= endIdx; i++) {
+      const v = values[i];
+      if (!Number.isFinite(v)) return NaN;
+      const w = i - start + 1;
+      num += v * w;
+      den += w;
+    }
+    return den ? (num / den) : NaN;
+  }
 
-    const nested = [
-      payload.data?.results, payload.data?.candles, payload.data?.bars,
-      payload.payload?.results, payload.payload?.candles, payload.payload?.bars,
-      payload.result?.results, payload.result?.candles, payload.result?.bars,
-    ];
-    for (const x of nested) if (Array.isArray(x) && x.length) return x;
+  function smaAt(values, endIdx, period) {
+    const start = endIdx - period + 1;
+    if (start < 0) return NaN;
+    let sum = 0;
+    for (let i = start; i <= endIdx; i++) {
+      const v = values[i];
+      if (!Number.isFinite(v)) return NaN;
+      sum += v;
+    }
+    return sum / period;
+  }
 
-    try {
-      for (const k of Object.keys(payload)) {
-        const v = payload[k];
-        if (Array.isArray(v) && v.length && typeof v[0] === 'object') {
-          const r0 = v[0] || {};
-          if (('o' in r0 || 'open' in r0) && ('c' in r0 || 'close' in r0)) return v;
-        }
+  function maOnArray(values, period, method) {
+    const m = String(method || "SMA").toUpperCase();
+    const out = new Array(values.length).fill(NaN);
+
+    if (period <= 1) {
+      for (let i = 0; i < values.length; i++) out[i] = values[i];
+      return out;
+    }
+
+    if (m === "EMA") {
+      const k = 2 / (period + 1);
+      let e = null;
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (!Number.isFinite(v)) { out[i] = NaN; continue; }
+        e = e == null ? v : v * k + e * (1 - k);
+        out[i] = e;
       }
-    } catch (_) {}
+      return out;
+    }
 
+    if (m === "WMA") {
+      for (let i = 0; i < values.length; i++) out[i] = wmaAt(values, i, period);
+      return out;
+    }
+
+    for (let i = 0; i < values.length; i++) out[i] = smaAt(values, i, period);
+    return out;
+  }
+
+  function computeAuxByYourAlgo(closes, period, method) {
+    const n = Math.max(2, Math.floor(period || 40));
+    const half = Math.max(1, Math.floor(n / 2));
+    const p = Math.max(1, Math.round(Math.sqrt(n)));
+
+    const vect = new Array(closes.length).fill(NaN);
+    for (let i = 0; i < closes.length; i++) {
+      const w1 = wmaAt(closes, i, half);
+      const w2 = wmaAt(closes, i, n);
+      vect[i] = (Number.isFinite(w1) && Number.isFinite(w2)) ? (2 * w1 - w2) : NaN;
+    }
+    return maOnArray(vect, p, method || "SMA");
+  }
+
+  function buildLinePoints(bars, values) {
+    const pts = new Array(bars.length);
+    for (let i = 0; i < bars.length; i++) {
+      pts[i] = { time: bars[i].time, value: Number.isFinite(values[i]) ? values[i] : null };
+    }
+    return pts;
+  }
+
+  // -----------------------------
+  // Toggles (same as old)
+  // -----------------------------
+  function applyToggles() {
+    safeRun("applyToggles", () => {
+      const emaChecked =
+        $("toggleEMA")?.checked ??
+        $("emaToggle")?.checked ??
+        $("tgEMA")?.checked ??
+        $("emaCheck")?.checked;
+
+      const auxChecked =
+        $("toggleAUX")?.checked ??
+        $("auxToggle")?.checked ??
+        $("tgAux")?.checked ??
+        $("auxCheck")?.checked;
+
+      if (typeof emaChecked === "boolean") showEMA = emaChecked;
+      if (typeof auxChecked === "boolean") showAUX = auxChecked;
+
+      if (emaSeries) emaSeries.applyOptions({ visible: !!showEMA });
+      if (auxSeries) auxSeries.applyOptions({ visible: !!showAUX });
+    });
+  }
+
+  // -----------------------------
+  // Snapshot output (read-only) + event
+  // -----------------------------
+  function publishSnapshot(snapshot) {
+    safeRun("publishSnapshot", () => {
+      const frozen = Object.freeze(snapshot);
+      window.__DARRIUS_CHART_STATE__ = frozen;
+      try { window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: frozen })); } catch (_) {}
+    });
+  }
+
+  // -----------------------------
+  // Build aggregates URL (CORRECT FORMAT)
+  // -----------------------------
+  function buildAggUrl(sym, tf) {
+    const cfg = tfToAggParams(tf);
+    const { from, to } = rangeByDaysBack(cfg.daysBack);
+
+    const url = new URL(API_BASE + AGGS_PATH);
+    url.searchParams.set("ticker", String(sym || "BTCUSDT").trim().toUpperCase());
+    url.searchParams.set("multiplier", String(cfg.multiplier));
+    url.searchParams.set("timespan", String(cfg.timespan));
+    url.searchParams.set("from", from);
+    url.searchParams.set("to", to);
+
+    // optional passthrough flags your backend might use
+    if (window.__DARRIUS_PROVIDER__) url.searchParams.set("provider", String(window.__DARRIUS_PROVIDER__));
+    if (window.__DARRIUS_SOURCE__) url.searchParams.set("source", String(window.__DARRIUS_SOURCE__));
+
+    return { url: url.toString(), cfg, range: { from, to } };
+  }
+
+  // -----------------------------
+  // Optional signals (best-effort)
+  // -----------------------------
+  function normalizeSignals(payload) {
+    const raw =
+      payload?.sigs ||
+      payload?.signals ||
+      payload?.data?.sigs ||
+      payload?.data?.signals ||
+      [];
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((s) => {
+        const time = toUnixSec(s.time ?? s.t ?? s.timestamp ?? s.ts ?? s.date);
+        const sideRaw = String(s.side ?? s.type ?? s.action ?? s.text ?? "").trim();
+        const sideUp = sideRaw.toUpperCase();
+        let side = "";
+        if (sideRaw === "eB" || sideUp === "EB") side = "eB";
+        else if (sideRaw === "eS" || sideUp === "ES") side = "eS";
+        else if (sideUp.includes("BUY")) side = "B";
+        else if (sideUp.includes("SELL")) side = "S";
+        else if (sideUp === "B" || sideUp === "S") side = sideUp;
+        if (!time || !side) return null;
+        return { time, side };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+  }
+
+  async function fetchOptionalSignals(sym, tf) {
+    const q = `symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
+    for (const p of SIGS_PATH_CANDIDATES) {
+      const url = `${API_BASE}${p}?${q}`;
+      try {
+        const payload = await fetchJson(url);
+        const sigs = normalizeSignals(payload);
+        if (sigs.length) return sigs;
+      } catch (_) {}
+    }
     return [];
   }
 
-  function updateSeries(payload, meta) {
-    if (!R.candleSeries) return;
+  // -----------------------------
+  // Core load
+  // -----------------------------
+  async function load() {
+    if (!chart || !candleSeries) return;
 
-    const rows = extractRows(payload);
-    if (!rows.length) {
-      window.__LAST_AGG__ = payload;
-      writeMutant(`Darrius Mutant\nAGG ERROR: No rows extracted\nkeys=${payload ? Object.keys(payload).join(',') : 'null'}`);
-      return;
+    const sym = getUiSymbol();
+    const tf = getUiTf();
+
+    const built = buildAggUrl(sym, tf);
+    const urlUsed = built.url;
+    DIAG.lastBarsUrl = urlUsed;
+
+    window.__LAST_AGG_URL__ = urlUsed;
+    window.__LAST_AGG_ERR__ = "";
+    window.__LAST_AGG_HTTP__ = null;
+    window.__LAST_AGG_TEXT_HEAD__ = "";
+
+    writeMutant(`Darrius Mutant\nLoading...\n${sym} ${tf}`);
+
+    let payload;
+    try {
+      payload = await fetchJson(urlUsed);
+    } catch (e) {
+      window.__LAST_AGG_ERR__ = String(e?.message || e);
+      writeMutant(
+        `Darrius Mutant\nAGG ERROR: ${window.__LAST_AGG_ERR__}\nHTTP: ${window.__LAST_AGG_HTTP__}\nHEAD: ${String(window.__LAST_AGG_TEXT_HEAD__ || "").slice(0,180)}`
+      );
+      throw e;
     }
 
-    const candles = [];
-    const emaFast = [];
-    const emaSlow = [];
-
-    for (const r of rows) {
-      const time = normalizeTime(r.t ?? r.timestamp ?? r.time);
-      if (!time) continue;
-
-      const o = num(r.o ?? r.open);
-      const h = num(r.h ?? r.high);
-      const l = num(r.l ?? r.low);
-      const c = num(r.c ?? r.close);
-      if ([o, h, l, c].some(v => v === null)) continue;
-
-      candles.push({ time, open: o, high: h, low: l, close: c });
-
-      const ef = num(r.ema_fast);
-      const es = num(r.ema_slow);
-      if (ef !== null) emaFast.push({ time, value: ef });
-      if (es !== null) emaSlow.push({ time, value: es });
+    const bars = normalizeBars(payload);
+    if (!bars.length) {
+      window.__LAST_AGG_ERR__ = "bars empty after normalization";
+      writeMutant(
+        `Darrius Mutant\nAGG ERROR: bars empty\nkeys=${payload ? Object.keys(payload).join(",") : "null"}`
+      );
+      throw new Error("bars empty after normalization");
     }
 
-    if (!candles.length) {
-      window.__LAST_AGG__ = payload;
-      writeMutant(`Darrius Mutant\nAGG ERROR: rows exist but candles empty\nsample=${JSON.stringify(rows[0]).slice(0,160)}`);
-      return;
-    }
+    // main draw
+    const closes = bars.map(b => b.close);
+    const emaVals = ema(closes, EMA_PERIOD);
+    const auxVals = computeAuxByYourAlgo(closes, AUX_PERIOD, AUX_METHOD);
 
-    try { R.candleSeries.setData(candles); } catch (e) {
-      window.__LAST_AGG__ = payload;
-      writeMutant(`Darrius Mutant\nsetData ERROR: ${String(e && e.message ? e.message : e)}`);
-      return;
-    }
+    candleSeries.setData(bars);
+    emaSeries.setData(buildLinePoints(bars, emaVals));
+    auxSeries.setData(buildLinePoints(bars, auxVals));
 
-    try { if (emaFast.length) R.emaFastSeries.setData(emaFast); } catch (_) {}
-    try { if (emaSlow.length) R.emaSlowSeries.setData(emaSlow); } catch (_) {}
+    applyToggles();
 
-    const lastBar = candles[candles.length - 1];
-    window.__DARRIUS_CHART_STATE__ = {
-      symbol: meta?.symbol || window.__CURRENT_SYMBOL__ || '',
-      timeframe: meta?.timeframe || window.__CURRENT_TIMEFRAME__ || '',
-      count: candles.length,
-      lastBar,
+    // optional sigs
+    const sigs = await fetchOptionalSignals(sym, tf);
+    DIAG.lastSigCount = sigs.length;
+
+    // publish snapshot (keep old names)
+    const flatSnapshot = {
+      version: "2026.02.02-TD-PROXY-V1",
       ts: Date.now(),
+      apiBase: API_BASE,
+      urlUsed,
+      symbol: String(sym).trim().toUpperCase(),
+      tf: String(tf).trim(),
+      params: { EMA_PERIOD, AUX_PERIOD, AUX_METHOD, CONFIRM_WINDOW },
+      barsCount: bars.length,
+      bars,
+      ema: emaVals,
+      aux: auxVals,
+      sigs,
+      signals: sigs,
+      lastClose: bars[bars.length - 1].close,
     };
 
-    window.__LAST_AGG__ = payload;
+    publishSnapshot(flatSnapshot);
 
-    writeMutant(`Darrius Mutant\nOK: ${window.__DARRIUS_CHART_STATE__.symbol} ${window.__DARRIUS_CHART_STATE__.timeframe}\nBars: ${candles.length}\nLast: ${lastBar.close}`);
-    window.dispatchEvent(new CustomEvent('darrius:chartUpdated', { detail: window.__DARRIUS_CHART_STATE__ }));
+    // rich snapshot getter for overlay
+    safeRun("exposeSnapshotGetter", () => {
+      window.DarriusChart = window.DarriusChart || {};
+      window.DarriusChart.getSnapshot = () => {
+        try { return window.__DARRIUS_CHART_STATE__ || null; }
+        catch (_) { return null; }
+      };
+    });
+
+    writeMutant(`Darrius Mutant\nOK: ${flatSnapshot.symbol} ${flatSnapshot.tf}\nBars: ${bars.length}\nLast: ${flatSnapshot.lastClose}`);
+    safeRun("fitContent", () => chart.timeScale().fitContent());
+
+    return { urlUsed, bars: bars.length };
   }
 
-  // -------- fetch: CORS-safe (omit credentials) --------
-  async function fetchJSON(url) {
-    const res = await fetch(url, { cache: 'no-store', credentials: 'omit' });
-    const text = await res.text();
+  // -----------------------------
+  // Init chart + coordinate bridge
+  // -----------------------------
+  function init(opts) {
+    opts = opts || {};
+    const containerId = opts.containerId || "chart";
+    containerEl = $(containerId) || qs("#chart") || qs(".chart-container");
+    if (!containerEl) throw new Error("Chart container missing");
+    if (!window.LightweightCharts) throw new Error("LightweightCharts missing");
 
-    window.__LAST_AGG_HTTP__ = res.status;
-    window.__LAST_AGG_TEXT_HEAD__ = text.slice(0, 300);
+    chart = window.LightweightCharts.createChart(containerEl, {
+      layout: { background: { color: "transparent" }, textColor: "#EAF0F7" },
+      grid: {
+        vertLines: { color: "rgba(255,255,255,.04)" },
+        horzLines: { color: "rgba(255,255,255,.04)" },
+      },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { timeVisible: true, secondsVisible: false, borderVisible: false },
+      crosshair: { mode: 1 },
+    });
 
-    let json = null;
-    try { json = JSON.parse(text); } catch (_) {}
+    candleSeries = chart.addCandlestickSeries({
+      upColor: COLOR_UP,
+      downColor: COLOR_DN,
+      wickUpColor: COLOR_UP,
+      wickDownColor: COLOR_DN,
+      borderVisible: false,
+    });
 
-    if (!res.ok) throw new Error(`HTTP ${res.status} | ${text.slice(0, 140)}`);
-    if (!json) throw new Error(`JSON parse failed | head=${text.slice(0, 140)}`);
-    return json;
-  }
+    emaSeries = chart.addLineSeries({
+      color: COLOR_EMA,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
 
-  // -------- timeframe -> aggregates params --------
-  function fmtDate(d) {
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(d.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }
-  function subDaysUTC(days) {
-    const d = new Date();
-    d.setUTCHours(0, 0, 0, 0);
-    d.setUTCDate(d.getUTCDate() - days);
-    return d;
-  }
-  function timeframeToAggParams(tf) {
-    const t = String(tf || '1D').toUpperCase();
-    if (t === '1D') return { multiplier: 1, timespan: 'day', daysBack: 550 };
-    if (t === '1W') return { multiplier: 1, timespan: 'week', daysBack: 2000 };
-    if (t === '1M') return { multiplier: 1, timespan: 'month', daysBack: 5000 };
-    if (t === '4H') return { multiplier: 4, timespan: 'hour', daysBack: 180 };
-    if (t === '1H') return { multiplier: 1, timespan: 'hour', daysBack: 90 };
-    if (t === '30M') return { multiplier: 30, timespan: 'minute', daysBack: 45 };
-    if (t === '15M') return { multiplier: 15, timespan: 'minute', daysBack: 25 };
-    if (t === '5M')  return { multiplier: 5,  timespan: 'minute', daysBack: 10 };
-    return { multiplier: 1, timespan: 'day', daysBack: 550 };
-  }
+    auxSeries = chart.addLineSeries({
+      color: COLOR_AUX,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
 
-  // -------- read symbol/timeframe (minimal + safe) --------
-  function readSymbol() {
-    // Use your global if you already set it elsewhere
-    const g = String(window.__CURRENT_SYMBOL__ || window.__DARRIUS_SYMBOL__ || '').trim();
-    if (g) return g.toUpperCase();
-    // fallback
-    return 'TSLA';
-  }
-  function readTimeframe() {
-    return String(window.__CURRENT_TIMEFRAME__ || window.__DARRIUS_TIMEFRAME__ || '1D').trim().toUpperCase();
-  }
+    // coordinate bridge for overlay
+    safeRun("bridgeExpose", () => {
+      window.DarriusChart = window.DarriusChart || {};
+      window.DarriusChart.timeToX = (t) => safeRun("timeToX", () => chart?.timeScale()?.timeToCoordinate(t));
+      window.DarriusChart.priceToY = (p) => safeRun("priceToY", () => candleSeries?.priceToCoordinate(p));
+      window.DarriusChart.__hostId = containerId || "chart";
+      if (typeof window.DarriusChart.getSnapshot !== "function") {
+        window.DarriusChart.getSnapshot = () => window.__DARRIUS_CHART_STATE__ || null;
+      }
+    });
 
-  function buildAggUrl(symbol, timeframe) {
-    const p = timeframeToAggParams(timeframe);
-    const from = fmtDate(subDaysUTC(p.daysBack));
-    const to = fmtDate(subDaysUTC(0));
+    // resize
+    const resize = () => safeRun("resize", () => {
+      const r = containerEl.getBoundingClientRect();
+      chart.applyOptions({
+        width: Math.max(1, Math.floor(r.width)),
+        height: Math.max(1, Math.floor(r.height)),
+      });
+    });
 
-    const qs = new URLSearchParams();
-    qs.set('ticker', symbol);
-    qs.set('multiplier', String(p.multiplier));
-    qs.set('timespan', String(p.timespan));
-    qs.set('from', from);
-    qs.set('to', to);
+    safeRun("observeResize", () => {
+      try { new ResizeObserver(resize).observe(containerEl); }
+      catch (_) { window.addEventListener("resize", resize); }
+    });
+    resize();
 
-    // optional passthrough
-    if (window.__DARRIUS_DATA_SOURCE__) qs.set('source', String(window.__DARRIUS_DATA_SOURCE__));
-    if (window.__DARRIUS_PROVIDER__) qs.set('provider', String(window.__DARRIUS_PROVIDER__));
+    // toggles
+    $("toggleEMA")?.addEventListener("change", applyToggles);
+    $("emaToggle")?.addEventListener("change", applyToggles);
+    $("tgEMA")?.addEventListener("change", applyToggles);
+    $("emaCheck")?.addEventListener("change", applyToggles);
 
-    return `${API_AGG}?${qs.toString()}`;
-  }
+    $("toggleAUX")?.addEventListener("change", applyToggles);
+    $("auxToggle")?.addEventListener("change", applyToggles);
+    $("tgAux")?.addEventListener("change", applyToggles);
+    $("auxCheck")?.addEventListener("change", applyToggles);
 
-  async function pollOnce() {
-    const symbol = readSymbol().toUpperCase();
-    const timeframe = readTimeframe();
-
-    window.__CURRENT_SYMBOL__ = symbol;
-    window.__CURRENT_TIMEFRAME__ = timeframe;
-
-    try {
-      const url = buildAggUrl(symbol, timeframe);
-      window.__LAST_AGG_URL__ = url;
-      window.__LAST_AGG_ERR__ = '';
-
-      const json = await fetchJSON(url);
-      updateSeries(json, { symbol, timeframe });
-    } catch (e) {
-      window.__LAST_AGG_ERR__ = String(e && e.message ? e.message : e);
-      writeMutant(`Darrius Mutant\nAGG ERROR: ${window.__LAST_AGG_ERR__}\nHTTP: ${window.__LAST_AGG_HTTP__}\nHEAD: ${String(window.__LAST_AGG_TEXT_HEAD__ || '').slice(0,140)}`);
-      console.error('[chart.core] poll error', e);
+    if (opts.autoLoad !== false) {
+      load().catch((e) => {
+        DIAG.chartError = { message: String(e?.message || e), stack: String(e?.stack || "") };
+      });
     }
+  }
 
-    // signals (best-effort)
+  function getSnapshot() {
     try {
-      const urlS = `${API_SIGS}?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`;
-      window.__LAST_SIGS__ = await fetchJSON(urlS);
-    } catch (_) {}
+      if (window.DarriusChart && typeof window.DarriusChart.getSnapshot === "function") return window.DarriusChart.getSnapshot();
+      return window.__DARRIUS_CHART_STATE__ || null;
+    } catch (_) {
+      return null;
+    }
   }
 
-  function startPolling() {
-    if (R.pollingTimer) return;
-    pollOnce();
-    R.pollingTimer = setInterval(pollOnce, POLL_INTERVAL);
-  }
-
-  // boot loop
-  let tries = 0;
-  const t = setInterval(() => {
-    tries += 1;
-    if (!R.candleSeries) initChart();
-    if (R.candleSeries) startPolling();
-    if (R.candleSeries || tries > 200) clearInterval(t);
-  }, 50);
-
+  window.ChartCore = { init, load, applyToggles, getSnapshot };
 })();
