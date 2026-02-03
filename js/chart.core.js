@@ -1,74 +1,55 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (FINAL / DROP-IN) v2026.02.02-FINAL-FULL-FIX-R3
+ * DarriusAI - chart.core.js (FINAL STABLE MAIN CHART)
+ * v2026.02.02-FIX-FROMTO-RANGE-R1
  *
- * Role:
- *  - Render main chart (candles + EMA [+ optional AUX if backend provides series])
- *  - Fetch OHLCV via backend proxy:   /api/data/stocks/aggregates
- *  - Fetch signals via backend ONLY:  /api/market/sigs   (NO local signal logic)
- *  - Output stable snapshot: window.__DARRIUS_CHART_STATE__  (never NaN/undefined)
- *  - Provide read-only bridge for UI overlay (market.pulse.js):
- *      DarriusChart.timeToX / DarriusChart.priceToY / DarriusChart.getSnapshot()
- *  - Emit event "darrius:chartUpdated" with snapshot detail
+ * Fixes:
+ *  - ALWAYS send from/to (YYYY-MM-DD) to /api/data/stocks/aggregates
+ *    => prevents 400 "from/to required" and the downstream "Loading..." freeze
+ *  - Works with API_BASE (darrius-api.onrender.com) OR relative /api on same origin
  *
- * HARD FIXES INCLUDED:
- *  A) Always call backend with absolute API_BASE (prevents GitHub Pages /api 404)
- *  B) Auto-fill from/to (YYYY-MM-DD) if missing (backend requires it)
- *  C) Snapshot schema v2 is stable; no NaN leaks; safe zones everywhere
+ * Safety:
+ *  - UI-only chart renderer; never touches billing/subscription/payment logic
+ *  - No-throw safe zones
+ *  - Stable snapshot schema (no undefined / NaN leaks)
  * ========================================================================= */
 
 (() => {
   'use strict';
 
-  // ---- PROVE LOADED (debug) ----
-  try {
-    console.log('[CHART CORE LOADED]', 'v2026.02.02-R3', Date.now());
-    window.__CHART_CORE_LOADED__ = 'v2026.02.02-R3';
-  } catch (_) {}
-
   // -----------------------------
   // No-throw safe zone
   // -----------------------------
-  function safe(fn, _tag = 'chart.core') {
-    try { return fn(); } catch (e) { return null; }
-  }
+  function safe(fn) { try { return fn(); } catch (_) { return null; } }
 
   // -----------------------------
   // Helpers: NaN lock & contract
   // -----------------------------
-  function isNum(v) { return typeof v === 'number' && Number.isFinite(v); }
-  function num(v, fb = 0) {
-    const x = (typeof v === 'string' && v.trim() !== '') ? Number(v) : v;
-    return isNum(x) ? x : fb;
-  }
-  function nnull(v) { const x = num(v, NaN); return Number.isFinite(x) ? x : null; }
-  function str(v, fb = '') { return (typeof v === 'string' && v.length) ? v : fb; }
-  function arr(v) { return Array.isArray(v) ? v : []; }
-  function clamp01(x) { x = num(x, 0); return x < 0 ? 0 : x > 1 ? 1 : x; }
+  const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+  const num = (v, fb = 0) => (isNum(v) ? v : fb);
+  const nnull = (v) => (isNum(v) ? v : null);
+  const str = (v, fb = '') => (typeof v === 'string' && v.length ? v : fb);
+  const arr = (v) => (Array.isArray(v) ? v : []);
+
+  const clamp01 = (x) => {
+    x = num(x, 0);
+    if (x < 0) return 0;
+    if (x > 1) return 1;
+    return x;
+  };
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const fmtYMD = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
   function nowIso() { return new Date().toISOString(); }
-  function fmtDateYYYYMMDD(d) { return d.toISOString().slice(0, 10); }
 
   // -----------------------------
-  // API base (ABSOLUTE)  ✅ FIX A
-  // -----------------------------
-  function apiBase() {
-    // priority: __API_BASE__ > API_BASE > hard default
-    const b = (window.__API_BASE__ || window.API_BASE || 'https://darrius-api.onrender.com');
-    return String(b).replace(/\/+$/, '');
-  }
-  function apiUrl(path) {
-    const p = String(path || '');
-    if (/^https?:\/\//i.test(p)) return p;
-    if (!p.startsWith('/')) return apiBase() + '/' + p;
-    return apiBase() + p;
-  }
-
-  // -----------------------------
-  // Stable Snapshot Contract (NEVER NaN/undefined)
+  // Snapshot (stable)
   // -----------------------------
   function makeSnapshotBase() {
     return {
       schema: 'darrius.snapshot.v2',
       ts: nowIso(),
+
       meta: {
         symbol: 'TSLA',
         timeframe: '1D',
@@ -77,12 +58,14 @@
         bars: 480,
         from: null,
         to: null,
-        source: 'unknown', // 'live'|'delayed'|'demo'|'unknown'
+
+        source: 'unknown',  // live|delayed|demo|unknown
         ready: false,
         loaded: false,
         error: null,
         notes: []
       },
+
       price: {
         last: null,
         lastTime: null,
@@ -91,130 +74,203 @@
         trend: 'flat',
         bias: 'stable'
       },
+
       signals: {
         bullish: 0,
         bearish: 0,
         neutral: 0,
         net: 0,
-        lastSig: null, // { t, side, label } | null
+        lastSig: null,
         raw: null
       },
+
       risk: {
         entry: null,
         stop: null,
         targets: [],
         confidence: null
       },
+
       backtest: {
         winRate: null,
         sampleSize: null
       },
+
       series: {
         candlesCount: 0,
         emaCount: 0,
         auxCount: 0
       },
+
       map: {
         xMin: 0, xMax: 1,
         yMin: 0, yMax: 1,
-        tMin: null, tMax: null,
-        pMin: null, pMax: null
+        tMin: null, tMax: null
       }
     };
   }
 
   function snapshotCommit(snap) {
-    // hard guarantee: always an object
-    if (!snap || typeof snap !== 'object') snap = makeSnapshotBase();
     window.__DARRIUS_CHART_STATE__ = snap;
-    safe(() => {
-      window.dispatchEvent(new CustomEvent('darrius:chartUpdated', { detail: snap }));
-    }, 'chartUpdated');
+    safe(() => window.dispatchEvent(new CustomEvent('darrius:chartUpdated', { detail: snap })));
   }
 
   // -----------------------------
-  // Config (minimal, do NOT touch billing/subscription)
+  // Config
   // -----------------------------
   const CFG = {
     aggregatesPath: '/api/data/stocks/aggregates',
     sigsPath: '/api/market/sigs',
 
     refreshMs: 15000,
-    sigsRefreshMs: 15000,
-    cacheBust: false,
 
     emaFastPeriod: 20,
-    emaSlowPeriod: 50,
-
-    containerSelectors: [
-      '#chart',
-      '#chartWrap #chart',
-      '#chartContainer',
-      '#mainChart',
-      '#tvchart',
-      '#chart-root',
-      '.chart-container'
-    ]
+    emaSlowPeriod: 50
   };
 
-  // -----------------------------
-  // DOM container
-  // -----------------------------
-  function findContainer() {
-    for (const sel of CFG.containerSelectors) {
-      const el = document.querySelector(sel);
-      if (el) return el;
+  // IMPORTANT: support API_BASE (your site uses https://darrius-api.onrender.com)
+  function getApiBase() {
+    // common variants in your project
+    const b =
+      window.__API_BASE__ ||
+      window.API_BASE ||
+      (window.__DARRIUS_GLOBALS__ && window.__DARRIUS_GLOBALS__.API_BASE) ||
+      '';
+    return str(b, '').trim();
+  }
+
+  function buildUrl(pathOrUrl) {
+    const apiBase = getApiBase();
+    // absolute already
+    if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+    // if apiBase provided, use it
+    if (/^https?:\/\//i.test(apiBase)) {
+      return apiBase.replace(/\/+$/, '') + pathOrUrl;
     }
-    return null;
+    // fallback same-origin
+    return new URL(pathOrUrl, window.location.origin).toString();
+  }
+
+  async function httpJson(pathOrUrl, params) {
+    const url = new URL(buildUrl(pathOrUrl));
+    if (params && typeof params === 'object') {
+      for (const [k, v] of Object.entries(params)) {
+        if (v === undefined || v === null || v === '') continue;
+        url.searchParams.set(k, String(v));
+      }
+    }
+    const res = await fetch(url.toString(), {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' }
+    });
+    const text = await res.text().catch(() => '');
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 160)}`);
+    return text ? JSON.parse(text) : {};
   }
 
   // -----------------------------
-  // Normalize aggregates
-  // backend format: { results: [{ t, o,h,l,c,v }, ...] }
+  // Runtime params (from UI globals / URL)
+  // -----------------------------
+  function readRuntimeParams(snap) {
+    const g = window.__DARRIUS_RUNTIME__ || {};
+    const q = new URLSearchParams(window.location.search);
+
+    const symbol = str(g.symbol, '') || str(q.get('symbol'), '') || snap.meta.symbol;
+    const timeframe = str(g.timeframe, '') || str(q.get('tf'), '') || snap.meta.timeframe;
+
+    // chart core uses aggregates timespan/multiplier
+    const timespan = str(g.timespan, '') || str(q.get('timespan'), '') || snap.meta.timespan;
+    const multiplier = Math.max(1, Math.floor(num(g.multiplier ?? q.get('multiplier'), snap.meta.multiplier)));
+    const bars = Math.max(10, Math.floor(num(g.bars ?? q.get('bars'), snap.meta.bars)));
+
+    // source hint
+    const source = str(g.source, '') || str(q.get('source'), '') || snap.meta.source;
+
+    // user may pass from/to; we will still auto-fix if missing/invalid
+    const from = g.from ?? q.get('from');
+    const to = g.to ?? q.get('to');
+
+    return {
+      symbol,
+      timeframe,
+      timespan,
+      multiplier,
+      bars,
+      source,
+      from: from ? String(from) : null,
+      to: to ? String(to) : null
+    };
+  }
+
+  // -----------------------------
+  // Auto range (THE KEY FIX)
+  // Always produce from/to in YYYY-MM-DD
+  // -----------------------------
+  function ensureFromTo(p) {
+    // accept valid YYYY-MM-DD
+    const isYMD = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+    let to = isYMD(p.to) ? p.to : null;
+    let from = isYMD(p.from) ? p.from : null;
+
+    // choose "to" as today (UTC-ish local date is fine for backend)
+    if (!to) to = fmtYMD(new Date());
+
+    // compute from based on bars & timeframe
+    if (!from) {
+      const bars = Math.max(10, Math.floor(num(p.bars, 480)));
+      const mult = Math.max(1, Math.floor(num(p.multiplier, 1)));
+      const span = str(p.timespan, 'day').toLowerCase();
+
+      // rough horizon in days (+ buffer) so backend always happy
+      let days = 30;
+
+      if (span === 'day') {
+        days = Math.ceil(bars * mult * 1.4); // buffer
+      } else if (span === 'week') {
+        days = Math.ceil(bars * mult * 7 * 1.2);
+      } else if (span === 'month') {
+        days = Math.ceil(bars * mult * 30 * 1.1);
+      } else if (span === 'hour') {
+        days = Math.ceil((bars * mult) / 24 * 1.6);
+      } else if (span === 'minute') {
+        days = Math.ceil((bars * mult) / (24 * 60) * 2.2);
+      } else {
+        days = 180; // safe fallback
+      }
+
+      // clamp sane limits
+      if (!Number.isFinite(days) || days < 7) days = 30;
+      if (days > 900) days = 900;
+
+      const dTo = new Date(to + 'T00:00:00');
+      const dFrom = new Date(dTo.getTime() - days * 86400000);
+      from = fmtYMD(dFrom);
+    }
+
+    return { from, to };
+  }
+
+  // -----------------------------
+  // Data normalize
   // -----------------------------
   function normalizeAggregates(payload) {
     const results = arr(payload && payload.results);
     const out = [];
     for (const r of results) {
       const t = num(r.t, 0);
-      const o = nnull(r.o);
-      const h = nnull(r.h);
-      const l = nnull(r.l);
-      const c = nnull(r.c);
-      const v = nnull(r.v) ?? 0;
-      if (!t || o === null || h === null || l === null || c === null) continue;
-      out.push({ t, o, h, l, c, v: num(v, 0) });
+      const o = r.o, h = r.h, l = r.l, c = r.c;
+      const v = num(r.v, 0);
+      if (!t) continue;
+      if (!isNum(o) || !isNum(h) || !isNum(l) || !isNum(c)) continue;
+      out.push({ t, o, h, l, c, v });
     }
     out.sort((a, b) => a.t - b.t);
     return out;
   }
 
-  function ymd(d) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function ensureFromTo(p) {
-  if (p.from && p.to) return p;
-
-  const toD = new Date();
-  // timespan: day / hour / minute 先按 day 处理（你现在就是 day）
-  const unitDays = (p.timespan === 'day') ? 1 : 1;
-
-  // bars * multiplier 天窗口（再多给一点 buffer）
-  const days = Math.max(5, Math.floor(p.bars * p.multiplier * unitDays));
-  const fromD = new Date(toD.getTime() - (days * 24 * 3600 * 1000));
-
-  p.to = ymd(toD);
-  p.from = ymd(fromD);
-  return p;
-}
-
-  // -----------------------------
-  // EMA (internal; does NOT produce signals)
-  // -----------------------------
+  // EMA (internal only)
   function calcEMA(values, period) {
     const p = Math.max(1, Math.floor(num(period, 1)));
     const k = 2 / (p + 1);
@@ -230,19 +286,16 @@ function ensureFromTo(p) {
     return out;
   }
 
-  function detectTrend(emaFastLast, emaSlowLast) {
-    const f = nnull(emaFastLast);
-    const s = nnull(emaSlowLast);
+  function detectTrend(emaFast, emaSlow) {
+    const f = nnull(emaFast);
+    const s = nnull(emaSlow);
     if (f === null || s === null) return { trend: 'flat', bias: 'stable' };
     if (f > s) return { trend: 'up', bias: 'bullish' };
     if (f < s) return { trend: 'down', bias: 'bearish' };
     return { trend: 'flat', bias: 'stable' };
   }
 
-  // -----------------------------
-  // Signals normalize (backend-only)
-  // Accept flexible shapes, convert to stable contract.
-  // -----------------------------
+  // signals normalize (backend-only)
   function normalizeSigs(payload) {
     const p = payload || {};
     const stats = p.stats || p.signal_stats || p.signals || p;
@@ -251,15 +304,13 @@ function ensureFromTo(p) {
     const bearish = num(stats && stats.bearish, 0);
     const neutral = num(stats && stats.neutral, 0);
 
-    const last = p.lastSig || p.last || p.last_signal || null;
+    const last = p.lastSig || p.last || null;
     let lastSig = null;
-    if (last && typeof last === 'object') {
-      const t = num(last.t || last.time || last.ts || 0, 0);
-      if (t > 0) {
-        const side = str(last.side || last.type || last.dir || '', '') || null;
-        const label = str(last.label || last.name || '', '') || null;
-        lastSig = { t, side, label };
-      }
+    if (last && (last.t || last.time || last.ts)) {
+      const t = num(last.t || last.time || last.ts, 0);
+      const side = str(last.side || last.type || last.dir || '', '');
+      const label = str(last.label || last.name || '', '');
+      if (t > 0) lastSig = { t, side: side || null, label: label || null };
     }
 
     const risk = p.risk || p.copilot || {};
@@ -275,15 +326,8 @@ function ensureFromTo(p) {
     }
 
     const bt = p.backtest || p.bt || {};
-    const winRate = (bt.winRate == null) ? null : nnull(bt.winRate);
-    const sampleSize = (bt.sampleSize == null) ? null : nnull(bt.sampleSize);
-
-    const rawMini = safe(() => ({
-      bullish, bearish, neutral,
-      lastSig,
-      risk: { entry, stop, targets: targets.slice(0, 6), confidence },
-      backtest: { winRate, sampleSize }
-    })) || null;
+    const winRate = bt.winRate == null ? null : nnull(bt.winRate);
+    const sampleSize = bt.sampleSize == null ? null : nnull(bt.sampleSize);
 
     return {
       bullish, bearish, neutral,
@@ -291,100 +335,58 @@ function ensureFromTo(p) {
       lastSig,
       risk: { entry, stop, targets, confidence },
       backtest: { winRate, sampleSize },
-      raw: rawMini
-    };
-  }
-
-  // -----------------------------
-  // HTTP json (absolute; no throw outside)
-  // -----------------------------
-  async function httpJson(absUrl, params) {
-    const u = new URL(absUrl);
-    if (params && typeof params === 'object') {
-      for (const [k, v] of Object.entries(params)) {
-        if (v === undefined || v === null || v === '') continue;
-        u.searchParams.set(k, String(v));
+      raw: {
+        bullish, bearish, neutral,
+        lastSig,
+        risk: { entry, stop, targets: targets.slice(0, 5), confidence },
+        backtest: { winRate, sampleSize }
       }
-    }
-    if (CFG.cacheBust) u.searchParams.set('_', String(Date.now()));
-
-    const res = await fetch(u.toString(), {
-      method: 'GET',
-      credentials: 'include',
-      headers: { 'Accept': 'application/json' }
-    });
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      // keep error short but useful
-      throw new Error(`HTTP ${res.status}: ${txt.slice(0, 180)}`);
-    }
-    return await res.json();
-  }
-
-  // -----------------------------
-  // Runtime params
-  //  - respects window.__DARRIUS_RUNTIME__ and URL query
-  //  - auto-fills from/to ✅ FIX B
-  // -----------------------------
-  function readRuntimeParams(SNAP) {
-    const g = window.__DARRIUS_RUNTIME__ || {};
-    const q = new URLSearchParams(window.location.search);
-
-    const symbol = str(g.symbol, '') || str(q.get('symbol'), '') || (SNAP && SNAP.meta.symbol) || 'TSLA';
-    const timeframe = str(g.timeframe, '') || str(q.get('tf'), '') || (SNAP && SNAP.meta.timeframe) || '1D';
-
-    const timespan = str(g.timespan, '') || str(q.get('timespan'), '') || (SNAP && SNAP.meta.timespan) || 'day';
-    const multiplier = num(g.multiplier ?? q.get('multiplier'), (SNAP && SNAP.meta.multiplier) || 1);
-    const bars = num(g.bars ?? q.get('bars'), (SNAP && SNAP.meta.bars) || 480);
-
-    const source = str(g.source, '') || str(q.get('source'), '') || (SNAP && SNAP.meta.source) || 'unknown';
-
-    let from = g.from ?? q.get('from');
-    let to   = g.to   ?? q.get('to');
-
-    if (!from || !to) {
-      // cover enough window for bars; conservative, stable
-      const m = Math.max(1, Math.floor(multiplier));
-      const b = Math.max(50, Math.floor(bars));
-
-      // if day-based chart: bars ~ days; else still use days as backend expects date window
-      const days = Math.max(10, Math.min(3650, Math.ceil((b / m) + 10)));
-      const dTo = new Date();
-      const dFrom = new Date(dTo.getTime() - days * 86400000);
-
-      from = from || fmtDateYYYYMMDD(dFrom);
-      to   = to   || fmtDateYYYYMMDD(dTo);
-    }
-
-    return {
-      symbol,
-      timeframe,
-      timespan,
-      multiplier: Math.max(1, Math.floor(multiplier)),
-      bars: Math.max(50, Math.floor(bars)),
-      source,
-      from: from ? String(from) : null,
-      to: to ? String(to) : null
     };
   }
 
   // -----------------------------
-  // Rendering: LightweightCharts (preferred)
+  // Chart rendering: LightweightCharts if present
+  // (without nuking container)
   // -----------------------------
-  let lwChart = null;
-  let lwSeries = null;
-  let lwInited = false;
+  const containerSelectors = [
+    '#chart', '#chartContainer', '#mainChart', '#tvchart',
+    '#chart-root', '.chart-container', 'main'
+  ];
+
+  function findContainer() {
+    for (const sel of containerSelectors) {
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    return document.body;
+  }
+
+  function ensureLwRoot(container) {
+    let root = container.querySelector('.darrius-lw-root');
+    if (!root) {
+      root = document.createElement('div');
+      root.className = 'darrius-lw-root';
+      root.style.width = '100%';
+      root.style.height = '100%';
+      root.style.position = 'relative';
+      root.style.zIndex = '0';
+      container.appendChild(root);
+    }
+    return root;
+  }
+
+  let lc = null;
+  let lcSeries = null;
 
   function initLightweight(container) {
     const LW = window.LightweightCharts;
     if (!LW || !LW.createChart) return false;
 
-    // do NOT nuke the whole container if it contains overlay nodes;
-    // only clear if it's a pure chart div.
-    safe(() => { container.innerHTML = ''; });
+    const root = ensureLwRoot(container);
+    // if already init, keep
+    if (lc && lcSeries) return true;
 
-    lwChart = LW.createChart(container, {
+    lc = LW.createChart(root, {
       layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#9fb3c8' },
       grid: { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
       rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
@@ -392,125 +394,78 @@ function ensureFromTo(p) {
       crosshair: { mode: 1 }
     });
 
-    lwSeries = {
-      candles: lwChart.addCandlestickSeries({
+    lcSeries = {
+      candles: lc.addCandlestickSeries({
         upColor: '#2BE2A6',
         downColor: '#FF5B6E',
         wickUpColor: '#2BE2A6',
         wickDownColor: '#FF5B6E',
         borderVisible: false
       }),
-      emaFast: lwChart.addLineSeries({ lineWidth: 2, color: '#F5B700' }),
-      emaSlow: lwChart.addLineSeries({ lineWidth: 2, color: '#4CC2FF' })
+      emaFast: lc.addLineSeries({ lineWidth: 2, color: '#F5B700' }),
+      emaSlow: lc.addLineSeries({ lineWidth: 2, color: '#4CC2FF' })
     };
-
-    lwInited = true;
     return true;
   }
 
-  function renderWithLightweight(DATA, EMA_FAST, EMA_SLOW) {
-    if (!lwInited || !lwChart || !lwSeries) return false;
+  function renderWithLightweight(data, emaFast, emaSlow) {
+    if (!lc || !lcSeries) return;
 
-    const candles = DATA.map(d => ({
+    const candles = data.map(d => ({
       time: Math.floor(d.t / 1000),
       open: d.o, high: d.h, low: d.l, close: d.c
     }));
 
     const ef = [];
     const es = [];
-    for (let i = 0; i < DATA.length; i++) {
-      const t = Math.floor(DATA[i].t / 1000);
-      const f = EMA_FAST[i];
-      const s = EMA_SLOW[i];
-      if (isNum(f)) ef.push({ time: t, value: f });
-      if (isNum(s)) es.push({ time: t, value: s });
+    for (let i = 0; i < data.length; i++) {
+      const t = Math.floor(data[i].t / 1000);
+      if (isNum(emaFast[i])) ef.push({ time: t, value: emaFast[i] });
+      if (isNum(emaSlow[i])) es.push({ time: t, value: emaSlow[i] });
     }
 
-    safe(() => lwSeries.candles.setData(candles), 'lw.candles');
-    safe(() => lwSeries.emaFast.setData(ef), 'lw.emaFast');
-    safe(() => lwSeries.emaSlow.setData(es), 'lw.emaSlow');
-
-    safe(() => {
-      // keep visible window sensible
-      lwChart.timeScale().fitContent();
-    }, 'lw.fit');
-
-    return true;
-  }
-
-  function resizeLightweight() {
-    if (!lwInited || !lwChart) return;
-    const container = findContainer();
-    if (!container) return;
-    const r = container.getBoundingClientRect();
-    const w = Math.max(100, Math.floor(r.width));
-    const h = Math.max(100, Math.floor(r.height));
-    safe(() => lwChart.applyOptions({ width: w, height: h }), 'lw.resize');
+    safe(() => lcSeries.candles.setData(candles));
+    safe(() => lcSeries.emaFast.setData(ef));
+    safe(() => lcSeries.emaSlow.setData(es));
   }
 
   // -----------------------------
-  // Mapping (for overlay)
-  // -----------------------------
-  function computeBounds(DATA) {
-    let pMin = Infinity, pMax = -Infinity;
-    for (const d of DATA) {
-      pMin = Math.min(pMin, d.l);
-      pMax = Math.max(pMax, d.h);
-    }
-    if (!Number.isFinite(pMin) || !Number.isFinite(pMax) || pMax <= pMin) {
-      pMin = 0; pMax = 1;
-    }
-    const tMin = DATA.length ? DATA[0].t : null;
-    const tMax = DATA.length ? DATA[DATA.length - 1].t : null;
-    return { pMin, pMax, tMin, tMax };
-  }
-
-  // Bridge functions use snapshot bounds (work even if chart impl changes)
-  function timeToX(msEpoch) {
-    const snap = window.__DARRIUS_CHART_STATE__ || SNAP;
-    const t = num(msEpoch, 0);
-    const tMin = snap.map.tMin;
-    const tMax = snap.map.tMax;
-    if (!tMin || !tMax || tMax <= tMin) return snap.map.xMin;
-    const r = clamp01((t - tMin) / (tMax - tMin));
-    return snap.map.xMin + (snap.map.xMax - snap.map.xMin) * r;
-  }
-
-  function priceToY(price) {
-    const snap = window.__DARRIUS_CHART_STATE__ || SNAP;
-    const p = nnull(price);
-    const pMin = snap.map.pMin;
-    const pMax = snap.map.pMax;
-    if (p === null || pMin === null || pMax === null || pMax <= pMin) return (snap.map.yMin + snap.map.yMax) / 2;
-    const r = clamp01((p - pMin) / (pMax - pMin));
-    // y increases downward
-    return snap.map.yMin + (snap.map.yMax - snap.map.yMin) * (1 - r);
-  }
-
-  function getSnapshot() {
-    return window.__DARRIUS_CHART_STATE__ || SNAP;
-  }
-
-  window.DarriusChart = window.DarriusChart || {};
-  window.DarriusChart.timeToX = timeToX;
-  window.DarriusChart.priceToY = priceToY;
-  window.DarriusChart.getSnapshot = getSnapshot;
-
-  // -----------------------------
-  // State
+  // Public bridge for overlay
   // -----------------------------
   let SNAP = makeSnapshotBase();
   let DATA = [];
   let EMA_FAST = [];
   let EMA_SLOW = [];
 
-  // -----------------------------
-  // Main loop: fetch aggregates -> render -> fetch sigs -> commit snapshot
-  // -----------------------------
-  async function fetchAndRender() {
-    const p = readRuntimeParams(SNAP);
+  function timeToX(msEpoch) {
+    const t = num(msEpoch, 0);
+    const tMin = SNAP.map.tMin;
+    const tMax = SNAP.map.tMax;
+    if (!tMin || !tMax || tMax <= tMin) return SNAP.map.xMin;
+    const r = (t - tMin) / (tMax - tMin);
+    return SNAP.map.xMin + (SNAP.map.xMax - SNAP.map.xMin) * clamp01(r);
+  }
 
-    // meta early
+  function priceToY(_price) {
+    // overlay can use its own mapping; keep stable fallback
+    return (SNAP.map.yMin + SNAP.map.yMax) / 2;
+  }
+
+  function getSnapshot() { return window.__DARRIUS_CHART_STATE__ || SNAP; }
+
+  window.DarriusChart = { timeToX, priceToY, getSnapshot };
+
+  // -----------------------------
+  // Core loop
+  // -----------------------------
+  let container = null;
+
+  async function fetchAndRender() {
+    const p0 = readRuntimeParams(SNAP);
+    const { from, to } = ensureFromTo(p0);
+    const p = { ...p0, from, to };
+
+    // meta
     SNAP.ts = nowIso();
     SNAP.meta.symbol = p.symbol;
     SNAP.meta.timeframe = p.timeframe;
@@ -519,17 +474,16 @@ function ensureFromTo(p) {
     SNAP.meta.bars = p.bars;
     SNAP.meta.from = p.from;
     SNAP.meta.to = p.to;
-    SNAP.meta.source = p.source || 'unknown';
+    SNAP.meta.source = p.source || SNAP.meta.source || 'unknown';
     SNAP.meta.error = null;
     SNAP.meta.ready = false;
     SNAP.meta.loaded = false;
-
     snapshotCommit(SNAP);
 
-    // ---- aggregates (ABSOLUTE + from/to) ----
+    // aggregates
     let aggPayload;
     try {
-      aggPayload = await httpJson(apiUrl(CFG.aggregatesPath), {
+      aggPayload = await httpJson(CFG.aggregatesPath, {
         symbol: p.symbol,
         multiplier: p.multiplier,
         timespan: p.timespan,
@@ -539,8 +493,6 @@ function ensureFromTo(p) {
       });
     } catch (e) {
       SNAP.meta.error = `aggregates: ${str(e && e.message, 'failed')}`;
-      SNAP.meta.loaded = false;
-      SNAP.meta.ready = false;
       snapshotCommit(SNAP);
       return;
     }
@@ -550,83 +502,57 @@ function ensureFromTo(p) {
 
     if (!DATA.length) {
       SNAP.meta.error = 'aggregates: empty';
-      SNAP.meta.loaded = false;
-      SNAP.meta.ready = false;
       snapshotCommit(SNAP);
       return;
     }
 
-    // compute EMA
+    // EMA
     const closes = DATA.map(d => d.c);
     EMA_FAST = calcEMA(closes, CFG.emaFastPeriod);
     EMA_SLOW = calcEMA(closes, CFG.emaSlowPeriod);
     SNAP.series.emaCount = DATA.length;
 
-    // last price
+    // price
     const last = DATA[DATA.length - 1];
     SNAP.price.last = nnull(last && last.c);
     SNAP.price.lastTime = nnull(last && last.t);
-
-    // ema last
     SNAP.price.emaFast = nnull(EMA_FAST[EMA_FAST.length - 1]);
     SNAP.price.emaSlow = nnull(EMA_SLOW[EMA_SLOW.length - 1]);
 
-    // trend/bias
     const tb = detectTrend(SNAP.price.emaFast, SNAP.price.emaSlow);
     SNAP.price.trend = tb.trend;
     SNAP.price.bias = tb.bias;
 
-    // bounds -> snapshot map
-    const b = computeBounds(DATA);
-    SNAP.map.tMin = b.tMin;
-    SNAP.map.tMax = b.tMax;
-    SNAP.map.pMin = b.pMin;
-    SNAP.map.pMax = b.pMax;
+    // mapping basics for overlay
+    SNAP.map.tMin = DATA[0].t;
+    SNAP.map.tMax = DATA[DATA.length - 1].t;
 
-    // map x/y bounds: use container rect (so overlay mapping is stable)
+    // render
     safe(() => {
-      const c = findContainer();
-      if (!c) return;
-      const r = c.getBoundingClientRect();
-      SNAP.map.xMin = 0;
-      SNAP.map.xMax = Math.max(1, Math.floor(r.width));
-      SNAP.map.yMin = 0;
-      SNAP.map.yMax = Math.max(1, Math.floor(r.height));
+      if (!container) container = findContainer();
+      // prefer LightweightCharts
+      initLightweight(container);
+      renderWithLightweight(DATA, EMA_FAST, EMA_SLOW);
+      // keep stable numbers (no NaN)
+      SNAP.map.xMin = 0; SNAP.map.xMax = 1;
+      SNAP.map.yMin = 0; SNAP.map.yMax = 1;
     });
-
-    // render (prefer LW)
-    safe(() => {
-      const container = findContainer();
-      if (!container) return;
-
-      if (!lwInited) {
-        const ok = initLightweight(container);
-        if (ok) resizeLightweight();
-      }
-      if (lwInited) {
-        renderWithLightweight(DATA, EMA_FAST, EMA_SLOW);
-      }
-    }, 'render');
 
     SNAP.meta.loaded = true;
 
-    // commit after chart render (so UI sees latest price/ema even if sigs fails)
-    snapshotCommit(SNAP);
-
-    // ---- signals (backend-only; do not block chart) ----
+    // signals (non-blocking)
     safe(async () => {
       let sigPayload;
       try {
-        sigPayload = await httpJson(apiUrl(CFG.sigsPath), {
+        sigPayload = await httpJson(CFG.sigsPath, {
           symbol: p.symbol,
           timeframe: p.timeframe,
           bars: p.bars
         });
       } catch (e) {
-        SNAP.meta.notes = arr(SNAP.meta.notes).slice(-6);
-        SNAP.meta.notes.push(`sigs: ${str(e && e.message, 'failed')}`);
-        // keep existing stable defaults
-        SNAP.meta.ready = true; // chart is ready even if sigs fails
+        const notes = arr(SNAP.meta.notes).slice(-6);
+        notes.push(`sigs: ${str(e && e.message, 'failed')}`);
+        SNAP.meta.notes = notes;
         snapshotCommit(SNAP);
         return;
       }
@@ -642,51 +568,38 @@ function ensureFromTo(p) {
 
       SNAP.risk.entry = s.risk ? s.risk.entry : null;
       SNAP.risk.stop = s.risk ? s.risk.stop : null;
-      SNAP.risk.targets = arr(s.risk && s.risk.targets).slice(0, 6).map(x => nnull(x)).filter(x => x !== null);
+      SNAP.risk.targets = arr(s.risk && s.risk.targets).slice(0, 6).map(nnull).filter(x => x !== null);
       SNAP.risk.confidence = s.risk ? s.risk.confidence : null;
 
-      SNAP.backtest.winRate = (s.backtest ? s.backtest.winRate : null);
-      SNAP.backtest.sampleSize = (s.backtest ? s.backtest.sampleSize : null);
+      SNAP.backtest.winRate = s.backtest ? s.backtest.winRate : null;
+      SNAP.backtest.sampleSize = s.backtest ? s.backtest.sampleSize : null;
 
       SNAP.meta.ready = true;
       snapshotCommit(SNAP);
-    }, 'sigs');
+    });
   }
 
   // -----------------------------
-  // Polling / lifecycle
+  // Boot / Poll
   // -----------------------------
   let timer = null;
 
   function start() {
-    // init snapshot immediately
     SNAP = makeSnapshotBase();
     snapshotCommit(SNAP);
 
-    // first render
-    safe(() => fetchAndRender(), 'start.fetch');
+    safe(() => fetchAndRender());
 
-    // polling
     if (timer) clearInterval(timer);
-    timer = setInterval(() => safe(() => fetchAndRender(), 'poll.fetch'), Math.max(3000, CFG.refreshMs));
+    timer = setInterval(() => safe(() => fetchAndRender()), Math.max(3000, CFG.refreshMs));
 
-    // resize (LW)
-    safe(() => {
-      window.addEventListener('resize', () => safe(() => resizeLightweight(), 'resize'));
-    });
-
-    // allow others to force refresh
-    safe(() => {
-      window.addEventListener('darrius:forceRefresh', () => safe(() => fetchAndRender(), 'forceRefresh'));
-    });
+    safe(() => window.addEventListener('darrius:forceRefresh', () => safe(() => fetchAndRender())));
   }
 
-  // -----------------------------
-  // Boot
-  // -----------------------------
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start);
   } else {
     start();
   }
+
 })();
