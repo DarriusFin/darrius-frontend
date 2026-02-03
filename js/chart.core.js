@@ -313,13 +313,58 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 TD-PROXY-V3 AUTOBOOT";
     return null;
   }
 
-  function normalizeBars(payload) {
-    const raw =
-      Array.isArray(payload) ? payload :
-      Array.isArray(payload?.results) ? payload.results :
-      Array.isArray(payload?.bars) ? payload.bars :
-      Array.isArray(payload?.data) ? payload.data :
-      [];
+ function normalizeBars(payload) {
+  // Accept many schemas:
+  // - Polygon/Massive: { results:[{t,o,h,l,c,...}] }
+  // - Generic: { bars:[...] } / { data:[...] }
+  // - Twelve Data: { values:[{datetime,open,high,low,close}] }
+  // - Nested: { data:{ values:[...] } } / { data:{ results:[...] } }
+
+  const raw =
+    Array.isArray(payload) ? payload :
+    Array.isArray(payload?.results) ? payload.results :
+    Array.isArray(payload?.bars) ? payload.bars :
+    Array.isArray(payload?.data) ? payload.data :
+    Array.isArray(payload?.values) ? payload.values :
+    Array.isArray(payload?.data?.values) ? payload.data.values :
+    Array.isArray(payload?.data?.results) ? payload.data.results :
+    [];
+
+  const bars = (raw || [])
+    .map((b) => {
+      // time fields (number ms/s OR ISO string)
+      const tRaw =
+        b.time ?? b.t ?? b.timestamp ?? b.ts ?? b.date ??
+        b.datetime ?? b.dateTime ?? b.DateTime ?? b.Datetime;
+
+      const time = toUnixSec(tRaw);
+      if (!time) return null;
+
+      // OHLC fields (Polygon: o/h/l/c ; TwelveData: open/high/low/close as string)
+      const open  = Number(b.open  ?? b.o ?? b.Open);
+      const high  = Number(b.high  ?? b.h ?? b.High);
+      const low   = Number(b.low   ?? b.l ?? b.Low);
+      const close = Number(b.close ?? b.c ?? b.Close);
+
+      if (![open, high, low, close].every(Number.isFinite)) return null;
+
+      return { time, open, high, low, close };
+    })
+    .filter(Boolean);
+
+  // sort + de-dupe
+  bars.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+
+  const out = [];
+  let lastT = null;
+  for (const b of bars) {
+    if (b.time === lastT) continue;
+    lastT = b.time;
+    out.push(b);
+  }
+  return out;
+}
+
 
     const bars = (raw || [])
       .map((b) => {
