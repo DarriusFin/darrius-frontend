@@ -1,42 +1,60 @@
 /* =========================================================================
  * DarriusAI - chart.core.js
- * FINAL v5 (UI-BIND + FROM/TO + HEADERS + NO-PENDING)
- * - Works with backend /api/data/stocks/aggregates (ticker/multiplier/timespan/from/to)
- * - Pulls symbol/timeframe from UI DOM (Control Center) if globals not set
- * - Emits rich snapshot for market.pulse.js
- * - Writes diagnostics into "Darrius Mutant" panel if present
+ * FULL REPLACEABLE v2026.02.02-FINAL-V6
+ *
+ * Goals:
+ *  - Render main chart (candles + EMA series if backend provides)
+ *  - Fetch aggregates via backend proxy:
+ *      GET {API_BASE}/api/data/stocks/aggregates
+ *        ?ticker=TSLA&multiplier=1&timespan=day&from=YYYY-MM-DD&to=YYYY-MM-DD
+ *        [&source=demo|provider] [&provider=auto|twelvedata|massive]
+ *  - Fetch signals (best-effort only):
+ *      GET {API_BASE}/api/market/sigs?symbol=TSLA&timeframe=1D
+ *  - Robust payload extraction (Polygon/Massive/TwelveData normalized/loosely-compatible)
+ *  - Hard diagnostics:
+ *      window.__LAST_AGG_URL__, window.__LAST_AGG__, window.__LAST_AGG_ERR__
+ *      window.__CURRENT_SYMBOL__, window.__CURRENT_TIMEFRAME__
+ *  - Never touch subscription / billing / UI logic
  * ========================================================================= */
 
-console.log("=== chart.core.js ACTIVE BUILD: 2026-02-02 FINAL-V5 ===");
-window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V5";
+console.log("=== chart.core.js ACTIVE BUILD: 2026-02-02 FINAL-V6 ===");
+window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V6";
 
 (() => {
   'use strict';
 
+  // -----------------------------
+  // Config
+  // -----------------------------
   const POLL_INTERVAL = 15000;
 
-  // API base (must be render backend; do NOT default to "/api" because GH Pages)
-  const API_BASE = String(window.__DARRIUS_API_BASE__ || "https://darrius-api.onrender.com").replace(/\/+$/, "");
+  const API_BASE = String(window.__DARRIUS_API_BASE__ || "https://darrius-api.onrender.com")
+    .replace(/\/+$/, "");
+
   const API_AGG  = `${API_BASE}/api/data/stocks/aggregates`;
   const API_SIGS = `${API_BASE}/api/market/sigs`;
 
-  // Runtime (always visible in console)
+  // If you want to pass source/provider by frontend (optional)
+  // window.__DARRIUS_DATA_SOURCE__ = "demo" | "provider"
+  // window.__DARRIUS_PROVIDER__    = "auto" | "twelvedata" | "massive"
+  const DEFAULT_SOURCE   = String(window.__DARRIUS_DATA_SOURCE__ || "").trim().toLowerCase();   // "" means omit
+  const DEFAULT_PROVIDER = String(window.__DARRIUS_PROVIDER__ || "").trim().toLowerCase();      // "" means omit
+
+  // Global runtime (always visible in console)
   window.__DARRIUS_CHART_RUNTIME__ = window.__DARRIUS_CHART_RUNTIME__ || {};
   const R = window.__DARRIUS_CHART_RUNTIME__;
 
-  // Hard error hooks (avoid silent failure)
+  // Capture unexpected errors (avoid silent failure)
   if (!R.__ERR_HOOKED__) {
     R.__ERR_HOOKED__ = true;
-    window.addEventListener('error', (e) => console.log('[window.onerror]', e.message));
-    window.addEventListener('unhandledrejection', (e) => console.log('[unhandledrejection]', e.reason));
+    window.addEventListener('error', (e) => console.log('[window.onerror]', e && e.message));
+    window.addEventListener('unhandledrejection', (e) => console.log('[unhandledrejection]', e && e.reason));
+    console.log('err hook ready');
   }
 
   // -----------------------------
-  // DOM helpers (robust selectors)
+  // DOM helpers
   // -----------------------------
-  function $(sel) { try { return document.querySelector(sel); } catch (_) { return null; } }
-  function $all(sel) { try { return Array.from(document.querySelectorAll(sel)); } catch (_) { return []; } }
-
   function findChartContainer() {
     return (
       document.querySelector('#chart') ||
@@ -58,6 +76,7 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V5";
     const el = document.getElementById('chart-loading');
     if (el) el.style.display = 'block';
   }
+
   function hideLoadingOnce() {
     if (R.loadingClosed) return;
     R.loadingClosed = true;
@@ -65,148 +84,43 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V5";
     if (el) el.style.display = 'none';
   }
 
-  function canInitNow() {
-    return !!(window.LightweightCharts && typeof window.LightweightCharts.createChart === 'function');
-  }
-
-  // -----------------------------
-  // UI -> state (Symbol/Timeframe)
-  // -----------------------------
-  function readSymbolFromUI() {
-    // Try common inputs in your Control Center
-    const candidates = [
-      '#symbol',
-      '#symbolInput',
-      'input[name="symbol"]',
-      'input[data-role="symbol"]',
-      '.market-symbol input',
-      '.control-center input[type="text"]',
-    ];
-    for (const sel of candidates) {
-      const el = $(sel);
-      const v = (el && el.value) ? String(el.value).trim() : '';
-      if (v) return v;
-    }
-
-    // Also try text nodes that show "BTCUSDT"
-    const textCandidates = [
-      '#current-symbol',
-      '[data-current-symbol]',
-      '.symbol-value',
-      '.market-symbol-value'
-    ];
-    for (const sel of textCandidates) {
-      const el = $(sel);
-      const v = el ? String(el.textContent || '').trim() : '';
-      if (v && v.length <= 20) return v;
-    }
-
-    // Fallback to global
-    return String(window.__CURRENT_SYMBOL__ || window.__DARRIUS_SYMBOL__ || 'TSLA').trim();
-  }
-
-  function readTimeframeFromUI() {
-    // If you have a select dropdown
-    const sel = $('#timeframe') || $('#timeframeSelect') || $('select[name="timeframe"]') || $('select[data-role="timeframe"]');
-    if (sel && sel.value) return String(sel.value).trim();
-
-    // If you have active button pills (5m/15m/1h/1D/1W/1M)
-    const activeBtn =
-      $('.tf-btn.active') ||
-      $('.timeframe button.active') ||
-      $('.timeframe .active') ||
-      $('[data-tf].active');
-
-    if (activeBtn) {
-      const tf = activeBtn.getAttribute('data-tf') || activeBtn.textContent;
-      if (tf) return String(tf).trim();
-    }
-
-    return String(window.__CURRENT_TIMEFRAME__ || window.__DARRIUS_TIMEFRAME__ || '1D').trim();
-  }
-
-  // Map UI timeframe -> backend params + range days
-  function tfToAggParams(tf) {
-    const t = String(tf || '').toUpperCase();
-
-    // default
-    let multiplier = 1;
-    let timespan = 'day';
-    let rangeDays = 365;
-
-    if (t === '5M' || t === '5MIN')  { multiplier = 5;  timespan = 'minute'; rangeDays = 45; }
-    if (t === '15M')                  { multiplier = 15; timespan = 'minute'; rangeDays = 120; }
-    if (t === '30M')                  { multiplier = 30; timespan = 'minute'; rangeDays = 180; }
-    if (t === '1H' || t === '60M')    { multiplier = 1;  timespan = 'hour';   rangeDays = 365; }
-    if (t === '4H')                   { multiplier = 4;  timespan = 'hour';   rangeDays = 365 * 2; }
-    if (t === '1D' || t === 'D')      { multiplier = 1;  timespan = 'day';    rangeDays = 365 * 2; }
-    if (t === '1W' || t === 'W')      { multiplier = 1;  timespan = 'week';   rangeDays = 365 * 6; }
-    if (t === '1M' || t === 'M')      { multiplier = 1;  timespan = 'month';  rangeDays = 365 * 10; }
-
-    return { multiplier, timespan, rangeDays };
-  }
-
-  function fmtDate(d) {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  function buildAggURL(symbol, timeframe) {
-    const sym = String(symbol || 'TSLA').trim().toUpperCase();
-    const tf = String(timeframe || '1D').trim();
-
-    const { multiplier, timespan, rangeDays } = tfToAggParams(tf);
-    const to = new Date();
-    const from = new Date(Date.now() - rangeDays * 24 * 3600 * 1000);
-
-    // IMPORTANT: backend expects ticker/from/to
-    const qs = new URLSearchParams();
-    qs.set('ticker', sym);
-    qs.set('multiplier', String(multiplier));
-    qs.set('timespan', String(timespan));
-    qs.set('from', fmtDate(from));
-    qs.set('to', fmtDate(to));
-    qs.set('adjusted', 'true');
-    qs.set('sort', 'asc');
-    qs.set('limit', '5000');
-    qs.set('provider', 'auto'); // let backend choose (Twelve Data vs Massive)
-    // qs.set('source', 'demo'); // optional; keep current policy at backend
-
-    const url = `${API_AGG}?${qs.toString()}`;
-    window.__LAST_AGG_URL__ = url;
-    return url;
-  }
-
-  function buildSigsURL(symbol, timeframe) {
-    const sym = String(symbol || 'TSLA').trim().toUpperCase();
-    const tf = String(timeframe || '1D').trim();
-    const qs = new URLSearchParams();
-    qs.set('symbol', sym);
-    qs.set('timeframe', tf);
-    const url = `${API_SIGS}?${qs.toString()}`;
-    window.__LAST_SIGS_URL__ = url;
-    return url;
+  // Put errors into "Darrius Mutant" panel (if exists)
+  function writeMutant(msg) {
+    try {
+      const el =
+        document.querySelector('#darrius-mutant') ||
+        document.querySelector('.darrius-mutant') ||
+        document.querySelector('[data-mutant]') ||
+        document.querySelector('.mutant') ||
+        null;
+      if (el) el.textContent = String(msg || '');
+    } catch (_) {}
   }
 
   // -----------------------------
   // Chart init
   // -----------------------------
+  function canInitNow() {
+    return !!(window.LightweightCharts && typeof window.LightweightCharts.createChart === 'function');
+  }
+
   function initChart() {
     const container = findChartContainer();
     if (!container) {
       console.error('[chart.core] #chart container NOT FOUND');
+      writeMutant('Darrius Mutant\nERROR: #chart container not found');
       return false;
     }
     if (!canInitNow()) {
       console.error('[chart.core] LightweightCharts NOT READY');
+      writeMutant('Darrius Mutant\nERROR: LightweightCharts not ready');
       return false;
     }
 
     const rect = ensureSize(container);
     console.log('[chart.core] init container:', { w: rect.width, h: rect.height, id: container.id, cls: container.className });
 
+    // destroy previous chart if exists
     try { if (R.chart && R.chart.remove) R.chart.remove(); } catch (_) {}
 
     const chart = LightweightCharts.createChart(container, {
@@ -243,54 +157,222 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V5";
   }
 
   // -----------------------------
-  // Payload extract + normalize
+  // UI reading (FIX: never read "User ID" as symbol)
+  // -----------------------------
+  function isLikelySymbol(v) {
+    const s = String(v || '').trim().toUpperCase();
+    if (!s) return false;
+    // Crypto pairs like BTCUSDT, ETHUSDT, BTCUSD etc
+    if (/^[A-Z]{2,10}(USDT|USD|USDC)$/.test(s)) return true;
+    // Stock symbols TSLA / BRK.B / RIVN / etc
+    if (/^[A-Z][A-Z0-9.\-]{0,9}$/.test(s)) return true;
+    return false;
+  }
+
+  function normalizeSymbol(v) {
+    return String(v || '').trim().toUpperCase();
+  }
+
+  function readSymbolFromUI() {
+    // 1) Strong selectors (if you ever add them, this becomes perfect)
+    const strongCandidates = [
+      '#symbol',
+      '#symbolInput',
+      'input[name="symbol"]',
+      'input[data-role="symbol"]',
+    ];
+    for (const sel of strongCandidates) {
+      const el = document.querySelector(sel);
+      const v = (el && el.value) ? String(el.value).trim() : '';
+      if (isLikelySymbol(v)) return normalizeSymbol(v);
+    }
+
+    // 2) Search within Control Center only, but exclude user/email fields.
+    const cc = document.querySelector('.control-center') || document;
+
+    // Gather candidate texts from inputs + visible blocks
+    const nodes = Array.from(cc.querySelectorAll('input, textarea, div, span, p'))
+      .map(el => {
+        const tag = (el.tagName || '').toUpperCase();
+        const v = (tag === 'INPUT' || tag === 'TEXTAREA') ? (el.value || '') : (el.textContent || '');
+        return { el, v: String(v || '').trim() };
+      })
+      .filter(x => x.v && x.v.length <= 30);
+
+    // Helper: exclude user/email/id-ish controls by nearby label text
+    function looksLikeUserField(x) {
+      const el = x.el;
+      const tag = (el.tagName || '').toUpperCase();
+      const name = String(el.getAttribute('name') || '').toLowerCase();
+      const id = String(el.getAttribute('id') || '').toLowerCase();
+      const ph = tag === 'INPUT' ? String(el.getAttribute('placeholder') || '').toLowerCase() : '';
+      const near = (el.closest('.field, .row, .form-group, .control, .section') || el.parentElement);
+      const nearText = near ? String(near.textContent || '').toLowerCase() : '';
+
+      // explicit markers
+      if (name.includes('user') || name.includes('email')) return true;
+      if (id.includes('user') || id.includes('email')) return true;
+      if (ph.includes('user') || ph.includes('email')) return true;
+      if (nearText.includes('user id') || nearText.includes('email') || nearText.includes('邮箱') || nearText.includes('用户')) return true;
+
+      // value patterns
+      const v = String(x.v || '');
+      if (v.includes('@')) return true;                 // email
+      if (/^darrius/i.test(v)) return true;             // your user naming pattern
+      if (v.toLowerCase() === 'id') return true;        // the exact bug you hit
+      return false;
+    }
+
+    // 3) Prefer candidates near "Symbol/品种"
+    for (const x of nodes) {
+      if (looksLikeUserField(x)) continue;
+      const near = (x.el.closest('.field, .row, .form-group, .control, .section') || x.el.parentElement);
+      const nearText = near ? String(near.textContent || '').toLowerCase() : '';
+      if (nearText.includes('symbol') || nearText.includes('品种')) {
+        if (isLikelySymbol(x.v)) return normalizeSymbol(x.v);
+      }
+    }
+
+    // 4) Fallback scan: pick first likely symbol, excluding numeric-heavy strings
+    for (const x of nodes) {
+      if (looksLikeUserField(x)) continue;
+      const v = String(x.v || '');
+      if (/\s/.test(v)) continue;
+      if (v.length > 15) continue;
+      // Exclude values with lots of digits (user ids)
+      if ((v.match(/\d/g) || []).length >= 2) continue;
+      if (isLikelySymbol(v)) return normalizeSymbol(v);
+    }
+
+    // 5) Final fallback
+    return normalizeSymbol(window.__CURRENT_SYMBOL__ || window.__DARRIUS_SYMBOL__ || 'TSLA');
+  }
+
+  function readTimeframeFromUI() {
+    const sel =
+      document.querySelector('#timeframe') ||
+      document.querySelector('#timeframeSelect') ||
+      document.querySelector('select[name="timeframe"]') ||
+      document.querySelector('select[data-role="timeframe"]');
+
+    let raw = '';
+    if (sel && sel.value) raw = String(sel.value).trim();
+    if (!raw) raw = String(window.__CURRENT_TIMEFRAME__ || window.__DARRIUS_TIMEFRAME__ || '1D').trim();
+
+    // accept "1d - 日线" etc
+    const u = raw.toUpperCase();
+    if (u.startsWith('1D')) return '1D';
+    if (u.startsWith('1W')) return '1W';
+    if (u.startsWith('1M')) return '1M';
+    if (u.startsWith('4H')) return '4H';
+    if (u.startsWith('1H')) return '1H';
+    if (u.startsWith('30M')) return '30M';
+    if (u.startsWith('15M')) return '15M';
+    if (u.startsWith('5M')) return '5M';
+    return u || '1D';
+  }
+
+  // -----------------------------
+  // Timeframe -> aggregates params
+  // -----------------------------
+  function fmtDate(d) {
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function subDaysUTC(days) {
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() - days);
+    return d;
+  }
+
+  function timeframeToAggParams(tf) {
+    // Choose sane windows so you get enough candles but not insane.
+    // You can tune later without breaking anything.
+    const t = String(tf || '1D').toUpperCase();
+
+    // default to daily 400-550 bars
+    if (t === '1D') return { multiplier: 1, timespan: 'day', daysBack: 550 };
+    if (t === '1W') return { multiplier: 1, timespan: 'week', daysBack: 2000 };
+    if (t === '1M') return { multiplier: 1, timespan: 'month', daysBack: 5000 };
+
+    if (t === '4H') return { multiplier: 4, timespan: 'hour', daysBack: 180 };
+    if (t === '1H') return { multiplier: 1, timespan: 'hour', daysBack: 90 };
+
+    if (t === '30M') return { multiplier: 30, timespan: 'minute', daysBack: 45 };
+    if (t === '15M') return { multiplier: 15, timespan: 'minute', daysBack: 25 };
+    if (t === '5M')  return { multiplier: 5,  timespan: 'minute', daysBack: 10 };
+
+    // fallback
+    return { multiplier: 1, timespan: 'day', daysBack: 550 };
+  }
+
+  // -----------------------------
+  // Payload extraction (robust)
   // -----------------------------
   function extractRows(payload) {
     if (!payload) return [];
-    const direct = [payload.candles, payload.results, payload.bars, payload.data];
-    for (const x of direct) if (Array.isArray(x) && x.length) return x;
 
-    const nested = [
-      payload.data?.results, payload.data?.candles, payload.data?.bars,
-      payload.payload?.results, payload.payload?.candles, payload.payload?.bars,
-      payload.result?.results, payload.result?.candles, payload.result?.bars,
+    // direct candidates
+    const direct = [
+      payload.candles,
+      payload.results,
+      payload.bars,
+      payload.data,
     ];
-    for (const x of nested) if (Array.isArray(x) && x.length) return x;
-
-    for (const k of Object.keys(payload)) {
-      const v = payload[k];
-      if (Array.isArray(v) && v.length && typeof v[0] === 'object') {
-        const r0 = v[0] || {};
-        if (('o' in r0 || 'open' in r0) && ('c' in r0 || 'close' in r0)) return v;
-      }
+    for (const x of direct) {
+      if (Array.isArray(x) && x.length) return x;
     }
+
+    // nested common wrappers
+    const nested = [
+      payload.data?.results,
+      payload.data?.candles,
+      payload.data?.bars,
+      payload.payload?.results,
+      payload.payload?.candles,
+      payload.payload?.bars,
+      payload.result?.results,
+      payload.result?.candles,
+      payload.result?.bars,
+    ];
+    for (const x of nested) {
+      if (Array.isArray(x) && x.length) return x;
+    }
+
+    // last resort: scan first-level keys for an array of objects with o/h/l/c
+    try {
+      for (const k of Object.keys(payload)) {
+        const v = payload[k];
+        if (Array.isArray(v) && v.length && typeof v[0] === 'object') {
+          const r0 = v[0] || {};
+          if (('o' in r0 || 'open' in r0) && ('c' in r0 || 'close' in r0)) return v;
+        }
+      }
+    } catch (_) {}
+
     return [];
   }
 
   function normalizeTime(t) {
+    // t could be seconds or milliseconds
     if (typeof t !== 'number') return null;
     if (t > 10_000_000_000) return Math.floor(t / 1000); // ms -> s
-    return Math.floor(t);
-  }
-
-  function writeMutantPanel(lines) {
-    const el =
-      $('#darrius-mutant') ||
-      $('#mutant') ||
-      $('[data-mutant]') ||
-      $('.darrius-mutant');
-    if (!el) return;
-    el.textContent = Array.isArray(lines) ? lines.join('\n') : String(lines || '');
+    return Math.floor(t); // already seconds
   }
 
   function updateSeries(payload, meta) {
     if (!R.candleSeries) return;
 
     const rows = extractRows(payload);
-    window.__LAST_AGG__ = payload;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       console.error('[chart.core] NO ROWS extracted. payload keys:', payload ? Object.keys(payload) : null);
+      window.__LAST_AGG__ = payload;
+      writeMutant(`Darrius Mutant\nAGG ERROR: No rows extracted\nkeys=${payload ? Object.keys(payload).join(',') : 'null'}`);
       return;
     }
 
@@ -311,12 +393,16 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V5";
       if ([o, h, l, c].some(v => typeof v !== 'number')) continue;
 
       candles.push({ time, open: o, high: h, low: l, close: c });
+
+      // optional EMA from backend
       if (typeof r.ema_fast === 'number') emaFast.push({ time, value: r.ema_fast });
       if (typeof r.ema_slow === 'number') emaSlow.push({ time, value: r.ema_slow });
     }
 
     if (!candles.length) {
       console.error('[chart.core] rows extracted BUT normalized candles empty. sample row=', rows[0]);
+      window.__LAST_AGG__ = payload;
+      writeMutant(`Darrius Mutant\nAGG ERROR: rows extracted but candles empty\nsample=${JSON.stringify(rows[0]).slice(0,120)}`);
       return;
     }
 
@@ -326,107 +412,116 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V5";
 
     hideLoadingOnce();
 
-    const last = candles[candles.length - 1];
-    const snap = {
-      symbol: meta?.symbol,
-      timeframe: meta?.timeframe,
+    // snapshot
+    const lastBar = candles[candles.length - 1];
+    window.__DARRIUS_CHART_STATE__ = {
+      symbol: meta?.symbol || window.__CURRENT_SYMBOL__ || '',
+      timeframe: meta?.timeframe || window.__CURRENT_TIMEFRAME__ || '',
       count: candles.length,
-      lastBar: last,
-      headers: meta?.headers || {},
-      sigs: window.__LAST_SIGS__ || null,
-      sigsError: window.__LAST_SIGS_ERR__ || null,
+      lastBar,
+      // keep useful upstream headers if you want later (optional)
+      headers: meta?.headers || null,
       ts: Date.now(),
     };
 
-    window.__DARRIUS_CHART_STATE__ = snap;
-    window.dispatchEvent(new CustomEvent('darrius:chartUpdated', { detail: snap }));
+    window.__LAST_AGG__ = payload;
 
-    // Fill mutant panel (bottom yellow box)
-    const h = snap.headers || {};
-    writeMutantPanel([
-      `Darrius Mutant`,
-      `symbol=${snap.symbol}  tf=${snap.timeframe}  bars=${snap.count}`,
-      `lastClose=${(last && last.close != null) ? last.close : 'n/a'}  t=${(last && last.time != null) ? last.time : 'n/a'}`,
-      `X-Data-Source=${h['x-data-source'] || h['X-Data-Source'] || 'n/a'}  X-Entitlement=${h['x-entitlement'] || h['X-Entitlement'] || 'n/a'}`,
-      `X-Cache=${h['x-cache'] || h['X-Cache'] || 'n/a'}  X-Upstream=${h['x-upstream'] || h['X-Upstream'] || 'n/a'}`,
-      `agg=${String(window.__LAST_AGG_URL__ || '').slice(0, 120)}`
-    ]);
+    // Update Mutant with a simple heartbeat
+    writeMutant(
+      `Darrius Mutant\nOK: ${window.__DARRIUS_CHART_STATE__.symbol} ${window.__DARRIUS_CHART_STATE__.timeframe}\nBars: ${candles.length}\nLast: ${lastBar.close}`
+    );
+
+    window.dispatchEvent(new CustomEvent('darrius:chartUpdated', { detail: window.__DARRIUS_CHART_STATE__ }));
   }
 
   // -----------------------------
-  // fetch with timeout (no pending)
+  // Fetch helper
   // -----------------------------
-  async function fetchTextWithTimeout(url, ms = 12000) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), ms);
-    try {
-      const res = await fetch(url, {
-        cache: 'no-store',
-        credentials: 'include',
-        signal: ctrl.signal
-      });
-      const text = await res.text();
-      return { res, text };
-    } finally {
-      clearTimeout(timer);
-    }
+  async function fetchText(url) {
+    const res = await fetch(url, { cache: 'no-store', credentials: 'include' });
+    const text = await res.text();
+    return { res, text };
   }
 
   async function fetchJSON(url) {
-    const { res, text } = await fetchTextWithTimeout(url, 12000);
+    const { res, text } = await fetchText(url);
     let json = null;
     try { json = JSON.parse(text); } catch (_) {}
 
     if (!res.ok) {
-      console.error('[chart.core] fetch failed', res.status, url, 'body=', text.slice(0, 200));
-      throw new Error(`HTTP ${res.status}`);
+      console.error('[chart.core] fetch failed', res.status, url, 'body=', text.slice(0, 240));
+      throw new Error(`HTTP ${res.status} ${text.slice(0, 120)}`);
     }
     if (!json) {
-      console.error('[chart.core] JSON parse failed. url=', url, 'body head=', text.slice(0, 200));
+      console.error('[chart.core] JSON parse failed. url=', url, 'body head=', text.slice(0, 240));
       throw new Error('JSON parse failed');
     }
-    return { json, res };
-  }
-
-  function lowerHeaderMap(res) {
-    const out = {};
-    try {
-      for (const [k, v] of res.headers.entries()) out[k] = v;
-    } catch (_) {}
-    return out;
+    return { json, headers: res.headers };
   }
 
   // -----------------------------
-  // polling
+  // Poll
   // -----------------------------
+  function buildAggUrl(symbol, timeframe) {
+    const s = normalizeSymbol(symbol);
+    const tf = String(timeframe || '1D').toUpperCase();
+
+    const p = timeframeToAggParams(tf);
+    const from = fmtDate(subDaysUTC(p.daysBack));
+    const to = fmtDate(subDaysUTC(0));
+
+    const qs = new URLSearchParams();
+    qs.set('ticker', s);
+    qs.set('multiplier', String(p.multiplier));
+    qs.set('timespan', String(p.timespan));
+    qs.set('from', from);
+    qs.set('to', to);
+
+    // optional passthrough (does not break if backend ignores)
+    if (DEFAULT_SOURCE) qs.set('source', DEFAULT_SOURCE);
+    if (DEFAULT_PROVIDER) qs.set('provider', DEFAULT_PROVIDER);
+
+    return `${API_AGG}?${qs.toString()}`;
+  }
+
   async function pollOnce() {
     const symbol = readSymbolFromUI();
     const timeframe = readTimeframeFromUI();
 
-    // persist to globals (so other modules can read)
+    // publish current selection to globals (for your console checks)
     window.__CURRENT_SYMBOL__ = symbol;
     window.__CURRENT_TIMEFRAME__ = timeframe;
 
-    // 1) aggregates (hard requirement)
+    // -------- aggregates: must succeed
     try {
-      const urlAgg = buildAggURL(symbol, timeframe);
-      const { json, res } = await fetchJSON(urlAgg);
-      const headers = lowerHeaderMap(res);
-      updateSeries(json, { symbol, timeframe, headers });
+      const urlAgg = buildAggUrl(symbol, timeframe);
+      window.__LAST_AGG_URL__ = urlAgg;
+      window.__LAST_AGG_ERR__ = '';
+
+      const { json, headers } = await fetchJSON(urlAgg);
+
+      // Keep a few useful headers (CORS-safe ones only; custom headers may be blocked by browser)
+      const h = {};
+      try {
+        ['x-data-source', 'x-entitlement', 'x-cache', 'x-upstream', 'x-provider'].forEach(k => {
+          const v = headers.get(k);
+          if (v) h[k] = v;
+        });
+      } catch (_) {}
+
+      updateSeries(json, { symbol, timeframe, headers: h });
     } catch (e) {
       console.error('[chart.core] aggregates poll error', e);
       window.__LAST_AGG_ERR__ = String(e && e.message ? e.message : e);
+      writeMutant(`Darrius Mutant\nAGG ERROR: ${window.__LAST_AGG_ERR__}\nURL: ${String(window.__LAST_AGG_URL__ || '').slice(0,160)}`);
+      // do not throw (keep loop alive)
     }
 
-    // 2) sigs (best-effort)
+    // -------- sigs: best-effort only (won't break chart)
     try {
-      const urlS = buildSigsURL(symbol, timeframe);
-      const { json } = await fetchJSON(urlS);
-      window.__LAST_SIGS__ = json;
-      window.__LAST_SIGS_ERR__ = null;
-    } catch (e) {
-      window.__LAST_SIGS_ERR__ = String(e && e.message ? e.message : e);
-    }
+      const urlS = `${API_SIGS}?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`;
+      window.__LAST_SIGS__ = (await fetchJSON(urlS)).json;
+    } catch (_) {}
   }
 
   function startPolling() {
@@ -435,36 +530,12 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V5";
     R.pollingTimer = setInterval(pollOnce, POLL_INTERVAL);
   }
 
-  function forceRefreshNow() {
-    try {
-      pollOnce();
-    } catch (_) {}
-  }
-
-  // Bind "Symbol Load" button (right yellow box behavior)
-  function bindUILoadButton() {
-    const btn =
-      $('#symbol-load') ||
-      $('#btnSymbolLoad') ||
-      $('button[data-action="symbol-load"]') ||
-      $all('button').find(b => /Symbol\s*Load/i.test(b.textContent || ''));
-    if (!btn || btn.__DARRIUS_BOUND__) return;
-    btn.__DARRIUS_BOUND__ = true;
-    btn.addEventListener('click', () => {
-      // reset loading so user sees it
-      R.loadingClosed = false;
-      showLoading();
-      forceRefreshNow();
-    });
-  }
-
+  // -----------------------------
   // Boot loop (defeat layout timing)
+  // -----------------------------
   let tries = 0;
   const t = setInterval(() => {
     tries += 1;
-
-    bindUILoadButton();
-
     if (!R.candleSeries) {
       showLoading();
       initChart();
@@ -472,6 +543,6 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V5";
     if (R.candleSeries) startPolling();
 
     if (R.candleSeries || tries > 200) clearInterval(t);
-  }, 80);
+  }, 50);
 
 })();
