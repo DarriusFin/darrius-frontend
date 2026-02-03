@@ -1,6 +1,6 @@
 /* =========================================================================
  * FILE: darrius-frontend/js/chart.core.js
- * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.03c + BADGE-OVERLAY
+ * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.03c + BADGE-OVERLAY (TUNED)
  *
  * Goals (NO-SECRETS):
  *  - NO EMA/AUX/signal algorithm in frontend.
@@ -20,6 +20,11 @@
  * Added:
  *  7) Glow Badge Overlay for B/S/eB/eS (yellow/red badge + white ring + glow)
  *     - DOM overlay, no chart internals touched
+ *
+ * TUNED (2026.02.03c-TUNED):
+ *  - S/eS slightly ABOVE candle (closer)
+ *  - B/eB slightly BELOW candle (closer)
+ *  - LAST TWO signals pulse/glow (regardless of side)
  * ========================================================================= */
 
 (function () {
@@ -61,6 +66,11 @@
     sizeMain: 26,   // B / S
     sizeEarly: 22,  // eB / eS
   };
+
+  // ✅ 位置微调：让它“贴近K线”但不压住
+  // 你觉得还要更近：把 6 改 4；更远：改 8~12
+  const BADGE_OFFSET_ABOVE_PX = 6; // S/eS：在K线上方额外抬多少px（越小越贴近）
+  const BADGE_OFFSET_BELOW_PX = 6; // B/eB：在K线下方额外压多少px（越小越贴近）
 
   // -----------------------------
   // DOM helpers
@@ -277,21 +287,41 @@
             transform: translate(-50%, -50%);
             user-select:none;
             -webkit-font-smoothing: antialiased;
+            pointer-events:none;
           }
           .darrius-badge.buy{
             background:${BADGE_STYLE.buyBg};
             color:${BADGE_STYLE.buyText};
             border:2px solid ${BADGE_STYLE.ring};
-            box-shadow: 0 0 14px ${BADGE_STYLE.buyGlow}, 0 0 28px rgba(245,197,66,.35);
+            box-shadow: 0 0 12px ${BADGE_STYLE.buyGlow}, 0 0 22px rgba(245,197,66,.28);
           }
           .darrius-badge.sell{
             background:${BADGE_STYLE.sellBg};
             color:${BADGE_STYLE.sellText};
             border:2px solid ${BADGE_STYLE.ring};
-            box-shadow: 0 0 14px ${BADGE_STYLE.sellGlow}, 0 0 28px rgba(255,71,87,.35);
+            box-shadow: 0 0 12px ${BADGE_STYLE.sellGlow}, 0 0 22px rgba(255,71,87,.28);
           }
           .darrius-badge .t{
             transform: translateY(-.5px);
+          }
+
+          /* ✅ only LAST TWO: pulse + stronger glow */
+          .darrius-badge.pulse{
+            animation: darriusBadgePulse 1.25s ease-in-out infinite;
+            will-change: transform, filter, opacity;
+          }
+          .darrius-badge.buy.pulse{
+            box-shadow: 0 0 16px ${BADGE_STYLE.buyGlow}, 0 0 34px rgba(245,197,66,.42), 0 0 52px rgba(245,197,66,.22);
+            filter: drop-shadow(0 0 10px rgba(255,255,255,.35));
+          }
+          .darrius-badge.sell.pulse{
+            box-shadow: 0 0 16px ${BADGE_STYLE.sellGlow}, 0 0 34px rgba(255,71,87,.42), 0 0 52px rgba(255,71,87,.22);
+            filter: drop-shadow(0 0 10px rgba(255,255,255,.35));
+          }
+          @keyframes darriusBadgePulse{
+            0%   { transform: translate(-50%, -50%) scale(1);    opacity: .95; }
+            50%  { transform: translate(-50%, -50%) scale(1.14); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1);    opacity: .95; }
           }
         `;
         document.head.appendChild(st);
@@ -331,8 +361,15 @@
           isBuy,
           isSell,
           isMain: (side === "B" || side === "S"),
+          isLastTwo: false, // will fill later
         });
       });
+
+      // ✅ identify last two by time (regardless of side)
+      items.sort((a, b) => (a.time - b.time));
+      const n = items.length;
+      if (n >= 1) items[n - 1].isLastTwo = true;
+      if (n >= 2) items[n - 2].isLastTwo = true;
 
       return { items, closeMap };
     }
@@ -354,12 +391,18 @@
         const y0 = priceToY(it.price);
         if (y0 == null) return;
 
-        // offset above/below
         const size = it.isMain ? BADGE_STYLE.sizeMain : BADGE_STYLE.sizeEarly;
-        const y = it.isBuy ? (y0 + size * 0.75) : (y0 - size * 0.75);
+
+        // ✅ NEW positioning:
+        // - Sell (S/eS): place ABOVE candle, closer: y0 - halfSize - offset
+        // - Buy  (B/eB): place BELOW candle, closer: y0 + halfSize + offset
+        const half = size * 0.5;
+        const y = it.isSell
+          ? (y0 - half - BADGE_OFFSET_ABOVE_PX)
+          : (y0 + half + BADGE_OFFSET_BELOW_PX);
 
         const d = document.createElement("div");
-        d.className = "darrius-badge " + (it.isBuy ? "buy" : "sell");
+        d.className = "darrius-badge " + (it.isBuy ? "buy" : "sell") + (it.isLastTwo ? " pulse" : "");
         d.style.width = size + "px";
         d.style.height = size + "px";
         d.style.left = x + "px";
