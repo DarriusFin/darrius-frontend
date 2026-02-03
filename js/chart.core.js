@@ -128,31 +128,46 @@
   // Fetch helpers (HARDENED JSON)
   // -----------------------------
   function parseJsonLoose(text) {
-    const s = String(text ?? "");
+  const s = String(text ?? "").trim();
 
-    // Fast path
-    try { return JSON.parse(s); } catch (_) {}
+  // 1) Fast path
+  try { return JSON.parse(s); } catch (_) {}
 
-    // Try to extract JSON object/array portion
-    const firstObj = s.indexOf("{");
-    const firstArr = s.indexOf("[");
-    let start = -1;
-    if (firstObj >= 0 && firstArr >= 0) start = Math.min(firstObj, firstArr);
-    else start = Math.max(firstObj, firstArr);
+  // 2) If multiple JSON objects are concatenated, parse from the end.
+  //    Try to parse substrings that start at each "{" (from right to left).
+  const starts = [];
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    if (ch === 123 /* { */ || ch === 91 /* [ */) starts.push(i);
+  }
+  for (let k = starts.length - 1; k >= 0; k--) {
+    const i = starts[k];
+    const sub = s.slice(i);
+    try {
+      return JSON.parse(sub);
+    } catch (_) {
+      // keep trying earlier start
+    }
+  }
 
-    if (start < 0) throw new Error("Invalid JSON: no { or [");
+  // 3) Fallback: cut between first opener and last closer, then try again.
+  const firstObj = s.indexOf("{");
+  const firstArr = s.indexOf("[");
+  let start = -1;
+  if (firstObj >= 0 && firstArr >= 0) start = Math.min(firstObj, firstArr);
+  else start = Math.max(firstObj, firstArr);
 
-    // Find last matching closer
-    const lastObj = s.lastIndexOf("}");
-    const lastArr = s.lastIndexOf("]");
-    let end = Math.max(lastObj, lastArr);
-    if (end <= start) throw new Error("Invalid JSON: cannot locate end");
+  const lastObj = s.lastIndexOf("}");
+  const lastArr = s.lastIndexOf("]");
+  const end = Math.max(lastObj, lastArr);
 
+  if (start >= 0 && end > start) {
     const cut = s.slice(start, end + 1);
-
-    // Try parse again
     return JSON.parse(cut);
   }
+
+  throw new Error("Invalid JSON");
+}
 
   async function fetchJson(url) {
     const r = await fetch(url, { method: "GET", credentials: "omit" });
