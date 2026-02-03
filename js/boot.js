@@ -1,10 +1,9 @@
 /* =========================================================
  * FILE: darrius-frontend/js/boot.js
- * DarriusAI · Boot / Wiring Module (Final, deduped)
+ * DarriusAI · Boot / Wiring Module (Final, deduped) + TSLA default
  * - Wires UI events
  * - Starts ChartCore + Subscription modules
  * - Keeps subscription stable; does NOT touch backend secrets
- * - Path A: Order Start stays checkout; Order Manage routes to /account.html
  * ========================================================= */
 
 (function () {
@@ -12,6 +11,11 @@
 
   // ---------- helpers ----------
   const $ = (id) => document.getElementById(id);
+
+  // ✅兼容 symbol / symbo1（你现在 HTML 里是 symbo1）
+  function getSymbolEl() {
+    return $("symbol") || $("symbo1") || null;
+  }
 
   function safeText(el, text) {
     if (!el) return;
@@ -34,7 +38,6 @@
   }
 
   function log(msg) {
-    // Reuse your existing logger if present
     if (typeof window.log === "function") {
       window.log(msg);
       return;
@@ -65,19 +68,19 @@
       const p = new URLSearchParams(location.search);
       const qsSym = p.get("symbol");
       const qsTf = p.get("tf");
-      if (qsSym && $("symbol")) $("symbol").value = qsSym.toUpperCase();
+
+      const symEl = getSymbolEl();
+      if (qsSym && symEl) symEl.value = qsSym.toUpperCase();
       if (qsTf && $("tf")) $("tf").value = qsTf;
     } catch (_) {}
   }
 
   // ---------- optional: share link ----------
   async function copyShareLink() {
-    const DEFAULT_SYM = String(window.__DEFAULT_SYMBOL__ || "TSLA").trim().toUpperCase();
-    const DEFAULT_TF  = String(window.__DEFAULT_TF__ || "1d").trim();
-
-    const sym = ($("symbol")?.value || DEFAULT_SYM).trim().toUpperCase();
-    const tf = $("tf")?.value || DEFAULT_TF;
-
+    // ✅默认 TSLA
+    const symEl = getSymbolEl();
+    const sym = ((symEl?.value || "TSLA").trim().toUpperCase()) || "TSLA";
+    const tf = $("tf")?.value || "1d";
     const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -90,7 +93,6 @@
   // ---------- optional: export png ----------
   function exportPNG() {
     try {
-      // ChartCore may provide screenshot helper, else fallback to chart instance if exposed
       if (window.ChartCore && typeof window.ChartCore.exportPNG === "function") {
         window.ChartCore.exportPNG();
         return;
@@ -124,7 +126,7 @@
     log("Admin mode enabled (?admin=1)");
   }
 
-  // ---------- Path A: Route Manage -> account.html ----------
+  // ---------- Route Manage -> account.html ----------
   function wireManageToAccount() {
     const manageBtn = $("manageBtn");
     if (!manageBtn) return;
@@ -142,47 +144,38 @@
       const qs = new URLSearchParams({ from: "home", user_id: userId });
       if (email) qs.set("email", email);
 
-      // Go to Account Center
       window.location.href = "/account.html?" + qs.toString();
     };
 
-    // 即使 status Unknown，也允许进入 account center
     manageBtn.disabled = false;
-
     if (isAdmin()) console.log("[BOOT] Order Manage routed to /account.html");
   }
 
   // ---------- main boot ----------
   function boot() {
-    // year
     safeText($("yearNow"), String(new Date().getFullYear()));
 
-    // global API base (shared by modules)
-    // NOTE: you can set this in index.html before scripts; if not, we keep existing value
-    if (!window.API_BASE) {
-      // Prefer your known Render backend; can be overridden in index.html
-      window.API_BASE = "https://darrius-api.onrender.com";
-    }
+    // ✅ 全站 API base（不在这里暴露算法）
+    if (!window.API_BASE) window.API_BASE = "https://darrius-api.onrender.com";
 
     enableAdminBlocksIfNeeded();
     applyQueryParamsToUI();
 
-    // Quick TF buttons
-    syncTfQuick($("tf")?.value || (window.__DEFAULT_TF__ || "1d"));
+    // ✅ 若 symbol/symbo1 为空，兜底 TSLA（不改 UI，只填默认值）
+    const symEl = getSymbolEl();
+    if (symEl && !String(symEl.value || "").trim()) symEl.value = "TSLA";
+
+    syncTfQuick($("tf")?.value || "1d");
 
     // ---- ChartCore wiring ----
-    const hasChartCore = !!window.ChartCore;
-    if (!hasChartCore) {
+    if (!window.ChartCore) {
       setStatus("ChartCore missing (js not loaded)", false);
       log("❌ ChartCore not found on window. Did you include /js/chart.core.js ?");
     } else {
-      // Bind TF quick -> reload
       bindTfQuick(() => {
-        // do a full reload of market data
         if (typeof window.ChartCore.load === "function") window.ChartCore.load();
       });
 
-      // toggles
       $("tgEMA")?.addEventListener("change", () => {
         if (typeof window.ChartCore.applyToggles === "function") window.ChartCore.applyToggles();
       });
@@ -190,18 +183,20 @@
         if (typeof window.ChartCore.applyToggles === "function") window.ChartCore.applyToggles();
       });
 
-      // Load button
       $("loadBtn")?.addEventListener("click", () => {
         if (typeof window.ChartCore.load === "function") window.ChartCore.load();
       });
 
-      // Init chart (ChartCore should create chart and do initial load)
       try {
         if (typeof window.ChartCore.init === "function") {
           window.ChartCore.init({
-            // pass DOM ids if ChartCore supports it; safe to ignore if not used
             chartElId: "chart",
             overlayElId: "sigOverlay",
+            // ✅兼容你现在 HTML 的 symbo1
+            symbolElIdPrimary: "symbol",
+            symbolElIdFallback: "symbo1",
+            tfElId: "tf",
+            defaultSymbol: "TSLA",
           });
           log("✅ ChartCore.init()");
         } else {
@@ -213,16 +208,16 @@
       }
     }
 
-    // ---- Subscription wiring ----
+    // ---- Subscription wiring (DO NOT TOUCH) ----
     if (!window.Subscription) {
       log("⚠️ Subscription module not found. Did you include /js/subscription.js ?");
     } else {
       try {
         if (typeof window.Subscription.attach === "function") {
-          window.Subscription.attach(); // ✅ bind buttons + load plans (original logic stays)
+          window.Subscription.attach();
           log("✅ Subscription.attach()");
         } else if (typeof window.Subscription.initPlans === "function") {
-          window.Subscription.initPlans(); // fallback: at least load plans
+          window.Subscription.initPlans();
           log("✅ Subscription.initPlans()");
         } else {
           log("⚠️ Subscription has no attach/initPlans");
@@ -232,25 +227,20 @@
       }
     }
 
-    // ✅ Path A: MUST be after Subscription.attach(), so our onclick wins.
     wireManageToAccount();
 
-    // Other UI utilities
     $("copyLinkBtn")?.addEventListener("click", copyShareLink);
     $("exportBtn")?.addEventListener("click", exportPNG);
     $("affiliateBtn")?.addEventListener("click", openAffiliate);
 
-    // Final status
     setStatus("Ready · 前端已就绪", true);
   }
 
-  // Run
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
   } else {
     boot();
   }
 
-  // expose (optional)
   window.Boot = { boot };
 })();
