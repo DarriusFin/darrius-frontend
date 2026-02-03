@@ -247,7 +247,7 @@ function pickSignalsWithLastSigFallback(snap) {
 }
 
   function renderFromSnapshot(s) {
-    const sig = readSignals(s);
+    const sig = pickSignalsWithLastSigFallback(s);
     const rk = readRisk(s);
     const bt = readBacktest(s);
     const mt = readMeta(s);
