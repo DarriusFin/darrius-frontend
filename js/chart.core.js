@@ -10,8 +10,13 @@ window.__CHART_CORE_ACTIVE__ = "2026-02-02 FINAL-V4";
   'use strict';
 
   const POLL_INTERVAL = 15000;
-  const API_AGG = '/api/data/stocks/aggregates';
-  const API_SIGS = '/api/market/sigs';
+  const API_BASE = String(window.__DARRIUS_API_BASE__ || "https://darrius-api.onrender.com")
+  .replace(/\/+$/, "");
+
+const API_AGG  = `${API_BASE}/api/data/stocks/aggregates`;
+const API_SIGS = `${API_BASE}/api/market/sigs`;
+
+
 
   // Global runtime (always visible in console)
   window.__DARRIUS_CHART_RUNTIME__ = window.__DARRIUS_CHART_RUNTIME__ || {};
