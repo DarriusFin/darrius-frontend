@@ -1,30 +1,19 @@
 /* =========================================================================
- * DarriusAI - chart.core.js (HARDENED / NO-SECRETS) v2026.02.03
+ * DarriusAI - chart.core.js (VNEXT / NO-SECRETS) v2026.02.03-HARDENED
  *
- * What this file guarantees:
- *  1) MAIN CHART MUST NEVER BREAK (even if backend returns empty payload)
- *  2) OHLCV is fetched ONLY via backend proxy (/api/data/stocks/aggregates)
- *  3) Signals are fetched ONLY via backend (/api/market/sigs etc.) best-effort
- *  4) Publishes stable snapshot to window.__DARRIUS_CHART_STATE__
- *  5) NO secret core algorithm is placed here
- *
- * Exports:
- *  - window.ChartCore.init({containerId, autoLoad, pollMs})
- *  - window.ChartCore.load()
- *  - window.ChartCore.getSnapshot()
- *
- * Diagnostics:
- *  - window.__DARRIUS_DIAG__
- *  - window.__LAST_AGG_URL__, window.__LAST_AGG__, window.__LAST_AGG_ERR__
- *  - window.__LAST_SIG_URL__, window.__LAST_SIG__, window.__LAST_SIG_ERR__
- *  - window.__DARRIUS_CHART_STATE__
+ * HARDENED fixes:
+ *  - normalizeBars(): supports many payload schemas + strong time parsing
+ *  - fetchJson(): tolerant JSON parse (strip non-json prefix/suffix)
+ *  - Never let empty bars kill the whole UI forever: still publish snapshot + hint
+ *  - Always render B/S/eB/eS markers (small markers) to ensure "signals come back"
+ *  - Disable volume histogram by default (to avoid "many columns" confusion)
  * ========================================================================= */
 
 (() => {
   "use strict";
 
   // -----------------------------
-  // Global DIAG (never throw)
+  // Global diagnostic (never throw)
   // -----------------------------
   const DIAG = (window.__DARRIUS_DIAG__ = window.__DARRIUS_DIAG__ || {
     lastError: null,
@@ -33,8 +22,6 @@
     lastSigUrl: null,
     lastBarsCount: null,
     lastSigsCount: null,
-    lastBarsSource: null, // "backend" | "lastGood" | "demo"
-    backendShape: null,
   });
 
   function safeRun(tag, fn) {
@@ -65,6 +52,8 @@
     "https://darrius-api.onrender.com";
 
   const API_BASE = String(DEFAULT_API_BASE || "").replace(/\/+$/, "");
+
+  // Your backend proxy endpoint
   const AGGS_PATH = "/api/data/stocks/aggregates";
 
   // Signals endpoints (best-effort candidates)
@@ -78,10 +67,11 @@
   ];
 
   // -----------------------------
-  // Non-secret periods
+  // Periods (non-secret)
   // -----------------------------
   const EMA_PERIOD = 14;
-  const AUX_PERIOD = 40; // placeholder SMA only (NO-SECRETS)
+  const AUX_PERIOD = 40; // placeholder SMA if backend does not provide AUX
+  const CONFIRM_WINDOW = 3;
 
   // -----------------------------
   // Colors
@@ -106,10 +96,10 @@
   let showAUX = true;
 
   let _pollTimer = null;
-  let _inFlight = false;
+  let _pollInFlight = false;
 
   // -----------------------------
-  // UI readers (best-effort)
+  // UI readers
   // -----------------------------
   function getUiSymbol() {
     const el =
@@ -135,8 +125,35 @@
   }
 
   // -----------------------------
-  // Fetch helper
+  // Fetch helpers (HARDENED JSON)
   // -----------------------------
+  function parseJsonLoose(text) {
+    const s = String(text ?? "");
+
+    // Fast path
+    try { return JSON.parse(s); } catch (_) {}
+
+    // Try to extract JSON object/array portion
+    const firstObj = s.indexOf("{");
+    const firstArr = s.indexOf("[");
+    let start = -1;
+    if (firstObj >= 0 && firstArr >= 0) start = Math.min(firstObj, firstArr);
+    else start = Math.max(firstObj, firstArr);
+
+    if (start < 0) throw new Error("Invalid JSON: no { or [");
+
+    // Find last matching closer
+    const lastObj = s.lastIndexOf("}");
+    const lastArr = s.lastIndexOf("]");
+    let end = Math.max(lastObj, lastArr);
+    if (end <= start) throw new Error("Invalid JSON: cannot locate end");
+
+    const cut = s.slice(start, end + 1);
+
+    // Try parse again
+    return JSON.parse(cut);
+  }
+
   async function fetchJson(url) {
     const r = await fetch(url, { method: "GET", credentials: "omit" });
     const text = await r.text().catch(() => "");
@@ -147,34 +164,31 @@
       throw err;
     }
     try {
-      return JSON.parse(text);
-    } catch {
+      return parseJsonLoose(text);
+    } catch (e) {
       const err = new Error("Invalid JSON");
       err.body = text;
       throw err;
     }
   }
 
-  // -----------------------------
-  // TF -> agg params
-  // -----------------------------
   function tfToAggParams(tf) {
     const m = String(tf || "1d").trim();
     const map = {
-      "5m":  { multiplier: 5,   timespan: "minute", daysBack: 20  },
-      "15m": { multiplier: 15,  timespan: "minute", daysBack: 35  },
-      "30m": { multiplier: 30,  timespan: "minute", daysBack: 60  },
-      "1h":  { multiplier: 60,  timespan: "minute", daysBack: 90  },
+      "5m":  { multiplier: 5,   timespan: "minute", daysBack: 20 },
+      "15m": { multiplier: 15,  timespan: "minute", daysBack: 35 },
+      "30m": { multiplier: 30,  timespan: "minute", daysBack: 60 },
+      "1h":  { multiplier: 60,  timespan: "minute", daysBack: 90 },
       "4h":  { multiplier: 240, timespan: "minute", daysBack: 180 },
       "1d":  { multiplier: 1,   timespan: "day",    daysBack: 700 },
-      "1w":  { multiplier: 1,   timespan: "week",   daysBack: 1800},
-      "1M":  { multiplier: 1,   timespan: "month",  daysBack: 3600},
+      "1w":  { multiplier: 1,   timespan: "week",   daysBack: 1800 },
+      "1M":  { multiplier: 1,   timespan: "month",  daysBack: 3600 },
     };
     return map[m] || map["1d"];
   }
 
   function toYMD(d) {
-    const y = d.getFullYear();
+    const y  = d.getFullYear();
     const mo = String(d.getMonth() + 1).padStart(2, "0");
     const da = String(d.getDate()).padStart(2, "0");
     return `${y}-${mo}-${da}`;
@@ -182,17 +196,17 @@
 
   function rangeByDaysBack(daysBack) {
     const to = new Date();
-    const from = new Date(Date.now() - daysBack * 86400 * 1000);
+    const from = new Date(Date.now() - daysBack * 24 * 3600 * 1000);
     return { from: toYMD(from), to: toYMD(to) };
   }
 
   // -----------------------------
-  // Time parsing (supports numeric string)
+  // Time parsing (HARDENED)
   // -----------------------------
-  function toUnixSec(t) {
+  function toUnixSecAny(t) {
     if (t == null) return null;
 
-    // business day object
+    // Business day object (year/month/day)
     if (typeof t === "object" && t.year && t.month && t.day) {
       const ms = Date.UTC(t.year, t.month - 1, t.day);
       return Math.floor(ms / 1000);
@@ -203,7 +217,7 @@
       return (t > 2e10) ? Math.floor(t / 1000) : Math.floor(t);
     }
 
-    // string: numeric ts or datetime
+    // numeric string or date string
     if (typeof t === "string") {
       const s = t.trim();
       if (/^\d+$/.test(s)) {
@@ -220,66 +234,36 @@
   }
 
   // -----------------------------
-  // Deep array finder (for weird backend wrappers)
-  // Looks for an array that contains objects with OHLC/time-like keys.
-  // -----------------------------
-  function looksLikeBarObj(o) {
-    if (!o || typeof o !== "object") return false;
-    const hasTime = ("t" in o) || ("time" in o) || ("datetime" in o) || ("date" in o) || ("timestamp" in o) || ("ts" in o);
-    const hasOHLC =
-      ("o" in o && "h" in o && "l" in o && "c" in o) ||
-      ("open" in o && "high" in o && "low" in o && "close" in o);
-    return !!(hasTime && hasOHLC);
-  }
-
-  function findBarsArray(payload) {
-    // common fast paths
-    const fast =
-      (Array.isArray(payload) && payload) ||
-      (Array.isArray(payload?.results) && payload.results) ||
-      (Array.isArray(payload?.bars) && payload.bars) ||
-      (Array.isArray(payload?.data?.results) && payload.data.results) ||
-      (Array.isArray(payload?.data?.bars) && payload.data.bars) ||
-      (Array.isArray(payload?.values) && payload.values) ||
-      (Array.isArray(payload?.data?.values) && payload.data.values) ||
-      (Array.isArray(payload?.data?.data?.values) && payload.data.data.values);
-
-    if (fast && fast.length && looksLikeBarObj(fast[0])) return fast;
-
-    // BFS search (depth-limited)
-    const seen = new Set();
-    const q = [{ v: payload, depth: 0 }];
-    while (q.length) {
-      const { v, depth } = q.shift();
-      if (!v || typeof v !== "object") continue;
-      if (seen.has(v)) continue;
-      seen.add(v);
-      if (depth > 4) continue;
-
-      if (Array.isArray(v) && v.length && looksLikeBarObj(v[0])) return v;
-
-      const keys = Object.keys(v);
-      for (const k of keys) {
-        const child = v[k];
-        if (child && typeof child === "object") q.push({ v: child, depth: depth + 1 });
-      }
-    }
-    return [];
-  }
-
-  // -----------------------------
-  // Normalize bars (supports many schemas)
+  // Normalizers (HARDENED)
   // -----------------------------
   function normalizeBars(payload) {
-    const raw = findBarsArray(payload) || [];
+    // Compatible schemas:
+    // - payload.results
+    // - payload.bars
+    // - payload.data.results
+    // - payload.data.bars
+    // - payload.values
+    // - payload.data.values
+    // - payload.data.data.values
+    const raw =
+      Array.isArray(payload) ? payload :
+      Array.isArray(payload?.results) ? payload.results :
+      Array.isArray(payload?.bars) ? payload.bars :
+      Array.isArray(payload?.data?.results) ? payload.data.results :
+      Array.isArray(payload?.data?.bars) ? payload.data.bars :
+      Array.isArray(payload?.values) ? payload.values :
+      Array.isArray(payload?.data?.values) ? payload.data.values :
+      Array.isArray(payload?.data?.data?.values) ? payload.data.data.values :
+      [];
 
     const bars = (raw || [])
       .map((b) => {
         const tRaw =
-          b?.time ?? b?.t ?? b?.timestamp ?? b?.ts ?? b?.date ?? b?.datetime ?? b?.datetime_utc ??
+          b?.time ?? b?.t ?? b?.timestamp ?? b?.ts ??
+          b?.date ?? b?.datetime ?? b?.datetime_utc ??
           b?.candleTime ?? b?.start ?? b?.end;
 
-        const time = toUnixSec(tRaw);
+        const time = toUnixSecAny(tRaw);
 
         const open  = Number(b?.open  ?? b?.o ?? b?.Open);
         const high  = Number(b?.high  ?? b?.h ?? b?.High);
@@ -310,18 +294,18 @@
     return out;
   }
 
-  // -----------------------------
-  // Signals normalize (supports many wrappers)
-  // -----------------------------
   function normalizeSignals(payload) {
+    // Accept:
+    // - payload.signals / payload.sigs
+    // - payload.data.signals / payload.data.sigs
+    // - payload.result.signals (rare)
     const raw =
-      (Array.isArray(payload) ? payload : null) ||
-      payload?.sigs ||
       payload?.signals ||
-      payload?.data?.sigs ||
+      payload?.sigs ||
       payload?.data?.signals ||
-      payload?.data?.data?.sigs ||
-      payload?.data?.data?.signals ||
+      payload?.data?.sigs ||
+      payload?.result?.signals ||
+      payload?.result?.sigs ||
       [];
 
     if (!Array.isArray(raw)) return [];
@@ -329,9 +313,9 @@
     const out = raw
       .map((s) => {
         const tRaw = s?.time ?? s?.t ?? s?.timestamp ?? s?.ts ?? s?.date ?? s?.datetime;
-        const time = toUnixSec(tRaw);
+        const time = toUnixSecAny(tRaw);
 
-        const sideRaw = String(s?.side ?? s?.type ?? s?.action ?? s?.signal ?? s?.text ?? "").trim();
+        const sideRaw = String(s?.side ?? s?.type ?? s?.action ?? s?.text ?? "").trim();
         const U = sideRaw.toUpperCase();
 
         let side = "";
@@ -367,7 +351,7 @@
   }
 
   // -----------------------------
-  // Non-secret math (EMA/SMA)
+  // Non-secret math
   // -----------------------------
   function ema(values, period) {
     const k = 2 / (period + 1);
@@ -399,12 +383,23 @@
   function buildLinePoints(bars, values) {
     const pts = new Array(bars.length);
     for (let i = 0; i < bars.length; i++) {
-      pts[i] = { time: bars[i].time, value: Number.isFinite(values[i]) ? values[i] : null };
+      const val = Number.isFinite(values[i]) ? values[i] : null;
+      pts[i] = { time: bars[i].time, value: val };
     }
     return pts;
   }
 
-  // Anchor signal price to bar if missing
+  function computeTrend(emaVals) {
+    const n = Math.min(10, emaVals.length - 1);
+    if (n < 2) return { emaSlope: null, emaRegime: "NEUTRAL" };
+    const eNow = emaVals[emaVals.length - 1];
+    const ePrev = emaVals[emaVals.length - 1 - n];
+    if (!Number.isFinite(eNow) || !Number.isFinite(ePrev)) return { emaSlope: null, emaRegime: "NEUTRAL" };
+    const emaSlope = (eNow - ePrev) / n;
+    const emaRegime = emaSlope > 0 ? "UP" : emaSlope < 0 ? "DOWN" : "FLAT";
+    return { emaSlope, emaRegime };
+  }
+
   function enrichSignalsWithPrice(bars, sigs) {
     const map = new Map();
     for (const b of bars) map.set(b.time, b);
@@ -413,56 +408,53 @@
         const b = map.get(s.time);
         if (!b) return null;
         if (Number.isFinite(s.price)) return s;
+
         const side = s.side;
         const anchor =
           (side === "B" || side === "eB") ? b.low :
           (side === "S" || side === "eS") ? b.high :
           b.close;
+
         return Object.assign({}, s, { price: Number(anchor) });
       })
       .filter(Boolean);
   }
 
   // -----------------------------
-  // Markers (small). Big overlay is in market.pulse.js
+  // Markers (FORCE ON to bring signals back)
   // -----------------------------
   function applyMarkers(sigs) {
     safeRun("applyMarkers", () => {
       if (!candleSeries) return;
 
-      // If you only want big overlay, keep small markers off
-      if (window.__OVERLAY_BIG_SIGS__ === true) {
-        candleSeries.setMarkers([]);
-        return;
-      }
-
       const arr = (Array.isArray(sigs) ? sigs : []).filter(s => s && (s.side === "B" || s.side === "S" || s.side === "eB" || s.side === "eS"));
 
-      candleSeries.setMarkers(
-        arr.map((s) => {
-          const isBuy = (s.side === "B" || s.side === "eB");
-          return {
-            time: s.time,
-            position: isBuy ? "belowBar" : "aboveBar",
-            color: isBuy ? "#FFD400" : "#FF5A5A",
-            shape: isBuy ? "arrowUp" : "arrowDown",
-            text: s.side,
-          };
-        })
-      );
+      candleSeries.setMarkers(arr.map((s) => {
+        const isBuy = (s.side === "B" || s.side === "eB");
+        const isEarly = (s.side === "eB" || s.side === "eS");
+
+        return {
+          time: s.time,
+          position: isBuy ? "belowBar" : "aboveBar",
+          color: isBuy ? "#FFD400" : "#FF5A5A",
+          shape: isBuy ? "arrowUp" : "arrowDown",
+          text: isEarly ? s.side : s.side, // show eB/eS explicitly
+        };
+      }));
     });
   }
 
   // -----------------------------
-  // Snapshot publish
+  // Snapshot publish (flat + getSnapshot)
   // -----------------------------
-  function publishSnapshot(flat) {
+  function publishSnapshot(snap) {
     safeRun("publishSnapshot", () => {
-      const frozen = Object.freeze(flat);
+      const frozen = Object.freeze(snap);
       window.__DARRIUS_CHART_STATE__ = frozen;
+
       try {
         window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: frozen }));
-      } catch {}
+      } catch (_) {}
     });
   }
 
@@ -479,11 +471,14 @@
             ema: (obj.ema || []).slice(),
             aux: (obj.aux || []).slice(),
             signals: (obj.signals || []).slice(),
+            trend: Object.assign({}, obj.trend),
+            risk: Object.assign({}, obj.risk),
           };
-        } catch {
+        } catch (_) {
           return null;
         }
       };
+
       if (typeof window.getChartSnapshot !== "function") {
         window.getChartSnapshot = window.DarriusChart.getSnapshot;
       }
@@ -516,57 +511,36 @@
   }
 
   // -----------------------------
-  // Last-good cache (kills "Loading forever")
+  // Data meta (for UI labels)
   // -----------------------------
-  function cacheKey(sym, tf) {
-    return `DARRIUS_LASTGOOD_BARS::${String(sym)}::${String(tf)}`;
-  }
+  function resolveDataMeta(tf, aggPayload) {
+    const dataMode = String(window.__DATA_MODE__ || window.__DATA_SOURCE__ || "").toLowerCase();
+    const delayedMinutesRaw = Number(window.__DELAYED_MINUTES__);
 
-  function saveLastGood(sym, tf, bars) {
-    safeRun("saveLastGood", () => {
-      if (!Array.isArray(bars) || !bars.length) return;
-      const key = cacheKey(sym, tf);
-      const payload = {
-        ts: Date.now(),
-        sym: String(sym),
-        tf: String(tf),
-        bars: bars.slice(-800),
-      };
-      localStorage.setItem(key, JSON.stringify(payload));
-    });
-  }
+    const provider =
+      String(aggPayload?.provider || aggPayload?.source || aggPayload?.data_source || "").trim();
 
-  function loadLastGood(sym, tf) {
-    return safeRun("loadLastGood", () => {
-      const key = cacheKey(sym, tf);
-      const raw = localStorage.getItem(key);
-      if (!raw) return null;
-      const obj = JSON.parse(raw);
-      if (!obj || !Array.isArray(obj.bars) || !obj.bars.length) return null;
-      return obj.bars;
-    });
-  }
+    const source =
+      provider ||
+      String(window.__DATA_SOURCE_NAME__ || window.__DATA_PROVIDER__ || window.__DATA_SOURCE__ || "").trim() ||
+      (dataMode.includes("demo") ? "Local" : "Backend-Proxy");
 
-  // Optional: demo fallback (only if you allow)
-  function genDemoBars(days = 200) {
-    const now = Math.floor(Date.now() / 1000);
-    let price = 100;
-    const out = [];
-    for (let i = days; i >= 0; i--) {
-      const t = now - i * 86400;
-      const drift = (Math.sin(i / 17) * 0.6) + (Math.random() - 0.5) * 1.2;
-      const o = price;
-      const c = Math.max(1, price + drift);
-      const h = Math.max(o, c) + Math.random() * 1.0;
-      const l = Math.min(o, c) - Math.random() * 1.0;
-      price = c;
-      out.push({ time: t, open: o, high: h, low: l, close: c, volume: Math.floor(100000 + Math.random() * 300000) });
+    let delayedMinutes = Number.isFinite(delayedMinutesRaw) ? delayedMinutesRaw : 0;
+    if (!Number.isFinite(delayedMinutesRaw)) {
+      delayedMinutes = dataMode.includes("demo") ? 0 : 15;
+      const t = String(tf || "").toLowerCase();
+      if (t === "1d" || t === "1w" || t === "1m") delayedMinutes = dataMode.includes("demo") ? 0 : 15;
     }
-    return out;
+
+    return {
+      dataMode: dataMode || (source.toLowerCase().includes("local") ? "demo" : "market"),
+      source,
+      delayedMinutes: Math.max(0, Math.floor(delayedMinutes)),
+    };
   }
 
   // -----------------------------
-  // Fetch bars
+  // Core fetch
   // -----------------------------
   async function fetchBars(sym, tf) {
     const cfg = tfToAggParams(tf);
@@ -586,33 +560,21 @@
     const payload = await fetchJson(urlStr);
     window.__LAST_AGG__ = payload;
 
-    // record backend shape to DIAG (what keys exist)
-    DIAG.backendShape = safeRun("shape", () => ({
-      keys: Object.keys(payload || {}),
-      hasResults: Array.isArray(payload?.results),
-      hasDataResults: Array.isArray(payload?.data?.results),
-      hasValues: Array.isArray(payload?.values),
-      hasDataValues: Array.isArray(payload?.data?.values),
-      resultsCount: payload?.resultsCount,
-      status: payload?.status,
-    }));
-
     const bars = normalizeBars(payload);
     return { payload, bars, urlUsed: urlStr };
   }
 
-  // -----------------------------
-  // Fetch signals (best-effort)
-  // -----------------------------
   function buildSigQueryPairs(sym, tf) {
+    const pairs = [];
     const s = encodeURIComponent(sym);
     const t = encodeURIComponent(tf);
-    return [
-      `symbol=${s}&tf=${t}`,
-      `ticker=${s}&tf=${t}`,
-      `symbol=${s}&timeframe=${t}`,
-      `ticker=${s}&timeframe=${t}`,
-    ];
+
+    pairs.push(`symbol=${s}&tf=${t}`);
+    pairs.push(`ticker=${s}&tf=${t}`);
+    pairs.push(`symbol=${s}&timeframe=${t}`);
+    pairs.push(`ticker=${s}&timeframe=${t}`);
+
+    return pairs;
   }
 
   async function fetchSignalsBestEffort(sym, tf) {
@@ -642,17 +604,19 @@
         }
       }
     }
-    return lastErr ? [] : [];
+
+    if (lastErr) return [];
+    return [];
   }
 
   // -----------------------------
-  // Main load (hardened)
+  // Main load
   // -----------------------------
   async function loadOnce() {
     if (!chart || !candleSeries) return;
 
     const sym = getUiSymbol();
-    const tf  = getUiTf();
+    const tf = getUiTf();
 
     window.__CURRENT_SYMBOL__ = sym;
     window.__CURRENT_TIMEFRAME__ = tf;
@@ -670,111 +634,146 @@
       payload = pack.payload;
       bars = pack.bars;
       urlUsed = pack.urlUsed;
-      window.__LAST_AGG_ERR__ = undefined;
     } catch (e) {
       window.__LAST_AGG_ERR__ = {
         message: String(e?.message || e),
         status: e?.status,
         body: String(e?.body || ""),
       };
-    }
 
-    // HARDENED: if backend returns no bars, try last-good cache
-    let barsSource = "backend";
-    if (!Array.isArray(bars) || !bars.length) {
-      const lastGood = loadLastGood(sym, tf);
-      if (Array.isArray(lastGood) && lastGood.length) {
-        bars = lastGood;
-        barsSource = "lastGood";
-      } else if (window.__ALLOW_DEMO_FALLBACK__ === true) {
-        bars = genDemoBars(260);
-        barsSource = "demo";
-      }
-    }
-
-    if (!Array.isArray(bars) || !bars.length) {
-      // still empty: do NOT crash; keep screen informative
-      const msg = "No bars from backend (payload has no array). Check backend /aggregates response.";
-      DIAG.chartError = { message: msg, stack: "" };
-      safeRun("hintFail", () => {
-        if ($("hintText")) $("hintText").textContent = "加载失败：后端未返回蜡烛数组（仅元信息）";
-      });
-      // publish minimal snapshot so UI can stop waiting
-      const flat = {
-        version: "2026.02.03-HARDENED-NO-SECRETS",
+      // Still publish a minimal snapshot so UI doesn't "die waiting"
+      const flatFail = {
+        version: "2026.02.03-HARDENED",
         ts: Date.now(),
         apiBase: API_BASE,
-        urlUsed: urlUsed || window.__LAST_AGG_URL__ || null,
+        urlUsed: window.__LAST_AGG_URL__ || null,
         symbol: sym,
         tf,
+        barsCount: 0,
+        sigsCount: 0,
+        sigs: [],
+        signals: [],
+        trend: { emaSlope: null, emaRegime: "NEUTRAL", emaColor: "NEUTRAL", flipCount: null },
+        risk: { entry: null, stop: null, targets: null, confidence: null, winrate: null },
+        error: { stage: "fetchBars", message: String(e?.message || e) },
+      };
+      publishSnapshot(flatFail);
+
+      safeRun("hintFail", () => {
+        if ($("hintText")) $("hintText").textContent = `加载失败：${e.message || e}`;
+      });
+      throw e;
+    }
+
+    // Meta (data source)
+    const metaDS = resolveDataMeta(tf, payload);
+
+    // If bars empty: do NOT crash forever. Show hint + publish snapshot.
+    if (!bars.length) {
+      const msg = `无K线数据（bars=0）。可能原因：${sym} 不属于 stocks aggregates（如 BTCUSDT），或日期范围/后端数据源不匹配。`;
+      DIAG.chartError = { message: msg, stack: "" };
+
+      safeRun("hintEmptyBars", () => {
+        if ($("hintText")) $("hintText").textContent = msg;
+      });
+
+      const flatEmpty = {
+        version: "2026.02.03-HARDENED",
+        ts: Date.now(),
+        apiBase: API_BASE,
+        urlUsed: urlUsed || null,
+        symbol: sym,
+        tf,
+        dataMode: metaDS.dataMode,
+        source: metaDS.source,
+        delayedMinutes: metaDS.delayedMinutes,
         barsCount: 0,
         bars: [],
         sigsCount: 0,
         sigs: [],
         signals: [],
-        error: msg,
-        backendShape: DIAG.backendShape || null,
+        trend: { emaSlope: null, emaRegime: "NEUTRAL", emaColor: "NEUTRAL", flipCount: null },
+        risk: { entry: null, stop: null, targets: null, confidence: null, winrate: null },
       };
+      publishSnapshot(flatEmpty);
       DIAG.lastBarsCount = 0;
       DIAG.lastSigsCount = 0;
-      DIAG.lastBarsSource = "none";
-      publishSnapshot(flat);
-      return flat;
+      return { bars: 0, sigs: 0, urlUsed };
     }
 
-    // We have bars -> draw main chart (never blocked by signals)
-    DIAG.lastBarsSource = barsSource;
-
+    // MAIN series data
     candleSeries.setData(bars);
 
+    // EMA
     const closes = bars.map(b => b.close);
     const emaVals = ema(closes, EMA_PERIOD);
     const emaPts  = buildLinePoints(bars, emaVals);
     emaSeries.setData(emaPts);
 
-    const auxVals = sma(closes, AUX_PERIOD);
-    const auxPts  = buildLinePoints(bars, auxVals);
-    auxSeries.setData(auxPts);
+    // AUX: backend aux if exists, else SMA placeholder
+    if (Array.isArray(payload?.aux)) {
+      if (payload.aux.length && typeof payload.aux[0] === "object") {
+        auxSeries.setData(payload.aux);
+      } else {
+        const auxVals = payload.aux.map(Number);
+        auxSeries.setData(buildLinePoints(bars, auxVals));
+      }
+    } else {
+      const auxVals = sma(closes, AUX_PERIOD);
+      auxSeries.setData(buildLinePoints(bars, auxVals));
+    }
 
-    // volume optional
+    // Volume: OFF by default (avoid "many columns")
+    const WANT_VOLUME = (window.__SHOW_VOLUME__ === true);
     safeRun("volume", () => {
       if (!volumeSeries) return;
+      volumeSeries.applyOptions({ visible: !!WANT_VOLUME });
+      if (!WANT_VOLUME) return;
+
       const vol = bars
         .filter(b => Number.isFinite(b.volume))
         .map(b => ({ time: b.time, value: b.volume }));
       if (vol.length) volumeSeries.setData(vol);
     });
 
-    // Save last-good bars (so next time backend empty won't kill UI)
-    saveLastGood(sym, tf, bars);
-
-    // Signals best-effort: 1) from agg payload 2) from sigs endpoint
-    let sigs = normalizeSignals(payload || {});
+    // Signals
+    let sigs = normalizeSignals(payload);
     if (!sigs.length) {
       const fetched = await fetchSignalsBestEffort(sym, tf);
       if (fetched.length) sigs = fetched;
     }
+
     const richSignals = enrichSignalsWithPrice(bars, sigs);
 
-    // Apply markers (small)
+    // Force markers ON
     applyMarkers(richSignals);
 
+    // Fit chart
     safeRun("fitContent", () => chart.timeScale().fitContent());
+
+    // Trend summary
+    const t = computeTrend(emaVals);
+    const trend = {
+      emaSlope: t.emaSlope,
+      emaRegime: t.emaRegime,
+      emaColor: t.emaRegime === "UP" ? "GREEN" : t.emaRegime === "DOWN" ? "RED" : "NEUTRAL",
+      flipCount: null,
+    };
+
+    const risk = { entry: null, stop: null, targets: null, confidence: null, winrate: null };
 
     // Top text
     safeRun("topText", () => {
       const last = bars[bars.length - 1];
       if ($("symText")) $("symText").textContent = sym;
       if ($("priceText") && last) $("priceText").textContent = Number(last.close).toFixed(2);
-
       if ($("hintText")) {
-        const sigTag = richSignals.length ? `sigs=${richSignals.length}` : "sigs=0";
         $("hintText").textContent =
-          `Loaded · bars=${bars.length} · ${sigTag} · source=${barsSource}`;
+          `Loaded · bars=${bars.length} · sigs=${richSignals.length} · source=${metaDS.source}`;
       }
     });
 
-    // Snapshot for UI overlay
+    // Snapshot object for DarriusChart.getSnapshot()
     const snapObj = {
       version: "snapshot_hardened_no_secrets",
       ts: Date.now(),
@@ -782,33 +781,43 @@
         symbol: sym,
         timeframe: tf,
         bars: bars.length,
-        urlUsed: urlUsed || null,
-        barsSource,
+        source: metaDS.source,
+        dataMode: metaDS.dataMode,
+        delayedMinutes: metaDS.delayedMinutes,
         emaPeriod: EMA_PERIOD,
         auxPeriod: AUX_PERIOD,
+        confirmWindow: CONFIRM_WINDOW,
+        urlUsed: urlUsed || null,
+        provider: String(payload?.provider || payload?.source || "") || null,
       },
       candles: bars,
       ema: emaPts,
-      aux: auxPts,
+      aux: [], // not needed by UI directly
       signals: richSignals,
+      trend,
+      risk,
     };
     setGetSnapshotObject(snapObj);
 
+    // Flat snapshot
     const flat = {
-      version: "2026.02.03-HARDENED-NO-SECRETS",
+      version: "2026.02.03-HARDENED",
       ts: Date.now(),
       apiBase: API_BASE,
-      urlUsed: urlUsed || window.__LAST_AGG_URL__ || null,
+      urlUsed: urlUsed || null,
       symbol: sym,
       tf,
-      barsSource,
+      dataMode: metaDS.dataMode,
+      source: metaDS.source,
+      delayedMinutes: metaDS.delayedMinutes,
       barsCount: bars.length,
-      bars: bars.slice(-800),
+      bars: bars.slice(Math.max(0, bars.length - 600)),
       sigsCount: richSignals.length,
-      sigs: richSignals.slice(-500),
-      signals: richSignals.slice(-500),
+      sigs: richSignals.slice(Math.max(0, richSignals.length - 400)),
+      signals: richSignals.slice(Math.max(0, richSignals.length - 400)),
+      trend,
+      risk,
       lastClose: bars[bars.length - 1].close,
-      backendShape: DIAG.backendShape || null,
     };
 
     DIAG.lastBarsCount = bars.length;
@@ -816,14 +825,15 @@
 
     publishSnapshot(flat);
     applyToggles();
-    return flat;
+
+    return { bars: bars.length, sigs: richSignals.length, urlUsed };
   }
 
   async function load() {
-    if (_inFlight) return;
-    _inFlight = true;
+    if (_pollInFlight) return;
+    _pollInFlight = true;
     try { return await loadOnce(); }
-    finally { _inFlight = false; }
+    finally { _pollInFlight = false; }
   }
 
   // -----------------------------
@@ -836,7 +846,10 @@
   }
 
   function stopPolling() {
-    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+    if (_pollTimer) {
+      clearInterval(_pollTimer);
+      _pollTimer = null;
+    }
   }
 
   // -----------------------------
@@ -886,31 +899,45 @@
       lastValueVisible: false,
     });
 
+    // volume series exists but default hidden
     volumeSeries = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
       priceScaleId: "",
       scaleMargins: { top: 0.82, bottom: 0 },
     });
+    volumeSeries.applyOptions({ visible: false });
 
-    // Bridge for overlay
+    // Coordinate bridge (for overlay)
     safeRun("bridgeExpose", () => {
       window.DarriusChart = window.DarriusChart || {};
-      window.DarriusChart.timeToX = (t) => safeRun("timeToX", () => chart.timeScale().timeToCoordinate(t));
-      window.DarriusChart.priceToY = (p) => safeRun("priceToY", () => candleSeries.priceToCoordinate(p));
+
+      window.DarriusChart.timeToX = (t) =>
+        safeRun("timeToX", () => {
+          if (!chart || !chart.timeScale) return null;
+          return chart.timeScale().timeToCoordinate(t);
+        });
+
+      window.DarriusChart.priceToY = (p) =>
+        safeRun("priceToY", () => {
+          if (!candleSeries || !candleSeries.priceToCoordinate) return null;
+          return candleSeries.priceToCoordinate(p);
+        });
+
       window.DarriusChart.__hostId = containerId || "chart";
     });
 
-    const resize = () => safeRun("resize", () => {
-      const r = containerEl.getBoundingClientRect();
-      chart.applyOptions({
-        width: Math.max(1, Math.floor(r.width)),
-        height: Math.max(1, Math.floor(r.height)),
+    const resize = () =>
+      safeRun("resize", () => {
+        const r = containerEl.getBoundingClientRect();
+        chart.applyOptions({
+          width: Math.max(1, Math.floor(r.width)),
+          height: Math.max(1, Math.floor(r.height)),
+        });
       });
-    });
 
     safeRun("observeResize", () => {
       try { new ResizeObserver(resize).observe(containerEl); }
-      catch { window.addEventListener("resize", resize); }
+      catch (_) { window.addEventListener("resize", resize); }
     });
     resize();
 
@@ -925,12 +952,14 @@
     $("tgAux")?.addEventListener("change", applyToggles);
     $("auxCheck")?.addEventListener("change", applyToggles);
 
+    // Auto-load
     if (opts.autoLoad !== false) {
       load().catch((e) => {
         DIAG.chartError = { message: String(e?.message || e), stack: String(e?.stack || "") };
       });
     }
 
+    // Optional polling
     if (opts.pollMs) startPolling(opts.pollMs);
   }
 
@@ -940,7 +969,9 @@
         return window.DarriusChart.getSnapshot();
       }
       return window.__DARRIUS_CHART_STATE__ || null;
-    } catch { return null; }
+    } catch (_) {
+      return null;
+    }
   }
 
   window.ChartCore = { init, load, applyToggles, getSnapshot, startPolling, stopPolling };
