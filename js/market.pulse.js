@@ -1,36 +1,65 @@
 /* =========================================================================
- * market.pulse.js (FORCE-ROBUST LEFT PANEL) v2026.02.03
- * Purpose:
- *  - Only fill LEFT PANEL: Market Pulse / Risk Copilot / Waiting
- *  - UI-only, never touches chart rendering / billing / subscription
- *  - Robust snapshot detection + robust DOM row mapping (no hardcoded IDs)
+ * market.pulse.js (SAFE APPEND-ONLY) v2026.02.03
+ * - Never overwrites existing module DOM (no textContent on containers)
+ * - Only APPENDS tiny dynamic rows into each module
+ * - UI-only: does not touch chart rendering / billing / subscription
  * ========================================================================= */
 (() => {
   'use strict';
 
-  // -----------------------------
-  // Absolute no-throw safe zone
-  // -----------------------------
   function safe(fn, fallback = null) {
     try { return fn(); } catch (e) { return fallback; }
   }
 
+  const fmt = (n, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '—');
+  const pct = (n, d = 0) => (Number.isFinite(n) ? (n * 100).toFixed(d) + '%' : '—');
+
   // -----------------------------
-  // Find LEFT PANEL container (yellow box area)
+  // Find module by title text
   // -----------------------------
-  function getLeftPanelRoot() {
-    // Try common containers; fallback to whole document
-    return (
-      document.querySelector('#left-panel') ||
-      document.querySelector('.left-panel') ||
-      document.querySelector('.sidebar-left') ||
-      document.querySelector('aside') ||
-      document.body
-    );
+  function findModuleByTitle(includesList) {
+    const all = Array.from(document.querySelectorAll('div,section,aside'));
+    // choose the smallest container that contains title text
+    let best = null;
+    for (const el of all) {
+      const t = (el.textContent || '').trim();
+      if (!t) continue;
+      if (!includesList.some(k => t.includes(k))) continue;
+
+      // heuristic: module containers are not too huge
+      const area = (el.offsetWidth || 0) * (el.offsetHeight || 0);
+      if (!best || area < best.area) best = { el, area };
+    }
+    return best ? best.el : null;
   }
 
   // -----------------------------
-  // Snapshot: ultra-robust getter
+  // Create or get an injected panel inside a module
+  // -----------------------------
+  function ensureInjectedBox(moduleEl, boxId) {
+    if (!moduleEl) return null;
+
+    let box = moduleEl.querySelector(`#${boxId}`);
+    if (box) return box;
+
+    box = document.createElement('div');
+    box.id = boxId;
+    box.style.marginTop = '8px';
+    box.style.padding = '8px 10px';
+    box.style.border = '1px solid rgba(255,255,255,0.10)';
+    box.style.borderRadius = '10px';
+    box.style.background = 'rgba(0,0,0,0.25)';
+    box.style.fontSize = '12px';
+    box.style.lineHeight = '1.45';
+    box.style.color = 'rgba(255,255,255,0.85)';
+
+    // append near bottom but inside module
+    moduleEl.appendChild(box);
+    return box;
+  }
+
+  // -----------------------------
+  // Snapshot getter (conservative + explicit)
   // -----------------------------
   function normalizeCandles(arr) {
     if (!Array.isArray(arr)) return [];
@@ -69,48 +98,26 @@
       safe(() => raw.meta && (raw.meta.timeframe || raw.meta.tf), null) ||
       '—';
 
-    const lastPrice = norm[norm.length - 1].c;
-
-    return { symbol, timeframe: tf, candles: norm, lastPrice, raw };
+    return { symbol, timeframe: tf, candles: norm, lastPrice: norm[norm.length - 1].c, raw };
   }
 
-  function scanWindowForSnapshot() {
-    // Scan a handful of likely global names first
-    const candidates = [
-      safe(() => window.DarriusChart && window.DarriusChart.getSnapshot && window.DarriusChart.getSnapshot(), null),
-      safe(() => window.__DARRIUS_CHART_STATE__, null),
-      safe(() => window.__DARRIUS_CHART_SNAPSHOT__, null),
-      safe(() => window.__CHART_SNAPSHOT__, null),
-      safe(() => window.__SNAPSHOT__, null),
-      safe(() => window.__STATE__, null),
-    ];
-    for (const c of candidates) {
-      const s = normalizeSnapshot(c);
-      if (s) return { snap: s, hint: 'direct' };
-    }
+  function getSnapshot() {
+    // Most reliable: DarriusChart.getSnapshot
+    const s1 = safe(() => window.DarriusChart && window.DarriusChart.getSnapshot && window.DarriusChart.getSnapshot(), null);
+    const n1 = normalizeSnapshot(s1);
+    if (n1) return { snap: n1, hint: 'DarriusChart.getSnapshot()' };
 
-    // If still none, scan window keys (bounded) for any object that looks like candles
-    const keys = Object.keys(window);
-    // Keep it cheap: only scan keys that look relevant
-    const likely = keys.filter(k =>
-      /snapshot|state|chart|darr|ohlc|candle|bar/i.test(k)
-    ).slice(0, 80);
+    // Fallback: explicit global
+    const s2 = safe(() => window.__DARRIUS_CHART_STATE__, null);
+    const n2 = normalizeSnapshot(s2);
+    if (n2) return { snap: n2, hint: '__DARRIUS_CHART_STATE__' };
 
-    for (const k of likely) {
-      const v = safe(() => window[k], null);
-      const s = normalizeSnapshot(v);
-      if (s) return { snap: s, hint: `window.${k}` };
-    }
-
-    return { snap: null, hint: `no snapshot found; scanned ${likely.length} keys` };
+    return { snap: null, hint: 'snapshot not exposed' };
   }
 
   // -----------------------------
-  // Compute: Market Pulse (simple, explainable)
+  // Compute Market Pulse
   // -----------------------------
-  const fmt = (n, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '—');
-  const pct = (n, d = 0) => (Number.isFinite(n) ? (n * 100).toFixed(d) + '%' : '—');
-
   function computeMarketPulse(candles) {
     if (!candles || candles.length < 30) return null;
 
@@ -132,14 +139,13 @@
     const slope = (n*sxy - sx*sy) / denom;
     const slopeN = slope / (last.c || 1);
 
-    // net inflow approx: up-volume - down-volume (20 bars)
+    // net inflow approx: up-volume - down-volume
     let upV=0, dnV=0;
     for (const b of seg) {
       if (b.c >= b.o) upV += (b.v||0); else dnV += (b.v||0);
     }
     const netInflow = upV - dnV;
 
-    // score
     const score = (slopeN*200) + (ret20*80) + (ret1*40);
     let label = 'Neutral';
     if (score > 3) label = 'Bullish';
@@ -153,7 +159,7 @@
   }
 
   // -----------------------------
-  // Compute: Risk Copilot (ATR-based, conservative)
+  // Compute Risk Copilot (ATR-based)
   // -----------------------------
   function computeRiskCopilot(candles) {
     if (!candles || candles.length < 30) return null;
@@ -178,11 +184,9 @@
 
     const stop = Number.isFinite(atr) ? (entry - 1.5 * atr) : NaN;
     const r = Number.isFinite(stop) ? (entry - stop) : NaN;
-
     const t1 = Number.isFinite(r) ? (entry + 1.0 * r) : NaN;
     const t2 = Number.isFinite(r) ? (entry + 2.0 * r) : NaN;
 
-    // confidence: up-bar ratio last 20
     const seg = candles.slice(-20);
     let up = 0;
     for (const b of seg) if (b.c >= b.o) up++;
@@ -192,125 +196,71 @@
   }
 
   // -----------------------------
-  // DOM row writer (no hardcoded ids)
-  // It finds a row by label text, then replaces right-side value (—)
-  // -----------------------------
-  function findModuleByTitle(root, titleIncludes) {
-    const nodes = Array.from(root.querySelectorAll('*'));
-    return nodes.find(n => {
-      const t = (n.textContent || '').trim();
-      return titleIncludes.some(x => t.includes(x));
-    }) || null;
-  }
-
-  function setRowValue(root, labelTextList, valueText) {
-    if (!root) return false;
-    const nodes = Array.from(root.querySelectorAll('*'));
-    // find the element that contains the label, then try to locate a sibling value area
-    for (const n of nodes) {
-      const txt = (n.textContent || '').trim();
-      if (!txt) continue;
-      if (labelTextList.some(k => txt === k || txt.includes(k))) {
-        // Try: same row container = parent
-        const row = n.closest('div') || n.parentElement;
-        if (!row) continue;
-
-        // Heuristic: pick the last child that looks like a value
-        const candidates = Array.from(row.querySelectorAll('span,div')).filter(x => x !== n);
-        // prefer right-aligned / short text nodes
-        let target = candidates.reverse().find(x => {
-          const t2 = (x.textContent || '').trim();
-          return t2 === '—' || t2 === '-' || t2.length <= 12;
-        }) || candidates[0];
-
-        if (target) {
-          target.textContent = valueText;
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  function setWaiting(root, on, text) {
-    // try find "Waiting..." block by containing text
-    const nodes = Array.from(root.querySelectorAll('*'));
-    const w = nodes.find(n => (n.textContent || '').includes('Waiting')) ||
-              nodes.find(n => (n.textContent || '').includes('等待')) ||
-              null;
-    if (w) {
-      // show it / update it
-      w.style.opacity = on ? '1' : '0.6';
-      // update nearby detail line
-      const parent = w.closest('div') || w.parentElement;
-      if (parent) {
-        const detail = Array.from(parent.querySelectorAll('div,span')).find(x => (x.textContent||'').includes('confirmation') || (x.textContent||'').includes('确认') || (x.textContent||'').includes('Waiting for'));
-        if (detail) detail.textContent = text;
-      }
-    }
-  }
-
-  // -----------------------------
-  // Render
+  // Render (append-only)
   // -----------------------------
   function render() {
-    const root = getLeftPanelRoot();
+    const mpModule = findModuleByTitle(['Market Pulse', '市场情绪']);
+    const rcModule = findModuleByTitle(['Risk Copilot', '风险助手']);
+    const wModule  = findModuleByTitle(['Waiting', '等待']);
 
-    const { snap, hint } = scanWindowForSnapshot();
+    const mpBox = ensureInjectedBox(mpModule, 'mp_injected_box');
+    const rcBox = ensureInjectedBox(rcModule, 'rc_injected_box');
+    const wBox  = ensureInjectedBox(wModule,  'w_injected_box');
+
+    const { snap, hint } = getSnapshot();
+
     if (!snap) {
-      setWaiting(root, true, `No snapshot yet (${hint}).`);
-      // also put dashes explicitly (optional)
+      if (wBox) {
+        wBox.innerHTML =
+          `<div style="opacity:.9">Status: <b>NO SNAPSHOT</b></div>
+           <div style="opacity:.75;margin-top:4px">Hint: ${hint}</div>
+           <div style="opacity:.75;margin-top:4px">Fix: chart.core.js must expose <code>window.__DARRIUS_CHART_STATE__</code> or provide <code>DarriusChart.getSnapshot()</code>.</div>`;
+      }
+      if (mpBox) mpBox.innerHTML = `<div style="opacity:.8">Market Pulse: — (waiting snapshot)</div>`;
+      if (rcBox) rcBox.innerHTML = `<div style="opacity:.8">Risk Copilot: — (waiting snapshot)</div>`;
       return;
     }
 
-    setWaiting(root, false, `Snapshot OK: ${snap.symbol} ${snap.timeframe} (${hint})`);
+    if (wBox) {
+      wBox.innerHTML =
+        `<div style="opacity:.9">Status: <b>SNAPSHOT OK</b></div>
+         <div style="opacity:.75;margin-top:4px">Symbol: ${snap.symbol} &nbsp; TF: ${snap.timeframe} &nbsp; Last: ${fmt(snap.lastPrice, 2)}</div>
+         <div style="opacity:.75;margin-top:4px">Source: ${hint}</div>`;
+    }
 
     const mp = computeMarketPulse(snap.candles);
     const rc = computeRiskCopilot(snap.candles);
 
-    // Market Pulse module block (title in screenshot: "Market Pulse - 市场情绪")
-    // write values by label text
-    if (mp) {
-      setRowValue(root, ['Bullish'], pct(mp.bull, 0));
-      setRowValue(root, ['Bearish'], pct(mp.bear, 0));
-      setRowValue(root, ['Neutral'], pct(mp.neu, 0));
-      setRowValue(root, ['Net Inflow'], Number.isFinite(mp.netInflow) ? Math.round(mp.netInflow).toLocaleString() : '—');
-      // ring center “Sentiment” text often shows as dash; try set it
-      setRowValue(root, ['Sentiment'], mp.label);
+    if (mpBox && mp) {
+      mpBox.innerHTML =
+        `<div><b>Sentiment:</b> ${mp.label}</div>
+         <div style="margin-top:4px;opacity:.9">Bullish: ${pct(mp.bull,0)} &nbsp; Bearish: ${pct(mp.bear,0)} &nbsp; Neutral: ${pct(mp.neu,0)}</div>
+         <div style="margin-top:4px;opacity:.9">Net Inflow (20 bars): ${Number.isFinite(mp.netInflow) ? Math.round(mp.netInflow).toLocaleString() : '—'}</div>`;
     }
 
-    // Risk Copilot module block (title: "Risk Copilot - 风险助手")
-    if (rc) {
-      setRowValue(root, ['Entry', '入场'], fmt(rc.entry, 2));
-      setRowValue(root, ['Stop', '止损'], fmt(rc.stop, 2));
-      setRowValue(root, ['Targets', '目标'], `${fmt(rc.t1, 2)} / ${fmt(rc.t2, 2)}`);
-      setRowValue(root, ['Confidence', '强度'], pct(rc.confidence, 0));
-      // Backtest WinRate 不要伪造，给 —
-      setRowValue(root, ['Backtest', '回测胜率'], '—');
+    if (rcBox && rc) {
+      rcBox.innerHTML =
+        `<div><b>Entry:</b> ${fmt(rc.entry,2)} &nbsp; <b>Stop:</b> ${fmt(rc.stop,2)}</div>
+         <div style="margin-top:4px;opacity:.9"><b>Targets:</b> ${fmt(rc.t1,2)} / ${fmt(rc.t2,2)}</div>
+         <div style="margin-top:4px;opacity:.9"><b>Confidence:</b> ${pct(rc.confidence,0)} &nbsp; <span style="opacity:.7">(derived)</span></div>`;
     }
   }
 
   // -----------------------------
-  // Bind to chart updates (multiple possible event names)
+  // Bind to chart update events + retry init
   // -----------------------------
   function bind() {
-    const evs = [
-      'darrius:chartUpdated',
-      'darrius:updated',
-      'chartUpdated',
-      'chart:updated'
-    ];
+    const evs = ['darrius:chartUpdated', 'chartUpdated', 'chart:updated'];
     evs.forEach(e => window.addEventListener(e, () => safe(render), { passive: true }));
 
-    // also render immediately + retry (in case chart initializes later)
     render();
+
     let tries = 0;
     const timer = setInterval(() => {
       tries++;
       render();
-      if (tries >= 20) clearInterval(timer);
-      const { snap } = scanWindowForSnapshot();
-      if (snap && snap.candles && snap.candles.length > 10) clearInterval(timer);
+      const { snap } = getSnapshot();
+      if (snap || tries >= 20) clearInterval(timer);
     }, 500);
   }
 
