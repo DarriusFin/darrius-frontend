@@ -1,9 +1,9 @@
 /* =========================================================================
- * market.pulse.js (LAYOUT-SAFE PATCH) v2026.02.03
- * - ZERO DOM insertion (no appendChild)
- * - ZERO container text overwrite
- * - Only replaces existing right-side value placeholders ("—" / "-")
- * - UI-only; never touches chart rendering / billing / subscription
+ * market.pulse.js (HIT-STRONG / LAYOUT-SAFE) v2026.02.03
+ * - ZERO DOM insertion
+ * - ZERO container overwrite
+ * - Replaces ONLY existing value placeholders inside each module
+ * - Shows tiny status in Waiting line (no layout break)
  * ========================================================================= */
 (() => {
   'use strict';
@@ -13,7 +13,7 @@
   const pct = (n, d = 0) => (Number.isFinite(n) ? (n * 100).toFixed(d) + '%' : '—');
 
   // -----------------------------
-  // Snapshot (prefer DarriusChart.getSnapshot, fallback __DARRIUS_CHART_STATE__)
+  // Snapshot
   // -----------------------------
   function normalizeCandles(arr) {
     if (!Array.isArray(arr)) return [];
@@ -55,20 +55,20 @@
     return { symbol, timeframe: tf, candles: norm, lastPrice: norm[norm.length - 1].c };
   }
 
-  function getSnapshot() {
+  function getSnapshotWithHint() {
     const s1 = safe(() => window.DarriusChart && window.DarriusChart.getSnapshot && window.DarriusChart.getSnapshot(), null);
     const n1 = normalizeSnapshot(s1);
-    if (n1) return n1;
+    if (n1) return { snap: n1, hint: 'DarriusChart.getSnapshot' };
 
     const s2 = safe(() => window.__DARRIUS_CHART_STATE__, null);
     const n2 = normalizeSnapshot(s2);
-    if (n2) return n2;
+    if (n2) return { snap: n2, hint: '__DARRIUS_CHART_STATE__' };
 
-    return null;
+    return { snap: null, hint: 'no snapshot' };
   }
 
   // -----------------------------
-  // Compute values (simple derived, consistent with candles)
+  // Compute
   // -----------------------------
   function computeMarketPulse(candles) {
     if (!candles || candles.length < 30) return null;
@@ -81,7 +81,7 @@
     const ret1 = (last.c - prev.c) / (prev.c || last.c);
     const ret20 = (last.c - seg[0].c) / (seg[0].c || last.c);
 
-    // slope (normalized) on last 20 closes
+    // slope normalized
     let sx=0, sy=0, sxx=0, sxy=0;
     for (let i=0;i<seg.length;i++){
       const x=i, y=seg[i].c;
@@ -91,7 +91,7 @@
     const slope = (n*sxy - sx*sy) / denom;
     const slopeN = slope / (last.c || 1);
 
-    // net inflow approx: upV - downV
+    // net inflow approx
     let upV=0, dnV=0;
     for (const b of seg) {
       if (b.c >= b.o) upV += (b.v||0); else dnV += (b.v||0);
@@ -145,80 +145,113 @@
   }
 
   // -----------------------------
-  // Layout-safe DOM mapping:
-  // find a label element inside LEFT sidebar and replace its row's value element only
+  // Find module containers by title text (stable)
   // -----------------------------
-  function findLeftSidebarRoot() {
-    // pick the most likely left sidebar container (narrow column on the left)
-    const candidates = Array.from(document.querySelectorAll('aside, .left, .sidebar, .sidebar-left, #left, #left-panel, .panel-left, .side'));
-    // choose smallest width > 150
+  function findModuleByTitleText(titleIncludes) {
+    const blocks = Array.from(document.querySelectorAll('div,section,aside'));
     let best = null;
-    for (const el of candidates) {
-      const w = el.getBoundingClientRect ? el.getBoundingClientRect().width : 0;
-      if (w < 150 || w > 450) continue;
-      if (!best || w < best.w) best = { el, w };
-    }
-    return best ? best.el : document.body;
-  }
 
-  function findRowValueEl(labelEl) {
-    if (!labelEl) return null;
-
-    // Row container: nearest div (or li) that likely holds "label + value"
-    const row = labelEl.closest('div') || labelEl.closest('li') || labelEl.parentElement;
-    if (!row) return null;
-
-    // In that row, find a value node that is NOT the labelEl and looks like placeholder
-    const nodes = Array.from(row.querySelectorAll('span,div'));
-    // Prefer exact placeholder
-    let val = nodes.find(n => n !== labelEl && ['—','-','--',''].includes((n.textContent||'').trim()));
-    if (val) return val;
-
-    // Fallback: rightmost short text node
-    val = nodes.reverse().find(n => n !== labelEl && (n.textContent||'').trim().length <= 12);
-    return val || null;
-  }
-
-  function setValueByLabel(sidebarRoot, labelKeywords, valueText) {
-    const all = Array.from(sidebarRoot.querySelectorAll('span,div'));
-    for (const el of all) {
+    for (const el of blocks) {
       const t = (el.textContent || '').trim();
       if (!t) continue;
+      if (!titleIncludes.some(k => t.includes(k))) continue;
 
-      // match: exact or includes
+      // Prefer medium sized card-like containers
+      const r = el.getBoundingClientRect ? el.getBoundingClientRect() : { width: 0, height: 0 };
+      const area = r.width * r.height;
+      if (r.width < 180 || r.width > 420) continue;
+      if (area < 20000 || area > 250000) continue;
+
+      if (!best || area < best.area) best = { el, area };
+    }
+
+    // fallback: first match
+    if (!best) {
+      const el = blocks.find(x => {
+        const t = (x.textContent || '').trim();
+        return titleIncludes.some(k => t.includes(k));
+      });
+      return el || null;
+    }
+    return best.el;
+  }
+
+  // -----------------------------
+  // Robust row value replace inside a module
+  // -----------------------------
+  const PLACEHOLDERS = new Set(['—', '-', '--', '–', '— —', '']);
+
+  function looksLikePlaceholderText(s) {
+    const t = (s || '').trim();
+    if (PLACEHOLDERS.has(t)) return true;
+    // some UI uses short blanks
+    return t.length <= 2 && /^[—\-–]*$/.test(t);
+  }
+
+  function findValueNearLabel(labelEl) {
+    if (!labelEl) return null;
+
+    // climb up a few levels to find a "row" that contains a placeholder value
+    let cur = labelEl;
+    for (let i=0; i<5 && cur; i++) {
+      const row = cur.closest('div') || cur.closest('li') || cur.parentElement;
+      if (!row) break;
+
+      const candidates = Array.from(row.querySelectorAll('span,div')).filter(n => n !== labelEl);
+      // prefer placeholder node
+      let val = candidates.find(n => looksLikePlaceholderText(n.textContent));
+      if (val) return val;
+
+      // if no placeholder, prefer rightmost small node
+      val = candidates.reverse().find(n => ((n.textContent||'').trim().length <= 12));
+      if (val) return val;
+
+      cur = row.parentElement;
+    }
+
+    // last resort: next siblings
+    let sib = labelEl.nextElementSibling;
+    while (sib) {
+      if (sib.matches('span,div') && (looksLikePlaceholderText(sib.textContent) || (sib.textContent||'').trim().length <= 12)) return sib;
+      sib = sib.nextElementSibling;
+    }
+
+    return null;
+  }
+
+  function setInModule(moduleEl, labelKeywords, valueText) {
+    if (!moduleEl) return false;
+    const nodes = Array.from(moduleEl.querySelectorAll('span,div'));
+
+    for (const n of nodes) {
+      const t = (n.textContent || '').trim();
+      if (!t) continue;
       if (!labelKeywords.some(k => t === k || t.includes(k))) continue;
 
-      const valEl = findRowValueEl(el);
-      if (valEl) {
-        valEl.textContent = valueText;
+      const v = findValueNearLabel(n);
+      if (v) {
+        v.textContent = valueText;
         return true;
       }
     }
     return false;
   }
 
-  function setSentimentCenterText(sidebarRoot, valueText) {
-    // Center text often is a single "—" inside the ring area; safer: find "Sentiment" label row first
-    const ok = setValueByLabel(sidebarRoot, ['Sentiment'], valueText);
-    if (ok) return true;
+  function setSentimentCenter(moduleEl, valueText) {
+    // Try row "Sentiment" first
+    if (setInModule(moduleEl, ['Sentiment'], valueText)) return true;
 
-    // fallback: find the biggest ring container and then find a child with placeholder "—"
-    const rings = Array.from(sidebarRoot.querySelectorAll('div')).filter(d => {
-      const r = d.getBoundingClientRect ? d.getBoundingClientRect() : { width: 0, height: 0 };
-      return r.width >= 80 && r.height >= 80 && r.width <= 220 && r.height <= 220;
-    });
-    const ring = rings[0];
-    if (!ring) return false;
-    const kids = Array.from(ring.querySelectorAll('span,div'));
-    const target = kids.find(k => (k.textContent || '').trim() === '—');
+    // Otherwise: find a standalone placeholder inside the ring
+    const nodes = Array.from(moduleEl.querySelectorAll('span,div'));
+    const target = nodes.find(n => (n.textContent || '').trim() === '—' && n.getBoundingClientRect && n.getBoundingClientRect().width <= 80);
     if (target) { target.textContent = valueText; return true; }
     return false;
   }
 
-  function updateWaiting(sidebarRoot, text) {
-    // ONLY update the line that contains "Waiting for confirmation" (don’t touch the container)
-    const nodes = Array.from(sidebarRoot.querySelectorAll('div,span'));
-    const line = nodes.find(n => {
+  function updateWaitingLine(waitingModule, text) {
+    if (!waitingModule) return;
+    const lines = Array.from(waitingModule.querySelectorAll('div,span'));
+    const line = lines.find(n => {
       const t = (n.textContent || '');
       return t.includes('Waiting for confirmation') || t.includes('Waiting for') || t.includes('等待确认');
     });
@@ -229,36 +262,34 @@
   // Render
   // -----------------------------
   function render() {
-    const sidebar = findLeftSidebarRoot();
-    const snap = getSnapshot();
+    const mpModule = findModuleByTitleText(['Market Pulse', '市场情绪']);
+    const rcModule = findModuleByTitleText(['Risk Copilot', '风险助手']);
+    const wModule  = findModuleByTitleText(['Waiting', '等待']);
 
+    const { snap, hint } = getSnapshotWithHint();
     if (!snap) {
-      updateWaiting(sidebar, 'Waiting for confirmation... (no snapshot exposed)');
-      // keep placeholders as-is
+      updateWaitingLine(wModule, `Waiting for confirmation... (${hint})`);
       return;
     }
+
+    updateWaitingLine(wModule, `Ready (${hint}) · ${snap.symbol} ${snap.timeframe} · ${fmt(snap.lastPrice,2)}`);
 
     const mp = computeMarketPulse(snap.candles);
     const rc = computeRiskCopilot(snap.candles);
 
-    updateWaiting(sidebar, `Ready: ${snap.symbol} ${snap.timeframe}  Last ${fmt(snap.lastPrice,2)}`);
-
-    // Market Pulse
-    if (mp) {
-      setSentimentCenterText(sidebar, mp.label);
-      setValueByLabel(sidebar, ['Bullish'], pct(mp.bull, 0));
-      setValueByLabel(sidebar, ['Bearish'], pct(mp.bear, 0));
-      setValueByLabel(sidebar, ['Neutral'], pct(mp.neu, 0));
-      setValueByLabel(sidebar, ['Net Inflow'], Number.isFinite(mp.netInflow) ? Math.round(mp.netInflow).toLocaleString() : '—');
+    if (mpModule && mp) {
+      setSentimentCenter(mpModule, mp.label);
+      setInModule(mpModule, ['Bullish'], pct(mp.bull, 0));
+      setInModule(mpModule, ['Bearish'], pct(mp.bear, 0));
+      setInModule(mpModule, ['Neutral'], pct(mp.neu, 0));
+      setInModule(mpModule, ['Net Inflow'], Number.isFinite(mp.netInflow) ? Math.round(mp.netInflow).toLocaleString() : '—');
     }
 
-    // Risk Copilot
-    if (rc) {
-      setValueByLabel(sidebar, ['Entry', '入场'], fmt(rc.entry, 2));
-      setValueByLabel(sidebar, ['Stop', '止损'], fmt(rc.stop, 2));
-      setValueByLabel(sidebar, ['Targets', '目标'], `${fmt(rc.t1, 2)} / ${fmt(rc.t2, 2)}`);
-      setValueByLabel(sidebar, ['Confidence', '强度'], pct(rc.confidence, 0));
-      // Backtest row leave as —
+    if (rcModule && rc) {
+      setInModule(rcModule, ['Entry', '入场'], fmt(rc.entry, 2));
+      setInModule(rcModule, ['Stop', '止损'], fmt(rc.stop, 2));
+      setInModule(rcModule, ['Targets', '目标'], `${fmt(rc.t1, 2)} / ${fmt(rc.t2, 2)}`);
+      setInModule(rcModule, ['Confidence', '强度'], pct(rc.confidence, 0));
     }
   }
 
@@ -266,15 +297,16 @@
   // Bind
   // -----------------------------
   function bind() {
-    const evs = ['darrius:chartUpdated', 'chartUpdated', 'chart:updated'];
-    evs.forEach(e => window.addEventListener(e, () => safe(render), { passive: true }));
+    ['darrius:chartUpdated', 'chartUpdated', 'chart:updated'].forEach(e =>
+      window.addEventListener(e, () => safe(render), { passive: true })
+    );
 
     render();
     let tries = 0;
     const timer = setInterval(() => {
       tries++;
       render();
-      const snap = getSnapshot();
+      const { snap } = getSnapshotWithHint();
       if (snap || tries >= 20) clearInterval(timer);
     }, 500);
   }
