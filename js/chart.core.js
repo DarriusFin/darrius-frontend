@@ -1,6 +1,6 @@
 /* =========================================================================
  * FILE: darrius-frontend/js/chart.core.js
- * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.04 + DATASOURCE-WIRING (FIXED)
+ * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.04 + DATASOURCE-WIRING (FIXED) + META-BADGE (MINIMAL)
  *
  * Goals (NO-SECRETS):
  *  - NO EMA/AUX/signal algorithm in frontend.
@@ -18,6 +18,7 @@
  *  6) EMA/AUX distinct colors
  *  7) Markers compatibility: v4 setMarkers() / v5 createSeriesMarkers()
  *  8) Glow Badge Overlay for B/S/eB/eS (DOM overlay; no chart internals touched)
+ *  9) ✅ MINIMAL meta badge: read snap.meta.provider + delayed_minutes (safe try/catch; no chart logic touched)
  *
  * NOTE:
  *  - Default API endpoint used here: /api/market/snapshot
@@ -110,6 +111,21 @@
       if ($("priceText") && lastClose != null) $("priceText").textContent = Number(lastClose).toFixed(2);
       setHint("Market snapshot loaded · 已加载市场快照");
     });
+  }
+
+  // -----------------------------
+  // ✅ MINIMAL META BADGE (10 lines try/catch, no chart impact)
+  // - Writes window.__DATA_SOURCE_BADGE__ only (optional DOM if #dataSourceBadge exists)
+  // -----------------------------
+  function updateMetaBadge(snap) {
+    try {
+      const meta = (snap && snap.meta) || {};
+      const p = String(meta.provider || meta.effective_source || snap.source || "").toLowerCase();
+      if (p === "demo") window.__DATA_SOURCE_BADGE__ = "DEMO";
+      else if (p === "twelve") window.__DATA_SOURCE_BADGE__ = `DELAYED ${meta.delayed_minutes || 15}m`;
+      const el = document.getElementById("dataSourceBadge");
+      if (el && window.__DATA_SOURCE_BADGE__) el.textContent = window.__DATA_SOURCE_BADGE__;
+    } catch (e) {}
   }
 
   // -----------------------------
@@ -625,6 +641,9 @@
   function renderSnapshot(symbol, tf, rawSnap) {
     const snap = normalizeSnapshot(rawSnap);
     if (!snap.ok) throw new Error("snapshot_not_ok");
+
+    // ✅ minimal badge (read meta only; safe)
+    updateMetaBadge(snap);
 
     let bars = snap.bars || [];
     if (!bars.length) throw new Error("no_bars");
