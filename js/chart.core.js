@@ -1,6 +1,6 @@
 /* =========================================================================
  * FILE: darrius-frontend/js/chart.core.js
- * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.03c + BADGE-OVERLAY (TUNED)
+ * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.04 + DATASOURCE-WIRING (FIXED)
  *
  * Goals (NO-SECRETS):
  *  - NO EMA/AUX/signal algorithm in frontend.
@@ -10,21 +10,20 @@
  *      - markers from signals (B/S/eB/eS)
  *
  * Key fixes in this version:
- *  1) Absolute URL fetch + strong network error print
- *  2) Snapshot schema compatibility
- *  3) LightweightCharts v4/v5 series API compatibility
- *  4) Trend coloring: up-trend => green, down-trend => red (by close vs prevClose)
- *  5) EMA/AUX distinct colors
- *  6) Markers compatibility: v4 setMarkers() / v5 createSeriesMarkers()
+ *  1) ✅ DataSource wiring: read #dataSource and append &source=...
+ *  2) ✅ Auto reload on dataSource change
+ *  3) Snapshot schema compatibility
+ *  4) LightweightCharts v4/v5 series API compatibility
+ *  5) Trend coloring: up-trend => green, down-trend => red (by close vs prevClose)
+ *  6) EMA/AUX distinct colors
+ *  7) Markers compatibility: v4 setMarkers() / v5 createSeriesMarkers()
+ *  8) Glow Badge Overlay for B/S/eB/eS (DOM overlay; no chart internals touched)
  *
- * Added:
- *  7) Glow Badge Overlay for B/S/eB/eS (yellow/red badge + white ring + glow)
- *     - DOM overlay, no chart internals touched
- *
- * TUNED (2026.02.03c-TUNED):
- *  - S/eS slightly ABOVE candle (closer)
- *  - B/eB slightly BELOW candle (closer)
- *  - LAST TWO signals pulse/glow (regardless of side)
+ * NOTE:
+ *  - Default API endpoint used here: /api/market/snapshot
+ *  - DataSource value expected (recommended):
+ *      demo | twelve | massive
+ *    (we also tolerate "3rd-party", "delayed" etc -> treated as twelve)
  * ========================================================================= */
 
 (function () {
@@ -68,14 +67,11 @@
   };
 
   // ✅ 位置微调：让它“贴近K线”但不压住
-  // 你觉得还要更近：把 6 改 4；更远：改 8~12
- // 卖出（S/eS）在K线上方：更高一点
-const BADGE_OFFSET_ABOVE_MAIN_PX  = 18; // S
-const BADGE_OFFSET_ABOVE_EARLY_PX = 16; // eS
-
-// 买入（B/eB）在K线下方：更低一点
-const BADGE_OFFSET_BELOW_MAIN_PX  = 18; // B
-const BADGE_OFFSET_BELOW_EARLY_PX = 16; // eB
+  // 你觉得还要更近：把 18 改 14；更远：改 22~30
+  const BADGE_OFFSET_ABOVE_MAIN_PX  = 18; // S
+  const BADGE_OFFSET_ABOVE_EARLY_PX = 16; // eS
+  const BADGE_OFFSET_BELOW_MAIN_PX  = 18; // B
+  const BADGE_OFFSET_BELOW_EARLY_PX = 16; // eB
 
   // -----------------------------
   // DOM helpers
@@ -114,6 +110,23 @@ const BADGE_OFFSET_BELOW_EARLY_PX = 16; // eB
       if ($("priceText") && lastClose != null) $("priceText").textContent = Number(lastClose).toFixed(2);
       setHint("Market snapshot loaded · 已加载市场快照");
     });
+  }
+
+  // -----------------------------
+  // ✅ DataSource (UI -> query param)
+  // -----------------------------
+  function readSourceFromUI() {
+    const el = $("dataSource");
+    const v = (el && el.value ? String(el.value) : "").trim();
+    if (!v) return "";                 // 空 => 后端走默认
+    if (v === "demo") return "demo";
+    if (v === "twelve") return "twelve";
+    if (v === "massive") return "massive";
+
+    // 兼容你当前 UI 文案/旧 value（如果你现在 value 不是 twelve）
+    if (/third|3rd|delay|provider/i.test(v)) return "twelve";
+
+    return v; // 兜底
   }
 
   // -----------------------------
@@ -248,16 +261,14 @@ const BADGE_OFFSET_BELOW_EARLY_PX = 16; // eB
     const state = {
       el: null,
       chartEl: null,
-      items: [], // normalized signals
+      items: [],
       closeMap: null,
-      mounted: false,
       subscribed: false,
     };
 
     function ensureOverlay(chartEl) {
       if (!chartEl) return null;
 
-      // Make sure chart container is positioned
       const cs = window.getComputedStyle(chartEl);
       if (cs.position === "static") chartEl.style.position = "relative";
 
@@ -274,7 +285,6 @@ const BADGE_OFFSET_BELOW_EARLY_PX = 16; // eB
       el.style.zIndex = "20";
       chartEl.appendChild(el);
 
-      // inject css once
       safeRun("badgeCSS", () => {
         if (document.getElementById("darriusBadgeCSS")) return;
         const st = document.createElement("style");
@@ -355,7 +365,6 @@ const BADGE_OFFSET_BELOW_EARLY_PX = 16; // eB
         const isSell = (side === "S" || side === "eS");
         if (!isBuy && !isSell) return;
 
-        // prefer explicit price, fallback to bar close
         const price = Number(s?.price);
         const p = Number.isFinite(price) ? price : closeMap.get(time);
 
@@ -366,11 +375,10 @@ const BADGE_OFFSET_BELOW_EARLY_PX = 16; // eB
           isBuy,
           isSell,
           isMain: (side === "B" || side === "S"),
-          isLastTwo: false, // will fill later
+          isLastTwo: false,
         });
       });
 
-      // ✅ identify last two by time (regardless of side)
       items.sort((a, b) => (a.time - b.time));
       const n = items.length;
       if (n >= 1) items[n - 1].isLastTwo = true;
@@ -389,25 +397,19 @@ const BADGE_OFFSET_BELOW_EARLY_PX = 16; // eB
       state.items.forEach((it) => {
         const x = timeToX(it.time);
         if (x == null) return;
-
-        // If price missing, don't crash; just skip.
         if (it.price == null) return;
 
         const y0 = priceToY(it.price);
         if (y0 == null) return;
 
         const size = it.isMain ? BADGE_STYLE.sizeMain : BADGE_STYLE.sizeEarly;
-
-        // ✅ NEW positioning:
-        // - Sell (S/eS): place ABOVE candle, closer: y0 - halfSize - offset
-        // - Buy  (B/eB): place BELOW candle, closer: y0 + halfSize + offset
         const half = size * 0.5;
-const offAbove = it.isMain ? BADGE_OFFSET_ABOVE_MAIN_PX : BADGE_OFFSET_ABOVE_EARLY_PX;
-const offBelow = it.isMain ? BADGE_OFFSET_BELOW_MAIN_PX : BADGE_OFFSET_BELOW_EARLY_PX;
+        const offAbove = it.isMain ? BADGE_OFFSET_ABOVE_MAIN_PX : BADGE_OFFSET_ABOVE_EARLY_PX;
+        const offBelow = it.isMain ? BADGE_OFFSET_BELOW_MAIN_PX : BADGE_OFFSET_BELOW_EARLY_PX;
 
-const y = it.isSell
-  ? (y0 - half - offAbove)   // S/eS：更高
-  : (y0 + half + offBelow);  // B/eB：更低
+        const y = it.isSell
+          ? (y0 - half - offAbove)
+          : (y0 + half + offBelow);
 
         const d = document.createElement("div");
         d.className = "darrius-badge " + (it.isBuy ? "buy" : "sell") + (it.isLastTwo ? " pulse" : "");
@@ -419,7 +421,7 @@ const y = it.isSell
 
         const t = document.createElement("div");
         t.className = "t";
-        t.textContent = it.side; // B / S / eB / eS
+        t.textContent = it.side;
         d.appendChild(t);
 
         state.el.appendChild(d);
@@ -430,7 +432,6 @@ const y = it.isSell
       if (state.subscribed) return;
       state.subscribed = true;
 
-      // When user scrolls/zooms, reposition badges
       safeRun("badge_subscribe", () => {
         if (chart?.timeScale && typeof chart.timeScale().subscribeVisibleTimeRangeChange === "function") {
           chart.timeScale().subscribeVisibleTimeRangeChange(() => {
@@ -438,9 +439,7 @@ const y = it.isSell
           });
         }
         if (chart && typeof chart.subscribeCrosshairMove === "function") {
-          // crosshair move occurs often; keep light
           chart.subscribeCrosshairMove(() => {
-            // micro-throttle: only if overlay exists
             safeRun("badge_relayout_crosshair", () => renderBadges(chart, candleSeries));
           });
         }
@@ -587,10 +586,13 @@ const y = it.isSell
   // Network: fetch snapshot
   // -----------------------------
   async function fetchSnapshot(symbol, tf, limit) {
+    const source = readSourceFromUI(); // ✅ NEW
+
     const url =
       `${API_BASE}/api/market/snapshot?symbol=${encodeURIComponent(symbol)}` +
       `&tf=${encodeURIComponent(tf)}` +
-      `&limit=${encodeURIComponent(String(limit || DEFAULTS.limit))}`;
+      `&limit=${encodeURIComponent(String(limit || DEFAULTS.limit))}` +
+      (source ? `&source=${encodeURIComponent(source)}` : ""); // ✅ NEW
 
     console.log("[ChartCore] FETCH", url);
 
@@ -627,17 +629,13 @@ const y = it.isSell
     let bars = snap.bars || [];
     if (!bars.length) throw new Error("no_bars");
 
-    // Trend coloring
     bars = applyTrendColorsToBars(bars);
 
-    // candles
     S.candle.setData(bars);
 
-    // top text
     const last = bars[bars.length - 1];
     setTopText(symbol, last && last.close);
 
-    // toggles
     const tgEMA = $("tgEMA");
     const tgAux = $("tgAux");
     if (tgEMA) S.toggles.ema = !!tgEMA.checked;
@@ -652,11 +650,9 @@ const y = it.isSell
     if (S.toggles.aux && auxSeries.length) S.aux.setData(auxSeries);
     else S.aux.setData([]);
 
-    // markers anchor (hide text)
     const markers = mapSignalsToMarkers(snap.signals || []);
     setSeriesMarkersCompat(S.candle, markers);
 
-    // snapshot for overlay UI
     const snapshot = {
       ok: true,
       symbol,
@@ -673,14 +669,12 @@ const y = it.isSell
     S.lastSnapshot = snapshot;
     window.__DARRIUS_CHART_STATE__ = snapshot;
 
-    // bridge
     window.DarriusChart = {
       timeToX: (t) => safeRun("timeToX", () => S.chart.timeScale().timeToCoordinate(t)),
       priceToY: (p) => safeRun("priceToY", () => S.candle.priceToCoordinate(p)),
       getSnapshot: () => (window.__DARRIUS_CHART_STATE__ || null),
     };
 
-    // ✅ Glow badges (the real visible B/S/eB/eS)
     safeRun("badgeOverlay", () => {
       const chartEl = $(S.opts.chartElId);
       BadgeOverlay.update(S.chart, S.candle, chartEl, snapshot.signals, snapshot.bars);
@@ -701,7 +695,8 @@ const y = it.isSell
       const tf = getTF(S.opts.tfElId);
       const limit = DEFAULTS.limit;
 
-      setHint("Loading snapshot… / 加载中…");
+      const ds = readSourceFromUI();
+      setHint(`Loading snapshot… / 加载中… (source=${ds || "default"})`);
 
       const raw = await fetchSnapshot(symbol, tf, limit);
       renderSnapshot(symbol, tf, raw);
@@ -738,6 +733,16 @@ const y = it.isSell
     if (!S.opts.defaultSymbol) S.opts.defaultSymbol = DEFAULTS.symbol;
 
     ensureChart();
+
+    // ✅ Auto reload when user switches Data Source
+    safeRun("bindDataSource", () => {
+      const ds = $("dataSource");
+      if (ds && !ds.__chartcoreBound) {
+        ds.__chartcoreBound = true;
+        ds.addEventListener("change", () => load());
+      }
+    });
+
     load();
   }
 
