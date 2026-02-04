@@ -446,7 +446,30 @@
       box-shadow: 0 0 0 4px rgba(76,194,255,.10);
       background: rgba(76,194,255,.10);
     }
-    #chartWrap{ position:relative; width:100%; flex: 1 1 auto; min-height: 0; }
+
+    /* ===========================
+       ✅ NEW: hide bottom-left attribution ("Charting by TradingView")
+       Zero-intrusive. Does NOT touch chart JS, does NOT block interactions.
+       =========================== */
+    #chartWrap{
+      position:relative;
+      width:100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow:hidden; /* ✅ key */
+    }
+    #chartWrap::after{
+      content:"";
+      position:absolute;
+      left:0;
+      bottom:0;
+      width:240px;     /* ✅ covers "Charting by TradingView" text */
+      height:38px;
+      background: rgba(10,18,32,.96); /* match your bg */
+      pointer-events:none; /* ✅ never block drag/zoom/crosshair */
+      z-index:15; /* above chart, below sigOverlay(z=20) */
+    }
+
     #chart{ position:absolute; inset:0; width:100%; height:100%; }
     #sigOverlay{ position:absolute; inset:0; pointer-events:none; z-index:20; }
 
