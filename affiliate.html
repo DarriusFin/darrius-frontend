@@ -60,7 +60,6 @@
       min-width: 260px;
     }
 
-    /* Logo: replace placeholder with real asset */
     .brand-logo{
       width:34px;
       height:34px;
@@ -379,7 +378,6 @@
   <div class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <!-- CHANGE THIS PATH if your real logo file name differs -->
         <img id="brandLogo" class="brand-logo" src="assets/logo.png" alt="DarriusAI Logo" />
         <div>
           <h1>DarriusAI · Inflection Hunter<span class="sub">Affiliate / 推荐人后台 · V1</span></h1>
@@ -433,7 +431,7 @@
             <label>Referral Code（dref_code）</label>
             <input id="drefCode" class="input" placeholder="点击 Generate 自动生成/拉取" />
             <div class="hint">
-              优先从后端签发/校验（如果后端尚未接入，则回退到本地 V1 生成）。
+              ✅ 优先从后端签发/校验（固定不变）；后端不可用时才回退到本地占位。
             </div>
           </div>
 
@@ -445,7 +443,7 @@
               <option value="/subscription.html">/subscription.html（如果你有这页）</option>
             </select>
             <div class="hint">
-              推荐链接会把 dref_code 作为参数带到落地页：<span class="mono">?dref=XXX</span>
+              落地页长链会把 dref_code 带到落地页：<span class="mono">?dref=XXX</span>
             </div>
           </div>
         </div>
@@ -459,10 +457,20 @@
 
         <div style="margin-top:12px;">
           <div class="field">
-            <label>Referral Link（推荐链接）</label>
+            <label>Referral Link（推荐链接 · Short /r/<code>）</label>
             <div id="refLink" class="mono">—</div>
             <div class="hint">
-              提示：你主站 index.html 里已引入 <span class="mono">js/referral.client.js</span>，后续将自动识别 <span class="mono">dref</span> 并写入 Stripe checkout metadata（归因闭环）。
+              ✅ 这个短链会命中后端 <span class="mono">/r/&lt;code&gt;</span>，用于点击归因/计数（summary 才会增长）。
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <div class="field">
+            <label>Landing URL（落地页长链 · ?dref=）</label>
+            <div id="landingLink" class="mono">—</div>
+            <div class="hint">
+              用于前端归因（<span class="mono">js/referral.client.js</span> 识别 dref 并写入 Stripe checkout metadata）。
             </div>
           </div>
         </div>
@@ -512,7 +520,6 @@
           </div>
         </div>
 
-        <!-- Compliance status -->
         <div class="subgrid">
           <div class="mini">
             <div class="t">
@@ -569,11 +576,12 @@
         </div>
 
         <div style="margin-top:14px;" class="note">
-          <b>后端接入路线（你后面发 routes.py 我再帮你落地）：</b><br>
+          <b>后端接入路线：</b><br>
           • 推荐码签发：<span class="mono">GET /api/referral/code?user_id=</span><br>
           • 签约记录：<span class="mono">POST /api/referral/agreements/accept</span><br>
           • 税务身份：<span class="mono">POST /api/referral/profile</span><br>
           • 汇总统计：<span class="mono">GET /api/referral/summary?user_id=</span><br>
+          • 点击入口：<span class="mono">GET /r/&lt;code&gt; (or /api/referral/r/&lt;code&gt;)</span><br>
           • 返佣台账：Stripe webhook 记账（invoice.paid / refunded / disputes）
         </div>
       </div>
@@ -584,7 +592,6 @@
     © <span id="yy"></span> Darrius FinTech Inc. · Affiliate V1 · This page is informational and for internal workflow validation.
   </div>
 
-  <!-- Agreement modal -->
   <div id="modalMask" class="modal-mask" role="dialog" aria-modal="true">
     <div class="modal">
       <div class="modal-hd">
@@ -611,12 +618,13 @@
 
       // ---------------- Config ----------------
       const API_BASE = 'https://darrius-api.onrender.com';
-
-      // Logo asset path (change if needed)
       const LOGO_SRC = 'assets/logo.png';
-
-      // Agreement version (frontend placeholder; backend should be source of truth)
       const AGREEMENT_VERSION = 'affiliate_v1_2026-02-05';
+
+      // Local storage keys
+      const LS_USER = 'darrius_user_id';
+      const LS_DREF = 'darrius_dref_code';
+      const LS_R_BASE = 'darrius_referral_r_base'; // remembers which /r path works
 
       // ---------------- Utilities ----------------
       const $ = (id) => document.getElementById(id);
@@ -627,7 +635,6 @@
         try{ return JSON.parse(s); } catch(e){ return null; }
       }
 
-      // light hash for local fallback only
       function hash36(str){
         let h = 2166136261;
         for (let i=0; i<str.length; i++){
@@ -666,16 +673,16 @@
 
       function saveLocal(userId, drefCode){
         try{
-          localStorage.setItem('darrius_user_id', userId || '');
-          localStorage.setItem('darrius_dref_code', drefCode || '');
+          localStorage.setItem(LS_USER, userId || '');
+          localStorage.setItem(LS_DREF, drefCode || '');
         }catch(e){}
       }
 
       function loadLocal(){
         try{
           return {
-            userId: localStorage.getItem('darrius_user_id') || '',
-            drefCode: localStorage.getItem('darrius_dref_code') || ''
+            userId: localStorage.getItem(LS_USER) || '',
+            drefCode: localStorage.getItem(LS_DREF) || ''
           };
         }catch(e){
           return { userId:'', drefCode:'' };
@@ -683,9 +690,7 @@
       }
 
       function saveAffiliateProfileLocal(userId, profile){
-        try{
-          localStorage.setItem(`affiliate_profile_${userId}`, JSON.stringify(profile || {}));
-        }catch(e){}
+        try{ localStorage.setItem(`affiliate_profile_${userId}`, JSON.stringify(profile || {})); }catch(e){}
       }
       function loadAffiliateProfileLocal(userId){
         try{
@@ -695,9 +700,7 @@
       }
 
       function saveAgreementLocal(userId, payload){
-        try{
-          localStorage.setItem(`affiliate_agreement_${userId}`, JSON.stringify(payload || {}));
-        }catch(e){}
+        try{ localStorage.setItem(`affiliate_agreement_${userId}`, JSON.stringify(payload || {})); }catch(e){}
       }
       function loadAgreementLocal(userId){
         try{
@@ -706,12 +709,33 @@
         }catch(e){ return {}; }
       }
 
-      function buildReferralLink(dref, landing){
+      function buildLandingLongLink(dref, landing){
         const base = window.location.origin;
         const path = landing || '/';
         const u = new URL(base + path);
         if (dref) u.searchParams.set('dref', dref);
         return u.toString();
+      }
+
+      function getRBaseCandidates(){
+        // Try remembered first, then common candidates.
+        const remembered = (() => {
+          try{ return localStorage.getItem(LS_R_BASE) || ''; }catch(e){ return ''; }
+        })();
+
+        const list = [];
+        if (remembered) list.push(remembered);
+
+        // Most common: blueprint mounted at '/'
+        list.push(`${API_BASE}/r/`);
+
+        // If blueprint mounted at '/api/referral'
+        list.push(`${API_BASE}/api/referral/r/`);
+
+        // If you later mount at '/api' etc., you can add more candidates here.
+
+        // De-dupe
+        return [...new Set(list)];
       }
 
       async function httpJSON(url, opts){
@@ -731,7 +755,6 @@
       }
 
       async function tryFetchServerDref(userId){
-        // Optional server endpoint: /api/referral/code?user_id=...
         const u = `${API_BASE}/api/referral/code?user_id=${encodeURIComponent(userId)}`;
         try{
           const r = await httpJSON(u, { method:'GET', credentials:'omit' });
@@ -746,7 +769,6 @@
       }
 
       async function tryFetchServerSummary(userId){
-        // Optional server endpoint: /api/referral/summary?user_id=...
         const u = `${API_BASE}/api/referral/summary?user_id=${encodeURIComponent(userId)}`;
         try{
           const r = await httpJSON(u, { method:'GET', credentials:'omit' });
@@ -758,13 +780,11 @@
       }
 
       async function tryPostAgreementAccept(userId){
-        // Optional server endpoint: /api/referral/agreements/accept
         const u = `${API_BASE}/api/referral/agreements/accept`;
         const payload = {
           user_id: userId,
           agreement_version: AGREEMENT_VERSION,
           accepted_at: new Date().toISOString(),
-          // best-effort audit fields
           user_agent: navigator.userAgent || '',
         };
         try{
@@ -782,7 +802,6 @@
       }
 
       async function tryPostTaxProfile(userId, taxType, taxStatus){
-        // Optional server endpoint: /api/referral/profile
         const u = `${API_BASE}/api/referral/profile`;
         const payload = {
           user_id: userId,
@@ -823,7 +842,6 @@
       }
 
       function setAgreementUI(state){
-        // state: { accepted: bool, accepted_at, version }
         const tag = $('agTag');
         const text = $('agText');
         const accepted = !!state?.accepted;
@@ -872,13 +890,13 @@
         if (loc.userId) return loc.userId;
 
         try{
-          const s1 = sessionStorage.getItem('darrius_user_id') || '';
+          const s1 = sessionStorage.getItem(LS_USER) || '';
           if (s1) return s1;
         }catch(e){}
 
         try{
           if (window.opener && window.opener.location && window.opener.location.origin === window.location.origin){
-            const v = window.opener.localStorage.getItem('darrius_user_id') || '';
+            const v = window.opener.localStorage.getItem(LS_USER) || '';
             if (v) return v;
           }
         }catch(e){}
@@ -901,7 +919,6 @@
       }
 
       function setKpiSummary(summary){
-        // Expected future payload: { referrals: n, commission_net: number/string }
         if (!summary){
           $('kpiRefs').textContent = '—';
           $('kpiComm').textContent = '—';
@@ -914,14 +931,62 @@
         else $('kpiComm').textContent = String(comm);
       }
 
+      function setLinksUI(dref){
+        if (!dref){
+          $('refLink').textContent = '—';
+          $('landingLink').textContent = '—';
+          return;
+        }
+
+        // Landing long link
+        const longLink = buildLandingLongLink(dref, $('landing').value);
+        $('landingLink').textContent = longLink;
+
+        // Short link (needs correct r-base)
+        const rBase = resolveRBaseFromLocal();
+        $('refLink').textContent = `${rBase}${encodeURIComponent(dref)}`;
+      }
+
+      function resolveRBaseFromLocal(){
+        try{
+          const v = localStorage.getItem(LS_R_BASE) || '';
+          if (v) return v;
+        }catch(e){}
+        return `${API_BASE}/r/`;
+      }
+
+      async function detectAndRememberRBase(dref){
+        if (!dref) return resolveRBaseFromLocal();
+
+        const candidates = getRBaseCandidates();
+        // We only need a best-effort probe; follow redirects is fine.
+        for (const base of candidates){
+          const url = `${base}${encodeURIComponent(dref)}`;
+          try{
+            const res = await fetch(url, { method:'GET', redirect:'manual', credentials:'omit' });
+            // Most likely: 302/301 redirect. Could be 200 if backend directly serves.
+            if (res.status === 301 || res.status === 302 || res.status === 303 || res.status === 307 || res.status === 308 || res.ok){
+              try{ localStorage.setItem(LS_R_BASE, base); }catch(e){}
+              return base;
+            }
+          }catch(e){}
+        }
+        return resolveRBaseFromLocal();
+      }
+
+      function setGenerateLoading(isLoading){
+        const btn = $('btnGenerate');
+        btn.disabled = !!isLoading;
+        btn.textContent = isLoading ? 'Generating…' : 'Generate Link（生成推荐链接）';
+      }
+
       // ---------------- init ----------------
       $('yy').textContent = nowYear();
 
-      // Logo fallback: if missing, use gradient background via data URI
+      // Logo fallback
       try{
         $('brandLogo').src = LOGO_SRC;
         $('brandLogo').addEventListener('error', () => {
-          // fallback: keep a subtle gradient block
           $('brandLogo').removeAttribute('src');
           $('brandLogo').style.background = 'linear-gradient(135deg, var(--accentA), var(--accentB))';
         }, { once:true });
@@ -945,21 +1010,17 @@
 
       // Load local agreement/profile placeholders
       if (initUserId){
-        const ag = loadAgreementLocal(initUserId);
-        setAgreementUI(ag);
-
-        const prof = loadAffiliateProfileLocal(initUserId);
-        setTaxUI(prof);
+        setAgreementUI(loadAgreementLocal(initUserId));
+        setTaxUI(loadAffiliateProfileLocal(initUserId));
       } else {
         setAgreementUI({ accepted:false });
         setTaxUI({ tax_status:'pending' });
       }
 
-      // Initial link
-      const link0 = buildReferralLink($('drefCode').value.trim(), $('landing').value);
-      $('refLink').textContent = ($('drefCode').value.trim() ? link0 : '—');
+      // Initial links (may be overwritten after server sync)
+      setLinksUI($('drefCode').value.trim());
 
-      // Initial pull status
+      // Initial pull: status + server dref (overwrite old local) + summary
       (async () => {
         try{
           if (!initUserId){
@@ -967,11 +1028,35 @@
             setKpiSummary(null);
             return;
           }
+
+          // subscription status
           const payload = await fetchSubStatus(initUserId);
           applyStatusUI(payload);
 
+          // server dref (overwrite)
+          const sv = await tryFetchServerDref(initUserId);
+          let code = $('drefCode').value.trim();
+
+          if (sv.ok && sv.code){
+            code = sv.code;
+            $('drefCode').value = code;
+            saveLocal(initUserId, code);
+          } else if (!code){
+            // fallback only if empty
+            code = localGenerateDref(initUserId);
+            $('drefCode').value = code;
+            saveLocal(initUserId, code);
+          }
+
+          // detect /r base and render links
+          const rBase = await detectAndRememberRBase(code);
+          $('refLink').textContent = `${rBase}${encodeURIComponent(code)}`;
+          $('landingLink').textContent = buildLandingLongLink(code, $('landing').value);
+
+          // summary
           const summary = await tryFetchServerSummary(initUserId);
           setKpiSummary(summary.ok ? summary.data : null);
+
         }catch(e){
           applyStatusUI({ status:'unknown', has_access:false });
           setKpiSummary(null);
@@ -986,32 +1071,37 @@
           return;
         }
 
-        // 1) try server code first (source of truth)
+        setGenerateLoading(true);
+
+        // 1) server code first (source of truth)
         let code = '';
         const sv = await tryFetchServerDref(userId);
         if (sv.ok && sv.code){
           code = sv.code;
         } else {
-          // 2) fallback local V1
           code = localGenerateDref(userId);
         }
 
         $('drefCode').value = code;
-
-        const link = buildReferralLink(code, $('landing').value);
-        $('refLink').textContent = link;
-
         saveLocal(userId, code);
 
-        // refresh subscription status + summary
+        // 2) detect correct /r base and show both links
+        const rBase = await detectAndRememberRBase(code);
+        $('refLink').textContent = `${rBase}${encodeURIComponent(code)}`;
+        $('landingLink').textContent = buildLandingLongLink(code, $('landing').value);
+
+        // 3) refresh status + summary
         try{
           const payload = await fetchSubStatus(userId);
           applyStatusUI(payload);
         }catch(e){}
+
         try{
           const summary = await tryFetchServerSummary(userId);
           setKpiSummary(summary.ok ? summary.data : null);
         }catch(e){}
+
+        setGenerateLoading(false);
       });
 
       $('btnCopy').addEventListener('click', async () => {
@@ -1046,12 +1136,14 @@
       $('btnReset').addEventListener('click', () => {
         if (!confirm('Reset local affiliate fields? (localStorage)')) return;
         try{
-          localStorage.removeItem('darrius_user_id');
-          localStorage.removeItem('darrius_dref_code');
+          localStorage.removeItem(LS_USER);
+          localStorage.removeItem(LS_DREF);
+          // do not remove LS_R_BASE (keep routing memory)
         }catch(e){}
         $('userId').value = '';
         $('drefCode').value = '';
         $('refLink').textContent = '—';
+        $('landingLink').textContent = '—';
         applyStatusUI({ status:'none', has_access:false });
         setKpiSummary(null);
         setAgreementUI({ accepted:false });
@@ -1078,19 +1170,25 @@
           alert('Please input User ID first.');
           return;
         }
+
         // Pull server dref + summary (best-effort)
         try{
           const sv = await tryFetchServerDref(userId);
           if (sv.ok && sv.code){
             $('drefCode').value = sv.code;
-            $('refLink').textContent = buildReferralLink(sv.code, $('landing').value);
             saveLocal(userId, sv.code);
+
+            const rBase = await detectAndRememberRBase(sv.code);
+            $('refLink').textContent = `${rBase}${encodeURIComponent(sv.code)}`;
+            $('landingLink').textContent = buildLandingLongLink(sv.code, $('landing').value);
           }
         }catch(e){}
+
         try{
           const summary = await tryFetchServerSummary(userId);
           setKpiSummary(summary.ok ? summary.data : null);
         }catch(e){}
+
         alert('Sync attempted ✅ (server endpoints may not be enabled yet)');
       });
 
@@ -1102,12 +1200,10 @@
         }
         if (!confirm('Confirm acceptance of the Affiliate Agreement (V1)?')) return;
 
-        // 1) try server record
         const r = await tryPostAgreementAccept(userId);
         const acceptedAt = new Date().toISOString();
 
         if (r.ok){
-          // If server returns canonical fields, prefer them
           const serverAcceptedAt = (r.data && typeof r.data === 'object' && (r.data.accepted_at || r.data.acceptedAt)) || acceptedAt;
           const state = { accepted:true, accepted_at: serverAcceptedAt, version: AGREEMENT_VERSION, source:'server' };
           saveAgreementLocal(userId, state);
@@ -1116,7 +1212,6 @@
           return;
         }
 
-        // 2) fallback local placeholder
         const state = { accepted:true, accepted_at: acceptedAt, version: AGREEMENT_VERSION, source:'local' };
         saveAgreementLocal(userId, state);
         setAgreementUI(state);
@@ -1136,7 +1231,6 @@
           return;
         }
 
-        // 1) try server save
         const r = await tryPostTaxProfile(userId, taxType, taxStatus);
         const profile = { tax_type: taxType, tax_status: taxStatus, updated_at: new Date().toISOString() };
 
@@ -1147,7 +1241,6 @@
           return;
         }
 
-        // 2) fallback local
         saveAffiliateProfileLocal(userId, { ...profile, source:'local' });
         setTaxUI(profile);
         alert('Tax profile saved ✅ (local placeholder; backend not enabled yet)');
@@ -1167,22 +1260,40 @@ V2 will collect actual forms and payout details.`
         );
       });
 
-      // Live link update
-      $('landing').addEventListener('change', () => {
+      // Live updates
+      $('landing').addEventListener('change', async () => {
         const dref = $('drefCode').value.trim();
-        $('refLink').textContent = dref ? buildReferralLink(dref, $('landing').value) : '—';
+        if (!dref){
+          $('landingLink').textContent = '—';
+          return;
+        }
+        $('landingLink').textContent = buildLandingLongLink(dref, $('landing').value);
+
+        // keep short link unchanged (based on /r base)
+        const rBase = resolveRBaseFromLocal();
+        $('refLink').textContent = `${rBase}${encodeURIComponent(dref)}`;
       });
 
-      $('drefCode').addEventListener('input', () => {
+      $('drefCode').addEventListener('input', async () => {
         const dref = $('drefCode').value.trim();
-        $('refLink').textContent = dref ? buildReferralLink(dref, $('landing').value) : '—';
         saveLocal($('userId').value.trim(), dref);
+
+        if (!dref){
+          $('refLink').textContent = '—';
+          $('landingLink').textContent = '—';
+          return;
+        }
+
+        // If user manually changes dref, still try to render short link using best known base.
+        const rBase = await detectAndRememberRBase(dref);
+        $('refLink').textContent = `${rBase}${encodeURIComponent(dref)}`;
+        $('landingLink').textContent = buildLandingLongLink(dref, $('landing').value);
       });
 
       $('userId').addEventListener('input', () => {
         const userId = $('userId').value.trim();
         saveLocal(userId, $('drefCode').value.trim());
-        // load local agreement/profile for this user
+
         if (userId){
           setAgreementUI(loadAgreementLocal(userId));
           setTaxUI(loadAffiliateProfileLocal(userId));
