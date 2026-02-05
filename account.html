@@ -311,10 +311,10 @@
       padding:10px 16px;
       border-radius: var(--r12);
       cursor:pointer;
+      user-select:none;
       background: var(--gradBrand);
       box-shadow: var(--shadow2);
       transition: transform .06s ease, filter .15s ease;
-      user-select:none;
       min-width: 170px;
       position:relative;
       z-index:20;
@@ -333,9 +333,9 @@
       padding:10px 16px;
       border-radius: var(--r12);
       cursor:pointer;
+      user-select:none;
       background: rgba(0,0,0,.14);
       transition: transform .06s ease, filter .15s ease;
-      user-select:none;
       min-width: 170px;
       position:relative;
       z-index:20;
@@ -433,6 +433,25 @@
       .topRight{ min-width:0; }
       .plansGrid{ grid-template-columns: 1fr; }
     }
+
+    /* =====================================================================
+     * ✅ Step 2: account.html#plans auto scroll + highlight (UI-only)
+     * ===================================================================== */
+    .darr-plans-anchor { scroll-margin-top: 92px; }
+    .darr-plans-focus {
+      outline: 2px solid rgba(76,194,255,.45);
+      box-shadow:
+        0 0 0 6px rgba(76,194,255,.12),
+        0 16px 60px rgba(0,0,0,.30);
+      border-radius: var(--r14);
+      transition: box-shadow .25s ease, outline-color .25s ease;
+    }
+    @keyframes darrPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(43,226,166,.18), 0 16px 60px rgba(0,0,0,.25); }
+      60%  { box-shadow: 0 0 0 10px rgba(43,226,166,.10), 0 16px 60px rgba(0,0,0,.30); }
+      100% { box-shadow: 0 0 0 0 rgba(43,226,166,.00), 0 16px 60px rgba(0,0,0,.25); }
+    }
+    .darr-plans-pulse { animation: darrPulse 1.05s ease-in-out 0s 2; }
   </style>
 </head>
 
@@ -468,8 +487,6 @@
         </div>
 
         <div class="panelBody">
-          <!-- ✅ 删除：左上那段红框说明文字（按你要求） -->
-
           <div class="card">
             <div class="cardTitle"><b>Identity · 身份信息</b><span class="note" id="backendHint">Backend: —</span></div>
 
@@ -482,7 +499,6 @@
               <div class="field">
                 <div class="label"><span>Email（邮箱，可选）</span><span>可选</span></div>
                 <input id="email" placeholder="（可选）用于 Stripe 匹配/收据"/>
-                <!-- ✅ 删除：这里原本的红框解释文字 -->
               </div>
             </div>
 
@@ -497,8 +513,6 @@
               <button class="btn" id="saveBtn">Save（保存/刷新）</button>
               <button class="btnGhost" id="refreshBtn">Refresh Status（刷新状态）</button>
             </div>
-
-            <!-- ✅ 删除：那段“只填 user_id active、一填 email unknown”的红框文字 -->
           </div>
 
           <div class="card">
@@ -510,7 +524,6 @@
             <div class="kv">
               <span>User（用户）</span><b id="kvUser" class="kvVal">—</b>
 
-              <!-- ✅ 你红框的三行：保留原 id，增强可读性 -->
               <span>Current Plan（当前套餐）</span><b id="kvPlan" class="kvVal">—</b>
               <span>Subscription Status（订阅状态）</span><b id="kvSubStatus" class="kvVal">—</b>
               <span>Renews / Ends（续订/到期）</span><b id="kvEnds" class="kvVal">—</b>
@@ -530,7 +543,6 @@
               <button class="btn" id="openPortalBtn">Open Billing Portal（账单管理）</button>
               <button class="btn" id="scrollPlansBtn">Go to Plans（查看套餐）</button>
             </div>
-            <!-- ✅ 删除：Actions 下面那段红框说明文字 -->
           </div>
         </div>
       </div>
@@ -543,17 +555,14 @@
         </div>
 
         <div class="panelBody">
-          <div class="card" id="plansCard">
+          <!-- ✅ Step2: anchor target lives here -->
+          <div class="card darr-plans-anchor" id="plans">
             <div class="cardTitle">
               <b>Plans（套餐 / 4个产品订购）</b>
               <span class="note" id="plansSource">plans: —</span>
             </div>
 
-            <!-- ✅ 删除：右侧红框的说明文字（/billing/prices + fallback 文案） -->
-
             <div class="plansGrid" id="plansGrid"></div>
-
-            <!-- ✅ 删除：Compliance note 红框文案 -->
           </div>
 
           <div class="card">
@@ -580,8 +589,6 @@
               Technical: support@darrius.ai
             </div>
           </div>
-
-          <!-- ✅ 删除：Endpoint Map（接口）整块（红框要求删除） -->
         </div>
       </div>
     </div>
@@ -615,7 +622,61 @@
     })();
   </script>
 
-  <!-- ✅ 订阅/支付/套餐渲染：保持你的原逻辑不变（下面脚本仅删除了 endpoint map 文案相关，不影响支付链路） -->
+  <!-- ✅ Step 2: #plans jump + highlight patch (UI-only, safe) -->
+  <script>
+    (function(){
+      'use strict';
+
+      function safe(fn){ try { return fn(); } catch(e){ return null; } }
+      function $(id){ return document.getElementById(id); }
+
+      function hasUpgradeIntent(){
+        const h = (location.hash || '').toLowerCase();
+        if (h === '#plans') return true;
+        const qs = new URLSearchParams(location.search || '');
+        return qs.get('upgrade') === '1';
+      }
+
+      function pulsePlans(){
+        const el = $('plans');
+        if (!el) return;
+
+        if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex','-1');
+
+        safe(() => el.scrollIntoView({ behavior:'smooth', block:'start' }));
+        setTimeout(() => {
+          el.classList.add('darr-plans-focus');
+          el.classList.add('darr-plans-pulse');
+          safe(() => el.focus({ preventScroll:true }));
+          setTimeout(() => {
+            el.classList.remove('darr-plans-pulse');
+            el.classList.remove('darr-plans-focus');
+          }, 2600);
+        }, 220);
+      }
+
+      // Expose for button click reuse
+      window.__DARRIUS_PULSE_PLANS__ = pulsePlans;
+
+      function run(){
+        if (!hasUpgradeIntent()) return;
+        setTimeout(pulsePlans, 80);
+
+        // 可选：清理 hash，避免刷新反复跳
+        setTimeout(() => {
+          safe(() => history.replaceState(null,'', location.pathname + location.search));
+        }, 1200);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run, { once:true });
+      } else {
+        run();
+      }
+    })();
+  </script>
+
+  <!-- ✅ 订阅/支付/套餐渲染：保持你的原逻辑不变 -->
   <script>
     (function(){
       'use strict';
@@ -627,7 +688,7 @@
       const emailEl  = $('email');
       const useEmailEl = $('useEmailMatch');
 
-      // ✅ 你的真实 price_id（你后端 TRIAL_DAYS_BY_PRICE 里那 4 个）
+      // ✅ 你的真实 price_id
       const PRICE_ID_BY_KEY = {
         weekly:    "price_1SpJMmR84UMUVSTg0T7xfm6r",
         monthly:   "price_1SpbvRR84UMUVSTggbg0SFzi",
@@ -686,7 +747,6 @@
       }
 
       function renderPlans(plans, sourceLabel){
-        // sourceLabel 仍然保留给系统区，但 UI 顶部的小字已隐藏（#plansSource display:none）
         $('plansSource').textContent = "plans: " + sourceLabel;
         $('plansSource2').textContent = sourceLabel;
 
@@ -857,16 +917,18 @@
       // ===== Wire UI events =====
       $('openPortalBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); openPortal(); });
 
+      // ✅ 改成滚到 #plans + 触发高亮（比滚到 plansCard 更准）
       $('scrollPlansBtn').addEventListener('click', (ev) => {
         ev.preventDefault(); ev.stopPropagation();
-        const el = $('plansCard');
+        if (window.__DARRIUS_PULSE_PLANS__) { window.__DARRIUS_PULSE_PLANS__(); return; }
+        const el = $('plans');
         if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
       });
 
       $('openDashBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
       $('backBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
 
-      // ✅ Save / Refresh：不在这里实现 status，交给 account.manage.fix.js（避免与你的支付逻辑纠缠）
+      // ✅ Save / Refresh：由 account.manage.fix.js 实现
       $('saveBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.DARRIUS_ACCOUNT_REFRESH_STATUS && window.DARRIUS_ACCOUNT_REFRESH_STATUS(); });
       $('refreshBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.DARRIUS_ACCOUNT_REFRESH_STATUS && window.DARRIUS_ACCOUNT_REFRESH_STATUS(); });
 
@@ -877,7 +939,6 @@
         $('buildText').textContent = new Date().toISOString();
         await loadPlans();
 
-        // 初次加载时，触发一次状态刷新（由外部脚本实现）
         setTimeout(() => { window.DARRIUS_ACCOUNT_REFRESH_STATUS && window.DARRIUS_ACCOUNT_REFRESH_STATUS(); }, 250);
       })();
     })();
