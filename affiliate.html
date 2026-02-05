@@ -3,14 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DarriusAI · Affiliate / 推荐人后台</title>
+  <title>DarriusAI · Affiliate Portal / 推荐人后台</title>
 
   <style>
     :root{
       --bg0:#071018;
       --bg1:#0b1622;
       --card:#0e2030;
-      --card2:#0b1a28;
       --stroke:rgba(255,255,255,.08);
       --muted:rgba(255,255,255,.68);
       --text:rgba(255,255,255,.92);
@@ -20,7 +19,6 @@
       --bad:#ff5b5b;
       --ok:#2BE2A6;
       --shadow: 0 18px 50px rgba(0,0,0,.45);
-      --radius:16px;
       --radius2:22px;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
@@ -56,33 +54,36 @@
       gap:12px;
     }
     .brand{
-      display:flex; align-items:center; gap:10px;
-      min-width: 260px;
+      display:flex; align-items:center; gap:12px;
+      min-width: 320px;
     }
 
+    /* ✅ LOGO enlarged (2x+) */
     .brand-logo{
-      width:34px;
-      height:34px;
-      border-radius:10px;
+      width:72px;
+      height:72px;
+      border-radius:16px;
       object-fit:cover;
-      box-shadow: 0 10px 30px rgba(0,0,0,.35);
-      border:1px solid rgba(255,255,255,.10);
+      box-shadow: 0 12px 34px rgba(0,0,0,.42);
+      border:1px solid rgba(255,255,255,.12);
       background: rgba(255,255,255,.06);
       display:block;
+      flex: 0 0 auto;
     }
+
     .brand h1{
       margin:0;
       font-size:16px;
-      font-weight:700;
+      font-weight:800;
       letter-spacing:.2px;
-      line-height:1.15;
+      line-height:1.2;
     }
     .brand .sub{
       display:block;
-      margin-top:2px;
+      margin-top:4px;
       font-size:12px;
       color:var(--muted);
-      font-weight:500;
+      font-weight:600;
     }
 
     .pill{
@@ -117,6 +118,8 @@
 
     @media (max-width: 980px){
       .wrap{ grid-template-columns: 1fr; }
+      .brand{ min-width: unset; }
+      .brand-logo{ width:64px; height:64px; }
     }
 
     .card{
@@ -134,7 +137,7 @@
     .card .hd h2{
       margin:0;
       font-size:14px;
-      font-weight:750;
+      font-weight:820;
       letter-spacing:.2px;
     }
     .card .hd p{
@@ -161,6 +164,7 @@
       font-size:12px;
       color:var(--muted);
       margin:0 0 6px;
+      font-weight:700;
     }
     .input, .select{
       width:100%;
@@ -194,7 +198,7 @@
       cursor:pointer;
       padding:10px 14px;
       border-radius: 14px;
-      font-weight:700;
+      font-weight:800;
       font-size:13px;
       color:#051018;
       background: linear-gradient(135deg, var(--accentA), var(--accentB));
@@ -242,11 +246,12 @@
     .kpi .t{
       font-size:12px;
       color:var(--muted);
+      font-weight:700;
     }
     .kpi .v{
       margin-top:6px;
       font-size:18px;
-      font-weight:800;
+      font-weight:900;
       letter-spacing:.2px;
     }
 
@@ -255,6 +260,7 @@
       color:var(--muted);
       line-height:1.55;
     }
+
     .footer{
       max-width:1180px;
       margin:0 auto;
@@ -273,10 +279,9 @@
       background: rgba(255,255,255,.03);
       color:rgba(255,255,255,.88);
       font-size:12px;
-      font-weight:700;
+      font-weight:800;
     }
     .badge.ok{ border-color: rgba(43,226,166,.25); }
-    .badge.bad{ border-color: rgba(255,91,91,.25); }
     .badge.warn{ border-color: rgba(255,204,102,.25); }
 
     .subgrid{
@@ -301,11 +306,12 @@
       align-items:center;
       justify-content:space-between;
       gap:10px;
+      font-weight:800;
     }
     .mini .v{
       margin-top:8px;
       font-size:14px;
-      font-weight:800;
+      font-weight:900;
       letter-spacing:.2px;
       display:flex;
       align-items:center;
@@ -328,7 +334,7 @@
       background: rgba(255,255,255,.03);
       color:rgba(255,255,255,.88);
       font-size:12px;
-      font-weight:700;
+      font-weight:800;
       white-space:nowrap;
     }
 
@@ -380,97 +386,98 @@
       <div class="brand">
         <img id="brandLogo" class="brand-logo" src="assets/logo.png" alt="DarriusAI Logo" />
         <div>
-          <h1>DarriusAI · Inflection Hunter<span class="sub">Affiliate / 推荐人后台 · V1</span></h1>
+          <h1>DarriusAI · Inflection Hunter</h1>
+          <span class="sub">Affiliate Portal / 推荐人后台 · V1</span>
         </div>
       </div>
 
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <span id="subPill" class="pill" title="Subscription (from backend)">
+        <span id="subPill" class="pill" title="Subscription status">
           <span id="subDot" class="dot"></span>
           <span id="subText">Subscription: —</span>
         </span>
 
-        <button class="btn secondary" id="btnBack">← Back to Dashboard</button>
+        <button class="btn secondary" id="btnBack">← Back to Dashboard / 返回首页</button>
       </div>
     </div>
   </div>
 
   <div class="wrap">
-    <!-- Left: generator + instructions -->
+    <!-- Left -->
     <div class="card">
       <div class="hd">
-        <h2>Affiliate / 推荐人入口（V1）</h2>
+        <h2>Affiliate Entry / 推荐人入口（V1）</h2>
         <p>
-          这里是“轻代理系统”第一版：生成推荐链接、展示基础规则与提示。<br>
-          签约/税务身份/返佣台账/归因闭环，将逐步接入后端 Referral 模块（不影响你现有订阅/支付体系）。
+          Generate your referral link and manage basic affiliate setup. / 生成推荐链接并完成基础设置。<br>
+          Commission settlement and reporting will be available in later versions. / 返佣结算与报表将逐步开放。
         </p>
       </div>
       <div class="bd">
         <div class="grid2">
           <div class="field">
-            <label>User ID（推荐人 ID）</label>
-            <input id="userId" class="input" placeholder="例如：darrius888" />
+            <label>Affiliate User ID / 推荐人 ID</label>
+            <input id="userId" class="input" placeholder="e.g., darrius888" />
             <div class="hint">
-              V1 会自动尝试从 URL 参数、localStorage/sessionStorage、以及 opener 页面读取（如果可用）。你也可手动填。
+              Auto-fill is supported when available. / 支持自动填充（如可用）。
             </div>
           </div>
 
           <div class="field">
-            <label>Commission（佣金比例）</label>
+            <label>Commission Rate / 佣金比例</label>
             <select id="commission" class="select">
-              <option value="0.20">20%（默认）</option>
+              <option value="0.20">20% (Default) / 默认</option>
               <option value="0.15">15%</option>
               <option value="0.10">10%</option>
             </select>
             <div class="hint">
-              规则：续费继续返佣（持续返佣模式）。返佣口径：以“净额（不含税/不含退款）×比例”为准（后端台账）。
+              Commission is calculated on net revenue (tax & refunds excluded). / 返佣按净收入口径（不含税、不含退款）。
             </div>
           </div>
 
           <div class="field">
-            <label>Referral Code（dref_code）</label>
-            <input id="drefCode" class="input" placeholder="点击 Generate 自动生成/拉取" />
+            <label>Referral Code (dref) / 推荐码</label>
+            <input id="drefCode" class="input" placeholder="Click Generate to fetch or create" />
             <div class="hint">
-              ✅ 优先从后端签发/校验（固定不变）；后端不可用时才回退到本地占位。
+              Prefer server-issued code when available. / 优先使用服务器签发的固定推荐码。
             </div>
           </div>
 
           <div class="field">
-            <label>Landing Page（落地页）</label>
+            <label>Landing Page / 落地页</label>
             <select id="landing" class="select">
-              <option value="/">/（Dashboard 首页）</option>
+              <option value="/">/ (Dashboard) / 首页</option>
               <option value="/index.html">/index.html</option>
-              <option value="/subscription.html">/subscription.html（如果你有这页）</option>
+              <option value="/subscription.html">/subscription.html</option>
             </select>
             <div class="hint">
-              落地页长链会把 dref_code 带到落地页：<span class="mono">?dref=XXX</span>
+              Landing URL will include <span class="mono">?dref=CODE</span>.
             </div>
           </div>
         </div>
 
         <div class="btnrow">
-          <button class="btn" id="btnGenerate">Generate Link（生成推荐链接）</button>
-          <button class="btn secondary" id="btnCopy">Copy Link（复制链接）</button>
-          <button class="btn secondary" id="btnOpen">Open Link（打开链接）</button>
-          <button class="btn danger" id="btnReset">Reset（清空本地）</button>
+          <button class="btn" id="btnGenerate">Generate Link / 生成链接</button>
+          <button class="btn secondary" id="btnCopy">Copy Link / 复制链接</button>
+          <button class="btn secondary" id="btnOpen">Open Link / 打开链接</button>
+          <button class="btn danger" id="btnReset">Reset / 清空</button>
         </div>
 
         <div style="margin-top:12px;">
           <div class="field">
-            <label>Referral Link（推荐链接 · Short /r/<code>）</label>
+            <label>Referral Link (Short) / 推荐短链</label>
             <div id="refLink" class="mono">—</div>
             <div class="hint">
-              ✅ 这个短链会命中后端 <span class="mono">/r/&lt;code&gt;</span>，用于点击归因/计数（summary 才会增长）。
+              Use this link when sharing. / 对外分享优先使用此短链。
             </div>
           </div>
         </div>
 
         <div style="margin-top:10px;">
           <div class="field">
-            <label>Landing URL（落地页长链 · ?dref=）</label>
+            <label>Landing URL (Long) / 落地页长链</label>
             <div id="landingLink" class="mono">—</div>
             <div class="hint">
-              用于前端归因（<span class="mono">js/referral.client.js</span> 识别 dref 并写入 Stripe checkout metadata）。
+              Useful for testing attribution. / 便于测试归因。
             </div>
           </div>
         </div>
@@ -478,44 +485,44 @@
         <div style="margin-top:14px;">
           <span id="modeBadge" class="badge warn">
             <span class="dot warn"></span>
-            Policy / 模式：V1 (Static)
+            Status / 状态：V1
           </span>
         </div>
 
         <hr style="border:none;border-top:1px solid var(--stroke); margin:16px 0;">
 
+        <!-- ✅ Cleaned, no internal language -->
         <div class="note">
-          <b>V1 说明（非常重要）：</b><br>
-          1) 推荐码默认“固定不变”（后端真相源优先）；V1 若后端未接入会回退本地占位；<br>
-          2) 真正的返佣统计必须以后端为准（Stripe webhook + DB 台账 + 结算状态机）；<br>
-          3) 税务：根据身份收集 W-9 / W-8BEN / W-8BEN-E（V1 先做身份与状态采集）；<br>
-          4) 原则不变：不碰你已定型的订阅/支付代码，只在外围增加模块与接口。
+          <b>Important Notes / 重要提示</b><br>
+          1) Referral code is typically fixed per affiliate. / 推荐码通常对每位推荐人固定不变。<br>
+          2) Commission reporting will be shown once transactions occur. / 有真实交易后才会产生返佣统计。<br>
+          3) Tax profile helps payout compliance. / 税务身份用于后续合规结算。
         </div>
       </div>
     </div>
 
-    <!-- Right: status + compliance + kpis -->
+    <!-- Right -->
     <div class="card">
       <div class="hd">
-        <h2>Account & Status</h2>
-        <p>读取你的订阅状态（来自后端 <span class="mono">/api/subscription/status</span>），并展示签约/税务/返佣闭环的状态。</p>
+        <h2>Account & Summary / 账号与汇总</h2>
+        <p>View your subscription access and basic affiliate summary. / 查看订阅访问权限与基础汇总。</p>
       </div>
       <div class="bd">
         <div class="kpis">
           <div class="kpi">
-            <div class="t">Subscription</div>
+            <div class="t">Subscription / 订阅</div>
             <div class="v" id="kpiSub">—</div>
           </div>
           <div class="kpi">
-            <div class="t">Access</div>
+            <div class="t">Access / 权限</div>
             <div class="v" id="kpiAccess">—</div>
           </div>
           <div class="kpi">
-            <div class="t">Referrals</div>
+            <div class="t">Referrals / 推荐数</div>
             <div class="v" id="kpiRefs">—</div>
           </div>
           <div class="kpi">
-            <div class="t">Commission (net)</div>
+            <div class="t">Commission (Net) / 返佣净额</div>
             <div class="v" id="kpiComm">—</div>
           </div>
         </div>
@@ -523,91 +530,87 @@
         <div class="subgrid">
           <div class="mini">
             <div class="t">
-              <span>Agreement</span>
-              <span id="agTag" class="tag"><span class="dot warn"></span> Pending</span>
+              <span>Agreement / 协议</span>
+              <span id="agTag" class="tag"><span class="dot warn"></span> Pending / 待确认</span>
             </div>
-            <div class="v" id="agText">Not accepted</div>
-            <div class="desc">V1：记录协议版本 + 接受时间（后端优先；未接入则本地占位）。</div>
+            <div class="v" id="agText">Not accepted / 未确认</div>
+            <div class="desc">Accept to proceed with affiliate participation. / 确认协议后可继续参与。</div>
             <div class="btnrow">
-              <button class="btn secondary" id="btnAgreementOpen">Open</button>
-              <button class="btn" id="btnAgreementAccept">I Accept</button>
+              <button class="btn secondary" id="btnAgreementOpen">Open / 查看</button>
+              <button class="btn" id="btnAgreementAccept">I Accept / 我同意</button>
             </div>
           </div>
 
           <div class="mini">
             <div class="t">
-              <span>Tax Profile</span>
-              <span id="taxTag" class="tag"><span class="dot warn"></span> Pending</span>
+              <span>Tax Profile / 税务身份</span>
+              <span id="taxTag" class="tag"><span class="dot warn"></span> Pending / 待提交</span>
             </div>
-            <div class="v" id="taxText">Not submitted</div>
-            <div class="desc">选择身份类型（US/Non-US × Individual/Entity），并提交税务资料状态。</div>
+            <div class="v" id="taxText">Not submitted / 未提交</div>
+            <div class="desc">Select your tax type and status. / 选择税务身份与状态。</div>
 
             <div class="grid2" style="margin-top:10px;">
               <div class="field">
-                <label>Tax Type（身份类型）</label>
+                <label>Tax Type / 身份类型</label>
                 <select id="taxType" class="select">
-                  <option value="">— Select —</option>
-                  <option value="us_individual">US Individual（W-9）</option>
-                  <option value="us_entity">US Entity（W-9）</option>
-                  <option value="nonus_individual">Non-US Individual（W-8BEN）</option>
-                  <option value="nonus_entity">Non-US Entity（W-8BEN-E）</option>
+                  <option value="">— Select / 请选择 —</option>
+                  <option value="us_individual">US Individual (W-9) / 美国个人</option>
+                  <option value="us_entity">US Entity (W-9) / 美国机构</option>
+                  <option value="nonus_individual">Non-US Individual (W-8BEN) / 非美个人</option>
+                  <option value="nonus_entity">Non-US Entity (W-8BEN-E) / 非美机构</option>
                 </select>
               </div>
               <div class="field">
-                <label>Tax Status</label>
+                <label>Tax Status / 状态</label>
                 <select id="taxStatus" class="select">
-                  <option value="pending">Pending</option>
-                  <option value="submitted">Submitted</option>
-                  <option value="verified">Verified</option>
+                  <option value="pending">Pending / 待提交</option>
+                  <option value="submitted">Submitted / 已提交</option>
+                  <option value="verified">Verified / 已核验</option>
                 </select>
               </div>
             </div>
 
             <div class="btnrow">
-              <button class="btn secondary" id="btnTaxSave">Save</button>
-              <button class="btn secondary" id="btnTaxGuide">Guide</button>
+              <button class="btn secondary" id="btnTaxSave">Save / 保存</button>
+              <button class="btn secondary" id="btnTaxGuide">Guide / 指引</button>
             </div>
           </div>
         </div>
 
         <div class="btnrow" style="margin-top:12px;">
-          <button class="btn secondary" id="btnRefreshStatus">Refresh Status（刷新状态）</button>
-          <button class="btn secondary" id="btnPullServer">Sync from Server（尝试拉取后端）</button>
+          <button class="btn secondary" id="btnRefreshStatus">Refresh Status / 刷新状态</button>
+          <button class="btn secondary" id="btnPullServer">Sync / 同步</button>
         </div>
 
+        <!-- ✅ Internal endpoints list removed -->
         <div style="margin-top:14px;" class="note">
-          <b>后端接入路线：</b><br>
-          • 推荐码签发：<span class="mono">GET /api/referral/code?user_id=</span><br>
-          • 签约记录：<span class="mono">POST /api/referral/agreements/accept</span><br>
-          • 税务身份：<span class="mono">POST /api/referral/profile</span><br>
-          • 汇总统计：<span class="mono">GET /api/referral/summary?user_id=</span><br>
-          • 点击入口：<span class="mono">GET /r/&lt;code&gt; (or /api/referral/r/&lt;code&gt;)</span><br>
-          • 返佣台账：Stripe webhook 记账（invoice.paid / refunded / disputes）
+          <b>Tip / 提示：</b> If any numbers look empty, try “Sync”. / 若数据为空，请先点“同步”。
         </div>
       </div>
     </div>
   </div>
 
   <div class="footer">
-    © <span id="yy"></span> Darrius FinTech Inc. · Affiliate V1 · This page is informational and for internal workflow validation.
+    © <span id="yy"></span> Darrius FinTech Inc. · Affiliate Portal V1
   </div>
 
+  <!-- Agreement modal -->
   <div id="modalMask" class="modal-mask" role="dialog" aria-modal="true">
     <div class="modal">
       <div class="modal-hd">
-        <b>Affiliate Agreement (V1 Draft)</b>
-        <button class="btn secondary" id="btnModalClose">Close</button>
+        <b>Affiliate Agreement (V1) / 推荐人协议（V1）</b>
+        <button class="btn secondary" id="btnModalClose">Close / 关闭</button>
       </div>
       <div class="modal-bd" id="modalBody">
-        <p><b>Summary (V1)</b></p>
+        <p><b>Summary / 概要</b></p>
         <ul>
-          <li><b>Commission:</b> default 20% of <b>net revenue</b> (exclude tax, exclude refunds/chargebacks).</li>
-          <li><b>Attribution:</b> first-touch by default (initial referral code captured).</li>
-          <li><b>Anti-fraud:</b> self-referral is not eligible.</li>
-          <li><b>Tax:</b> US affiliates may need W-9; non-US may need W-8 forms.</li>
-          <li><b>Termination:</b> platform may suspend/terminate for fraud or policy violations.</li>
+          <li><b>Commission / 返佣:</b> 20% of <b>net revenue</b> (exclude tax, refunds/chargebacks). / 按净收入计算（不含税与退款/拒付）。</li>
+          <li><b>Attribution / 归因:</b> First-touch by default. / 默认首次归因。</li>
+          <li><b>Anti-fraud / 反作弊:</b> Self-referral is not eligible. / 不允许自推自买。</li>
+          <li><b>Tax / 税务:</b> W-9 (US) or W-8 forms (Non-US). / 美国W-9，非美W-8表。</li>
+          <li><b>Termination / 终止:</b> We may suspend for fraud or policy violations. / 违规或作弊可暂停/终止。</li>
         </ul>
-        <p class="note">V2：将替换为正式协议（版本化）+ 电子签 + 可审计记录。</p>
+        <p class="note">Full agreement text will be finalized in a later version. / 正式协议文本将于后续版本完善。</p>
       </div>
     </div>
   </div>
@@ -621,10 +624,9 @@
       const LOGO_SRC = 'assets/logo.png';
       const AGREEMENT_VERSION = 'affiliate_v1_2026-02-05';
 
-      // Local storage keys
       const LS_USER = 'darrius_user_id';
       const LS_DREF = 'darrius_dref_code';
-      const LS_R_BASE = 'darrius_referral_r_base'; // remembers which /r path works
+      const LS_R_BASE = 'darrius_referral_r_base';
 
       // ---------------- Utilities ----------------
       const $ = (id) => document.getElementById(id);
@@ -717,25 +719,24 @@
         return u.toString();
       }
 
+      function resolveRBaseFromLocal(){
+        try{
+          const v = localStorage.getItem(LS_R_BASE) || '';
+          if (v) return v;
+        }catch(e){}
+        return `${API_BASE}/r/`;
+      }
+
       function getRBaseCandidates(){
-        // Try remembered first, then common candidates.
         const remembered = (() => {
           try{ return localStorage.getItem(LS_R_BASE) || ''; }catch(e){ return ''; }
         })();
 
         const list = [];
         if (remembered) list.push(remembered);
-
-        // Most common: blueprint mounted at '/'
         list.push(`${API_BASE}/r/`);
-
-        // If blueprint mounted at '/api/referral'
         list.push(`${API_BASE}/api/referral/r/`);
-
-        // If you later mount at '/api' etc., you can add more candidates here.
-
-        // De-dupe
-        return [...new Set(list)];
+        return [...new Set(list.filter(Boolean))];
       }
 
       async function httpJSON(url, opts){
@@ -760,11 +761,11 @@
           const r = await httpJSON(u, { method:'GET', credentials:'omit' });
           if (r.ok && r.data && typeof r.data === 'object'){
             const code = r.data.dref_code || r.data.code || '';
-            if (code) return { ok:true, code, source:'server' };
+            if (code) return { ok:true, code };
           }
-          return { ok:false, code:'', source:'server' };
+          return { ok:false, code:'' };
         }catch(e){
-          return { ok:false, code:'', source:'server' };
+          return { ok:false, code:'' };
         }
       }
 
@@ -834,10 +835,10 @@
         const badge = $('modeBadge');
         if (hasAccess) {
           badge.className = 'badge ok';
-          badge.innerHTML = '<span class="dot ok"></span> Policy / 模式：Eligible (V1)';
+          badge.innerHTML = '<span class="dot ok"></span> Status / 状态：Eligible';
         } else {
           badge.className = 'badge warn';
-          badge.innerHTML = '<span class="dot warn"></span> Policy / 模式：Trial/None (V1)';
+          badge.innerHTML = '<span class="dot warn"></span> Status / 状态：Limited';
         }
       }
 
@@ -847,13 +848,13 @@
         const accepted = !!state?.accepted;
 
         if (accepted){
-          tag.innerHTML = '<span class="dot ok"></span> Accepted';
+          tag.innerHTML = '<span class="dot ok"></span> Accepted / 已同意';
           tag.style.borderColor = 'rgba(43,226,166,.25)';
           text.textContent = `Accepted · ${state.accepted_at ? new Date(state.accepted_at).toLocaleString() : '—'}`;
         } else {
-          tag.innerHTML = '<span class="dot warn"></span> Pending';
+          tag.innerHTML = '<span class="dot warn"></span> Pending / 待确认';
           tag.style.borderColor = 'rgba(255,204,102,.25)';
-          text.textContent = 'Not accepted';
+          text.textContent = 'Not accepted / 未确认';
         }
       }
 
@@ -868,17 +869,17 @@
         $('taxStatus').value = taxStatus || 'pending';
 
         if (taxStatus === 'verified'){
-          tag.innerHTML = '<span class="dot ok"></span> Verified';
+          tag.innerHTML = '<span class="dot ok"></span> Verified / 已核验';
           tag.style.borderColor = 'rgba(43,226,166,.25)';
           text.textContent = taxType ? `${taxType} · Verified` : 'Verified';
         } else if (taxStatus === 'submitted'){
-          tag.innerHTML = '<span class="dot warn"></span> Submitted';
+          tag.innerHTML = '<span class="dot warn"></span> Submitted / 已提交';
           tag.style.borderColor = 'rgba(255,204,102,.25)';
           text.textContent = taxType ? `${taxType} · Submitted` : 'Submitted';
         } else {
-          tag.innerHTML = '<span class="dot warn"></span> Pending';
+          tag.innerHTML = '<span class="dot warn"></span> Pending / 待提交';
           tag.style.borderColor = 'rgba(255,204,102,.25)';
-          text.textContent = taxType ? `${taxType} · Pending` : 'Not submitted';
+          text.textContent = taxType ? `${taxType} · Pending` : 'Not submitted / 未提交';
         }
       }
 
@@ -892,13 +893,6 @@
         try{
           const s1 = sessionStorage.getItem(LS_USER) || '';
           if (s1) return s1;
-        }catch(e){}
-
-        try{
-          if (window.opener && window.opener.location && window.opener.location.origin === window.location.origin){
-            const v = window.opener.localStorage.getItem(LS_USER) || '';
-            if (v) return v;
-          }
         }catch(e){}
 
         return '';
@@ -937,34 +931,18 @@
           $('landingLink').textContent = '—';
           return;
         }
-
-        // Landing long link
-        const longLink = buildLandingLongLink(dref, $('landing').value);
-        $('landingLink').textContent = longLink;
-
-        // Short link (needs correct r-base)
         const rBase = resolveRBaseFromLocal();
         $('refLink').textContent = `${rBase}${encodeURIComponent(dref)}`;
-      }
-
-      function resolveRBaseFromLocal(){
-        try{
-          const v = localStorage.getItem(LS_R_BASE) || '';
-          if (v) return v;
-        }catch(e){}
-        return `${API_BASE}/r/`;
+        $('landingLink').textContent = buildLandingLongLink(dref, $('landing').value);
       }
 
       async function detectAndRememberRBase(dref){
         if (!dref) return resolveRBaseFromLocal();
-
         const candidates = getRBaseCandidates();
-        // We only need a best-effort probe; follow redirects is fine.
         for (const base of candidates){
           const url = `${base}${encodeURIComponent(dref)}`;
           try{
             const res = await fetch(url, { method:'GET', redirect:'manual', credentials:'omit' });
-            // Most likely: 302/301 redirect. Could be 200 if backend directly serves.
             if (res.status === 301 || res.status === 302 || res.status === 303 || res.status === 307 || res.status === 308 || res.ok){
               try{ localStorage.setItem(LS_R_BASE, base); }catch(e){}
               return base;
@@ -977,7 +955,7 @@
       function setGenerateLoading(isLoading){
         const btn = $('btnGenerate');
         btn.disabled = !!isLoading;
-        btn.textContent = isLoading ? 'Generating…' : 'Generate Link（生成推荐链接）';
+        btn.textContent = isLoading ? 'Generating… / 生成中…' : 'Generate Link / 生成链接';
       }
 
       // ---------------- init ----------------
@@ -1008,7 +986,6 @@
       $('userId').value = initUserId || '';
       $('drefCode').value = initDref || '';
 
-      // Load local agreement/profile placeholders
       if (initUserId){
         setAgreementUI(loadAgreementLocal(initUserId));
         setTaxUI(loadAffiliateProfileLocal(initUserId));
@@ -1017,10 +994,8 @@
         setTaxUI({ tax_status:'pending' });
       }
 
-      // Initial links (may be overwritten after server sync)
       setLinksUI($('drefCode').value.trim());
 
-      // Initial pull: status + server dref (overwrite old local) + summary
       (async () => {
         try{
           if (!initUserId){
@@ -1029,11 +1004,9 @@
             return;
           }
 
-          // subscription status
           const payload = await fetchSubStatus(initUserId);
           applyStatusUI(payload);
 
-          // server dref (overwrite)
           const sv = await tryFetchServerDref(initUserId);
           let code = $('drefCode').value.trim();
 
@@ -1042,18 +1015,15 @@
             $('drefCode').value = code;
             saveLocal(initUserId, code);
           } else if (!code){
-            // fallback only if empty
             code = localGenerateDref(initUserId);
             $('drefCode').value = code;
             saveLocal(initUserId, code);
           }
 
-          // detect /r base and render links
           const rBase = await detectAndRememberRBase(code);
           $('refLink').textContent = `${rBase}${encodeURIComponent(code)}`;
           $('landingLink').textContent = buildLandingLongLink(code, $('landing').value);
 
-          // summary
           const summary = await tryFetchServerSummary(initUserId);
           setKpiSummary(summary.ok ? summary.data : null);
 
@@ -1067,13 +1037,12 @@
       $('btnGenerate').addEventListener('click', async () => {
         const userId = $('userId').value.trim();
         if (!userId){
-          alert('Please input User ID first.');
+          alert('Please input User ID first. / 请先输入推荐人ID。');
           return;
         }
 
         setGenerateLoading(true);
 
-        // 1) server code first (source of truth)
         let code = '';
         const sv = await tryFetchServerDref(userId);
         if (sv.ok && sv.code){
@@ -1085,12 +1054,10 @@
         $('drefCode').value = code;
         saveLocal(userId, code);
 
-        // 2) detect correct /r base and show both links
         const rBase = await detectAndRememberRBase(code);
         $('refLink').textContent = `${rBase}${encodeURIComponent(code)}`;
         $('landingLink').textContent = buildLandingLongLink(code, $('landing').value);
 
-        // 3) refresh status + summary
         try{
           const payload = await fetchSubStatus(userId);
           applyStatusUI(payload);
@@ -1107,12 +1074,12 @@
       $('btnCopy').addEventListener('click', async () => {
         const text = $('refLink').textContent.trim();
         if (!text || text === '—'){
-          alert('No referral link to copy. Click Generate Link first.');
+          alert('No referral link to copy. / 没有可复制的链接，请先生成。');
           return;
         }
         try{
           await navigator.clipboard.writeText(text);
-          alert('Copied ✅');
+          alert('Copied ✅ / 已复制');
         }catch(e){
           const ta = document.createElement('textarea');
           ta.value = text;
@@ -1120,25 +1087,24 @@
           ta.select();
           document.execCommand('copy');
           document.body.removeChild(ta);
-          alert('Copied ✅');
+          alert('Copied ✅ / 已复制');
         }
       });
 
       $('btnOpen').addEventListener('click', () => {
         const text = $('refLink').textContent.trim();
         if (!text || text === '—'){
-          alert('No referral link to open. Click Generate Link first.');
+          alert('No referral link to open. / 没有可打开的链接，请先生成。');
           return;
         }
         window.open(text, '_blank', 'noopener');
       });
 
       $('btnReset').addEventListener('click', () => {
-        if (!confirm('Reset local affiliate fields? (localStorage)')) return;
+        if (!confirm('Reset local fields? / 清空本地缓存？')) return;
         try{
           localStorage.removeItem(LS_USER);
           localStorage.removeItem(LS_DREF);
-          // do not remove LS_R_BASE (keep routing memory)
         }catch(e){}
         $('userId').value = '';
         $('drefCode').value = '';
@@ -1153,25 +1119,24 @@
       $('btnRefreshStatus').addEventListener('click', async () => {
         const userId = $('userId').value.trim();
         if (!userId){
-          alert('Please input User ID first.');
+          alert('Please input User ID first. / 请先输入推荐人ID。');
           return;
         }
         try{
           const payload = await fetchSubStatus(userId);
           applyStatusUI(payload);
         }catch(e){
-          alert('Failed to fetch status. Check backend connectivity.');
+          alert('Failed to fetch status. / 获取状态失败。');
         }
       });
 
       $('btnPullServer').addEventListener('click', async () => {
         const userId = $('userId').value.trim();
         if (!userId){
-          alert('Please input User ID first.');
+          alert('Please input User ID first. / 请先输入推荐人ID。');
           return;
         }
 
-        // Pull server dref + summary (best-effort)
         try{
           const sv = await tryFetchServerDref(userId);
           if (sv.ok && sv.code){
@@ -1189,16 +1154,16 @@
           setKpiSummary(summary.ok ? summary.data : null);
         }catch(e){}
 
-        alert('Sync attempted ✅ (server endpoints may not be enabled yet)');
+        alert('Sync attempted ✅ / 已尝试同步');
       });
 
       $('btnAgreementAccept').addEventListener('click', async () => {
         const userId = $('userId').value.trim();
         if (!userId){
-          alert('Please input User ID first.');
+          alert('Please input User ID first. / 请先输入推荐人ID。');
           return;
         }
-        if (!confirm('Confirm acceptance of the Affiliate Agreement (V1)?')) return;
+        if (!confirm('Confirm acceptance? / 确认同意协议？')) return;
 
         const r = await tryPostAgreementAccept(userId);
         const acceptedAt = new Date().toISOString();
@@ -1208,26 +1173,26 @@
           const state = { accepted:true, accepted_at: serverAcceptedAt, version: AGREEMENT_VERSION, source:'server' };
           saveAgreementLocal(userId, state);
           setAgreementUI(state);
-          alert('Agreement accepted ✅ (server)');
+          alert('Accepted ✅ / 已同意');
           return;
         }
 
         const state = { accepted:true, accepted_at: acceptedAt, version: AGREEMENT_VERSION, source:'local' };
         saveAgreementLocal(userId, state);
         setAgreementUI(state);
-        alert('Agreement accepted ✅ (local placeholder; backend not enabled yet)');
+        alert('Accepted (local) ✅ / 已同意（本地占位）');
       });
 
       $('btnTaxSave').addEventListener('click', async () => {
         const userId = $('userId').value.trim();
         if (!userId){
-          alert('Please input User ID first.');
+          alert('Please input User ID first. / 请先输入推荐人ID。');
           return;
         }
         const taxType = $('taxType').value;
         const taxStatus = $('taxStatus').value;
         if (!taxType){
-          alert('Please select Tax Type first.');
+          alert('Please select Tax Type. / 请选择税务身份类型。');
           return;
         }
 
@@ -1237,41 +1202,30 @@
         if (r.ok){
           saveAffiliateProfileLocal(userId, { ...profile, source:'server' });
           setTaxUI(profile);
-          alert('Tax profile saved ✅ (server)');
+          alert('Saved ✅ / 已保存');
           return;
         }
 
         saveAffiliateProfileLocal(userId, { ...profile, source:'local' });
         setTaxUI(profile);
-        alert('Tax profile saved ✅ (local placeholder; backend not enabled yet)');
+        alert('Saved (local) ✅ / 已保存（本地占位）');
       });
 
       $('btnTaxGuide').addEventListener('click', () => {
         alert(
-`Tax Guide (V1)
+`Tax Guide / 税务指引
 
-Choose your affiliate type:
-- US Individual / US Entity: W-9
-- Non-US Individual: W-8BEN
-- Non-US Entity: W-8BEN-E
+US Individual/Entity: W-9
+Non-US Individual: W-8BEN
+Non-US Entity: W-8BEN-E
 
-V1 only stores status + type.
-V2 will collect actual forms and payout details.`
+V1 stores type & status only. / V1仅保存类型与状态。`
         );
       });
 
-      // Live updates
-      $('landing').addEventListener('change', async () => {
+      $('landing').addEventListener('change', () => {
         const dref = $('drefCode').value.trim();
-        if (!dref){
-          $('landingLink').textContent = '—';
-          return;
-        }
-        $('landingLink').textContent = buildLandingLongLink(dref, $('landing').value);
-
-        // keep short link unchanged (based on /r base)
-        const rBase = resolveRBaseFromLocal();
-        $('refLink').textContent = `${rBase}${encodeURIComponent(dref)}`;
+        $('landingLink').textContent = dref ? buildLandingLongLink(dref, $('landing').value) : '—';
       });
 
       $('drefCode').addEventListener('input', async () => {
@@ -1284,7 +1238,6 @@ V2 will collect actual forms and payout details.`
           return;
         }
 
-        // If user manually changes dref, still try to render short link using best known base.
         const rBase = await detectAndRememberRBase(dref);
         $('refLink').textContent = `${rBase}${encodeURIComponent(dref)}`;
         $('landingLink').textContent = buildLandingLongLink(dref, $('landing').value);
@@ -1293,7 +1246,6 @@ V2 will collect actual forms and payout details.`
       $('userId').addEventListener('input', () => {
         const userId = $('userId').value.trim();
         saveLocal(userId, $('drefCode').value.trim());
-
         if (userId){
           setAgreementUI(loadAgreementLocal(userId));
           setTaxUI(loadAffiliateProfileLocal(userId));
