@@ -1,208 +1,247 @@
 /* =========================================================================
  * FILE: darrius-frontend/js/upgrade.guard.js
- * DarriusAI - Upgrade Guard (PRODUCTION) v2026.02.05
+ * DarriusAI - Upgrade Guard (FRONTEND ENFORCER) v2026.02.05-step2
  *
- * Purpose:
- * - Intercept fetch() globally
- * - If API returns 402 or {code:"UPGRADE_REQUIRED"}:
- *    - Show upgrade modal immediately
- *    - Throw to stop downstream render (chart won't draw)
+ * Role:
+ *  - Intercept fetch() responses
+ *  - If backend returns 402 with code=UPGRADE_REQUIRED => show Upgrade modal
+ *  - Keep UI isolated; never touch chart.core.js internals
  *
- * Safety:
- * - Never breaks non-API fetches
- * - Modal is injected only once
- * - No dependency on chart.core.js internals
+ * Contract:
+ *  - Backend returns HTTP 402 and JSON like:
+ *      { ok:false, code:"UPGRADE_REQUIRED", message:"...", meta:{...} }
+ *    and/or headers: x-upgrade-required: 1
+ *
+ * Config (optional, set before this script loads):
+ *  - window.__UPGRADE_URL__ = "account.html#plans"
+ *  - window.__UPGRADE_AUTO_REDIRECT__ = false   (default false)
+ *  - window.__UPGRADE_MODAL_FORCE__ = true      (default true)
  * ========================================================================= */
 (() => {
   'use strict';
 
-  // Allow disabling in emergencies
-  if (typeof window.__UPGRADE_GUARD_ENABLED__ === 'boolean' && !window.__UPGRADE_GUARD_ENABLED__) {
-    return;
+  // ---------- config ----------
+  const UPGRADE_URL = (typeof window.__UPGRADE_URL__ === 'string' && window.__UPGRADE_URL__.trim())
+    ? window.__UPGRADE_URL__.trim()
+    : 'account.html#plans';
+
+  const AUTO_REDIRECT = (typeof window.__UPGRADE_AUTO_REDIRECT__ === 'boolean')
+    ? window.__UPGRADE_AUTO_REDIRECT__
+    : false;
+
+  const FORCE_MODAL = (typeof window.__UPGRADE_MODAL_FORCE__ === 'boolean')
+    ? window.__UPGRADE_MODAL_FORCE__
+    : true;
+
+  // ---------- helpers ----------
+  const safe = (fn) => { try { return fn(); } catch (_) { return null; } };
+
+  function isProbablyJsonResponse(resp) {
+    const ct = (resp && resp.headers && resp.headers.get && resp.headers.get('content-type')) || '';
+    return (ct || '').toLowerCase().includes('application/json');
   }
 
-  const ORIG_FETCH = window.fetch ? window.fetch.bind(window) : null;
-  if (!ORIG_FETCH) return;
-
-  const STATE = {
-    showing: false,
-    lastShownAt: 0,
-    lastKey: '',
-  };
-
-  function nowMs() { return Date.now(); }
-
-  function isApiUrl(u) {
-    try {
-      const s = String(u || '');
-      // only guard our backend endpoints (avoid breaking assets/CDN)
-      return (
-        s.includes('/api/') ||
-        s.includes('darrius-api.onrender.com')
-      );
-    } catch (_) { return false; }
+  function looksLikeUpgrade(resp, json) {
+    const status = resp ? resp.status : 0;
+    const hdr = resp && resp.headers && resp.headers.get ? resp.headers.get('x-upgrade-required') : null;
+    const hdrFlag = String(hdr || '').trim() === '1';
+    const bodyFlag = json && (json.code === 'UPGRADE_REQUIRED' || json.upgrade_required === true);
+    return status === 402 || hdrFlag || !!bodyFlag;
   }
 
-  function safeJsonParse(text) {
-    try { return JSON.parse(text); } catch (_) { return null; }
+  function parseTier(json) {
+    // Prefer backend meta
+    const metaTier = json && json.meta && (json.meta.tier || json.meta.quota_tier);
+    const tier = (metaTier || json.tier || '').toString().toUpperCase();
+    if (tier === 'TRIAL') return 'TRIAL';
+    if (tier === 'PAID' || tier === 'PRO' || tier === 'ELITE') return 'PAID';
+    return 'FREE';
+  }
+
+  function prettyReason(json) {
+    const msg = (json && (json.message || json.error)) ? String(json.message || json.error) : '';
+    const code = (json && json.code) ? String(json.code) : '';
+    const attemptSymbol = json && json.meta && json.meta.attempt_symbol ? String(json.meta.attempt_symbol) : '';
+    const hint = [];
+
+    if (attemptSymbol) hint.push(`Attempt: ${attemptSymbol}`);
+    if (code) hint.push(`Code: ${code}`);
+    if (msg) hint.push(msg);
+
+    return hint.filter(Boolean).join(' • ');
+  }
+
+  function goUpgrade() {
+    try { window.location.href = UPGRADE_URL; } catch (_) {}
+  }
+
+  // ---------- modal UI (self-contained) ----------
+  const MODAL_ID = '__darr__upgrade_modal__';
+  const STYLE_ID = '__darr__upgrade_style__';
+
+  function ensureStyle() {
+    if (document.getElementById(STYLE_ID)) return;
+    const css = `
+#${MODAL_ID}{position:fixed;inset:0;z-index:999999;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px);}
+#${MODAL_ID} .box{width:min(520px,92vw);border-radius:16px;background:#10131a;color:#e8eefc;box-shadow:0 12px 48px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.08);overflow:hidden;}
+#${MODAL_ID} .hd{padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:10px;align-items:center;}
+#${MODAL_ID} .dot{width:10px;height:10px;border-radius:99px;background:#7aa2ff;box-shadow:0 0 0 6px rgba(122,162,255,.18);}
+#${MODAL_ID} .ttl{font-size:16px;font-weight:700;letter-spacing:.2px;}
+#${MODAL_ID} .bd{padding:14px 18px 6px 18px;font-size:13px;line-height:1.5;color:rgba(232,238,252,.92);}
+#${MODAL_ID} .pill{display:inline-block;margin-top:10px;padding:6px 10px;border-radius:999px;background:rgba(122,162,255,.14);border:1px solid rgba(122,162,255,.25);font-size:12px;color:#cfe0ff;}
+#${MODAL_ID} .ft{padding:14px 18px 16px 18px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
+#${MODAL_ID} button{appearance:none;border:0;border-radius:12px;padding:10px 12px;font-weight:700;cursor:pointer;}
+#${MODAL_ID} .btn-ghost{background:rgba(255,255,255,.06);color:#e8eefc;}
+#${MODAL_ID} .btn-primary{background:linear-gradient(135deg,#7aa2ff,#ff5aa5);color:#0b0f16;}
+#${MODAL_ID} .small{margin-top:10px;font-size:12px;color:rgba(232,238,252,.65);}
+#${MODAL_ID} .reason{margin-top:8px;font-size:12px;color:rgba(232,238,252,.75);}
+    `.trim();
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = css;
+    document.head.appendChild(style);
   }
 
   function ensureModal() {
-    if (document.getElementById('darrius-upgrade-guard-root')) return;
+    ensureStyle();
+    let el = document.getElementById(MODAL_ID);
+    if (el) return el;
 
-    const style = document.createElement('style');
-    style.id = 'darrius-upgrade-guard-style';
-    style.textContent = `
-#darrius-upgrade-guard-root{position:fixed;inset:0;z-index:999999;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55)}
-#darrius-upgrade-guard-modal{width:min(560px,92vw);border-radius:16px;background:#0b1220;color:#e8eefc;box-shadow:0 10px 35px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.10);overflow:hidden}
-#darrius-upgrade-guard-hd{padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.10);display:flex;align-items:center;justify-content:space-between}
-#darrius-upgrade-guard-hd h3{margin:0;font-size:16px;font-weight:700;letter-spacing:.2px}
-#darrius-upgrade-guard-bd{padding:16px 18px;line-height:1.55;font-size:14px}
-#darrius-upgrade-guard-bd .sub{opacity:.85;margin-top:8px;font-size:13px}
-#darrius-upgrade-guard-ft{padding:14px 18px;border-top:1px solid rgba(255,255,255,.10);display:flex;gap:10px;justify-content:flex-end}
-.dar-btn{cursor:pointer;border-radius:12px;padding:10px 14px;font-weight:700;font-size:14px;border:1px solid rgba(255,255,255,.16);background:transparent;color:#e8eefc}
-.dar-btn.primary{background:#2b6cff;border-color:rgba(43,108,255,.45)}
-.dar-btn:hover{filter:brightness(1.05)}
-#darrius-upgrade-guard-x{cursor:pointer;opacity:.8;border:none;background:transparent;color:#e8eefc;font-size:18px;line-height:1}
-#darrius-upgrade-guard-x:hover{opacity:1}
-#darrius-upgrade-guard-code{margin-top:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;opacity:.85;background:rgba(255,255,255,.06);padding:8px 10px;border-radius:10px;word-break:break-word}
+    el = document.createElement('div');
+    el.id = MODAL_ID;
+    el.innerHTML = `
+      <div class="box" role="dialog" aria-modal="true" aria-label="Upgrade Required">
+        <div class="hd">
+          <div class="dot"></div>
+          <div class="ttl" id="__darr_up_ttl__">Upgrade required</div>
+        </div>
+        <div class="bd">
+          <div id="__darr_up_body__"></div>
+          <div class="pill" id="__darr_up_pill__">Plan</div>
+          <div class="reason" id="__darr_up_reason__"></div>
+          <div class="small" id="__darr_up_small__"></div>
+        </div>
+        <div class="ft">
+          <button class="btn-ghost" id="__darr_up_close__">Not now</button>
+          <button class="btn-primary" id="__darr_up_go__">Upgrade</button>
+        </div>
+      </div>
     `;
-    document.head.appendChild(style);
+    document.body.appendChild(el);
 
-    const root = document.createElement('div');
-    root.id = 'darrius-upgrade-guard-root';
-    root.innerHTML = `
-  <div id="darrius-upgrade-guard-modal" role="dialog" aria-modal="true">
-    <div id="darrius-upgrade-guard-hd">
-      <h3>Upgrade Required</h3>
-      <button id="darrius-upgrade-guard-x" aria-label="Close">×</button>
-    </div>
-    <div id="darrius-upgrade-guard-bd">
-      <div id="darrius-upgrade-guard-msg">You’ve reached your Free/Trial limit. Upgrade to continue using real market data.</div>
-      <div class="sub" id="darrius-upgrade-guard-sub">No demo data will be shown.</div>
-      <div id="darrius-upgrade-guard-code" style="display:none;"></div>
-    </div>
-    <div id="darrius-upgrade-guard-ft">
-      <button class="dar-btn" id="darrius-upgrade-guard-close">Close</button>
-      <button class="dar-btn primary" id="darrius-upgrade-guard-upgrade">Upgrade</button>
-    </div>
-  </div>
-    `;
-    document.body.appendChild(root);
+    // close handlers
+    const close = () => hideUpgrade();
+    el.addEventListener('click', (e) => { if (e.target === el) close(); });
+    safe(() => document.getElementById('__darr_up_close__').addEventListener('click', close));
+    safe(() => document.getElementById('__darr_up_go__').addEventListener('click', () => goUpgrade()));
 
-    const close = () => { root.style.display = 'none'; STATE.showing = false; };
-    root.addEventListener('click', (e) => { if (e.target === root) close(); });
-    root.querySelector('#darrius-upgrade-guard-x').addEventListener('click', close);
-    root.querySelector('#darrius-upgrade-guard-close').addEventListener('click', close);
-
-    root.querySelector('#darrius-upgrade-guard-upgrade').addEventListener('click', () => {
-      // choose your upgrade destination
-      // 1) account page with plans
-      const url = window.__UPGRADE_URL__ || 'account.html#plans';
-      try { window.location.href = url; } catch (_) {}
+    // ESC
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hideUpgrade();
     });
+
+    return el;
   }
 
-  function showUpgrade(info) {
-    try {
-      ensureModal();
-      const root = document.getElementById('darrius-upgrade-guard-root');
-      if (!root) return;
+  let _locked = false; // prevent modal spam storms
+  let _lastKey = '';
 
-      // de-dupe: avoid spamming modal if many requests fail at once
-      const key = (info && (info.code || info.message || info.status || '')) + '|' + (info && info.path ? info.path : '');
-      const t = nowMs();
-      if (STATE.showing && (t - STATE.lastShownAt) < 800) return;
-      if (STATE.lastKey === key && (t - STATE.lastShownAt) < 1200) return;
+  function showUpgrade({ tier, reason, meta }) {
+    // avoid repeated popups for same event
+    const key = `${tier}|${meta && meta.attempt_symbol ? meta.attempt_symbol : ''}|${meta && meta.user_id ? meta.user_id : ''}|${reason || ''}`;
+    if (_locked && key === _lastKey) return;
+    _locked = true;
+    _lastKey = key;
+    setTimeout(() => { _locked = false; }, 1200);
 
-      STATE.showing = true;
-      STATE.lastShownAt = t;
-      STATE.lastKey = key;
+    const el = ensureModal();
+    const ttlEl = document.getElementById('__darr_up_ttl__');
+    const bodyEl = document.getElementById('__darr_up_body__');
+    const pillEl = document.getElementById('__darr_up_pill__');
+    const rsnEl = document.getElementById('__darr_up_reason__');
+    const smallEl = document.getElementById('__darr_up_small__');
 
-      const msgEl = document.getElementById('darrius-upgrade-guard-msg');
-      const codeEl = document.getElementById('darrius-upgrade-guard-code');
+    // copy by tier
+    let title = 'Upgrade required';
+    let body = 'You’ve reached your current access limit for real-time market data.';
+    let pill = 'ACCESS LIMIT';
+    let small = '';
 
-      const msg = (info && info.message) ? info.message : 'You’ve reached your Free/Trial limit. Upgrade to continue using real market data.';
-      if (msgEl) msgEl.textContent = msg;
-
-      const code = (info && info.code) ? info.code : '';
-      if (codeEl) {
-        if (code) { codeEl.style.display = 'block'; codeEl.textContent = `code: ${code}`; }
-        else { codeEl.style.display = 'none'; codeEl.textContent = ''; }
-      }
-
-      root.style.display = 'flex';
-
-      // notify app listeners (optional)
-      window.dispatchEvent(new CustomEvent('darrius:upgradeRequired', { detail: info || {} }));
-    } catch (_) {}
-  }
-
-  async function extractErrorInfo(res, urlStr) {
-    let info = { status: res.status, path: urlStr || '' };
-    try {
-      const text = await res.clone().text();
-      const j = safeJsonParse(text);
-      if (j && typeof j === 'object') {
-        info = Object.assign(info, {
-          ok: j.ok,
-          code: j.code,
-          message: j.message || j.error || '',
-          meta: j.meta || null,
-        });
-      }
-    } catch (_) {}
-    return info;
-  }
-
-  // Global fetch guard
-  window.fetch = async function guardedFetch(input, init) {
-    const urlStr = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
-    const shouldGuard = isApiUrl(urlStr);
-
-    const res = await ORIG_FETCH(input, init);
-
-    if (!shouldGuard) return res;
-
-    // 402: always upgrade
-    if (res && res.status === 402) {
-      const info = await extractErrorInfo(res, urlStr);
-      info.code = info.code || 'UPGRADE_REQUIRED';
-      showUpgrade(info);
-
-      // Throw to stop render pipeline (chart will not draw)
-      const err = new Error('UPGRADE_REQUIRED');
-      err.name = 'UpgradeRequiredError';
-      err.info = info;
-      throw err;
+    if (tier === 'FREE') {
+      title = 'Upgrade to view more symbols';
+      body = 'Free access is limited. Upgrade to unlock multi-symbol viewing and avoid interruptions.';
+      pill = 'FREE LIMIT REACHED';
+      small = 'Tip: Paid plans unlock unlimited symbols. Trial requires a card and has a daily symbol cap.';
+    } else if (tier === 'TRIAL') {
+      title = 'Trial limit reached';
+      body = 'Trial is designed for conversion, not unlimited usage. Upgrade to keep browsing without daily caps.';
+      pill = 'TRIAL CAP REACHED';
+      small = 'Your trial resets daily (symbol cap). Upgrade removes symbol limits.';
+    } else { // PAID
+      title = 'Action required';
+      body = 'We couldn’t complete this request. Please check your subscription status.';
+      pill = 'SUBSCRIPTION ACTION';
+      small = 'If you believe this is a mistake, refresh and try again, or open Billing to confirm status.';
     }
 
-    // 200 but payload says UPGRADE_REQUIRED (just in case)
-    try {
-      const ct = (res.headers && res.headers.get) ? (res.headers.get('content-type') || '') : '';
-      if (ct.includes('application/json')) {
-        const text = await res.clone().text();
-        const j = safeJsonParse(text);
-        if (j && j.code === 'UPGRADE_REQUIRED') {
-          const info = {
-            status: res.status,
-            path: urlStr || '',
-            code: j.code,
-            message: j.message || 'Upgrade required',
-            meta: j.meta || null,
-          };
-          showUpgrade(info);
-          const err = new Error('UPGRADE_REQUIRED');
-          err.name = 'UpgradeRequiredError';
-          err.info = info;
-          throw err;
-        }
-      }
-    } catch (_) {
-      // ignore parse issues
+    if (ttlEl) ttlEl.textContent = title;
+    if (bodyEl) bodyEl.textContent = body;
+    if (pillEl) pillEl.textContent = pill;
+
+    const rsn = reason ? String(reason) : '';
+    if (rsnEl) rsnEl.textContent = rsn ? `Details: ${rsn}` : '';
+    if (smallEl) smallEl.textContent = small;
+
+    el.style.display = 'flex';
+
+    if (AUTO_REDIRECT) {
+      setTimeout(() => goUpgrade(), 350);
+    }
+  }
+
+  function hideUpgrade() {
+    const el = document.getElementById(MODAL_ID);
+    if (el) el.style.display = 'none';
+  }
+
+  // ---------- fetch interceptor ----------
+  const _fetch = window.fetch ? window.fetch.bind(window) : null;
+  if (!_fetch) return;
+
+  window.fetch = async function patchedFetch(input, init) {
+    const resp = await _fetch(input, init);
+
+    // Fast-path by header or status
+    const status = resp.status;
+    const hdr = resp.headers && resp.headers.get ? resp.headers.get('x-upgrade-required') : null;
+    const hdrFlag = String(hdr || '').trim() === '1';
+
+    if (status !== 402 && !hdrFlag) return resp;
+
+    // Try parse JSON if possible (clone!)
+    let j = null;
+    if (isProbablyJsonResponse(resp)) {
+      j = await safe(async () => await resp.clone().json());
     }
 
-    return res;
+    if (!looksLikeUpgrade(resp, j)) return resp;
+
+    // Show modal even if body parse failed
+    const tier = parseTier(j);
+    const reason = prettyReason(j) || 'upgrade_required';
+    const meta = (j && j.meta) ? j.meta : {};
+
+    // If FORCE_MODAL, always show. Otherwise rely on caller.
+    if (FORCE_MODAL) {
+      showUpgrade({ tier, reason, meta });
+    }
+
+    return resp;
   };
+
+  // allow other scripts to manually trigger modal (optional)
+  window.DarriusUpgrade = window.DarriusUpgrade || {};
+  window.DarriusUpgrade.show = (payload) => safe(() => showUpgrade(payload || {}));
+  window.DarriusUpgrade.hide = () => safe(() => hideUpgrade());
 
 })();
