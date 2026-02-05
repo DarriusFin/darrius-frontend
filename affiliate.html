@@ -57,12 +57,19 @@
     }
     .brand{
       display:flex; align-items:center; gap:10px;
+      min-width: 260px;
     }
-    .logo{
-      width:34px; height:34px;
+
+    /* Logo: replace placeholder with real asset */
+    .brand-logo{
+      width:34px;
+      height:34px;
       border-radius:10px;
-      background: linear-gradient(135deg, var(--accentA), var(--accentB));
-      box-shadow: 0 10px 30px rgba(76,194,255,.12);
+      object-fit:cover;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.06);
+      display:block;
     }
     .brand h1{
       margin:0;
@@ -205,6 +212,10 @@
       color: rgba(255,255,255,.92);
       border:1px solid rgba(255,91,91,.25);
     }
+    .btn:disabled{
+      opacity:.55;
+      cursor:not-allowed;
+    }
 
     .mono{
       font-family: var(--mono);
@@ -269,6 +280,96 @@
     .badge.bad{ border-color: rgba(255,91,91,.25); }
     .badge.warn{ border-color: rgba(255,204,102,.25); }
 
+    .subgrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      margin-top:12px;
+    }
+    @media (max-width: 560px){
+      .subgrid{ grid-template-columns: 1fr; }
+    }
+    .mini{
+      border:1px solid var(--stroke);
+      background: rgba(0,0,0,.18);
+      border-radius: 16px;
+      padding:12px;
+    }
+    .mini .t{
+      font-size:12px;
+      color:var(--muted);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .mini .v{
+      margin-top:8px;
+      font-size:14px;
+      font-weight:800;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .mini .desc{
+      margin-top:6px;
+      font-size:11px;
+      color:rgba(255,255,255,.55);
+      line-height:1.35;
+    }
+
+    .tag{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.03);
+      color:rgba(255,255,255,.88);
+      font-size:12px;
+      font-weight:700;
+      white-space:nowrap;
+    }
+
+    .modal-mask{
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+      z-index:999;
+    }
+    .modal{
+      width:min(860px, 100%);
+      border:1px solid var(--stroke);
+      border-radius: 18px;
+      background: rgba(14,32,48,.95);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .modal-hd{
+      padding:12px 14px;
+      border-bottom:1px solid var(--stroke);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+    }
+    .modal-hd b{ font-size:13px; }
+    .modal-bd{
+      padding:14px;
+      max-height: 70vh;
+      overflow:auto;
+      font-size:12px;
+      line-height:1.6;
+      color: rgba(255,255,255,.86);
+    }
+
     a{ color: rgba(76,194,255,.95); text-decoration:none; }
     a:hover{ text-decoration:underline; }
   </style>
@@ -278,7 +379,8 @@
   <div class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <div class="logo" aria-hidden="true"></div>
+        <!-- CHANGE THIS PATH if your real logo file name differs -->
+        <img id="brandLogo" class="brand-logo" src="assets/logo.png" alt="DarriusAI Logo" />
         <div>
           <h1>DarriusAI · Inflection Hunter<span class="sub">Affiliate / 推荐人后台 · V1</span></h1>
         </div>
@@ -302,14 +404,14 @@
         <h2>Affiliate / 推荐人入口（V1）</h2>
         <p>
           这里是“轻代理系统”第一版：生成推荐链接、展示基础规则与提示。<br>
-          返佣统计/打款/税务表单等，将在后端 Referral 模块落地后接入（不影响你现在的订阅/支付体系）。
+          签约/税务身份/返佣台账/归因闭环，将逐步接入后端 Referral 模块（不影响你现有订阅/支付体系）。
         </p>
       </div>
       <div class="bd">
         <div class="grid2">
           <div class="field">
             <label>User ID（推荐人 ID）</label>
-            <input id="userId" class="input" placeholder="例如：PerryWu" />
+            <input id="userId" class="input" placeholder="例如：darrius888" />
             <div class="hint">
               V1 会自动尝试从 URL 参数、localStorage/sessionStorage、以及 opener 页面读取（如果可用）。你也可手动填。
             </div>
@@ -323,15 +425,15 @@
               <option value="0.10">10%</option>
             </select>
             <div class="hint">
-              规则：续费继续返佣（持续返佣模式）。比例最终以代理协议/后台策略为准。
+              规则：续费继续返佣（持续返佣模式）。返佣口径：以“净额（不含税/不含退款）×比例”为准（后端台账）。
             </div>
           </div>
 
           <div class="field">
             <label>Referral Code（dref_code）</label>
-            <input id="drefCode" class="input" placeholder="点击 Generate 自动生成" />
+            <input id="drefCode" class="input" placeholder="点击 Generate 自动生成/拉取" />
             <div class="hint">
-              V1：本地生成并保存（localStorage）。后端 referral 落地后，会改为由服务器签发/校验。
+              优先从后端签发/校验（如果后端尚未接入，则回退到本地 V1 生成）。
             </div>
           </div>
 
@@ -360,7 +462,7 @@
             <label>Referral Link（推荐链接）</label>
             <div id="refLink" class="mono">—</div>
             <div class="hint">
-              提示：你主站 `index.html` 里已引入 <span class="mono">js/referral.client.js</span>，后续可让它自动识别 <span class="mono">dref</span> 并写入 Stripe checkout metadata。
+              提示：你主站 index.html 里已引入 <span class="mono">js/referral.client.js</span>，后续将自动识别 <span class="mono">dref</span> 并写入 Stripe checkout metadata（归因闭环）。
             </div>
           </div>
         </div>
@@ -376,19 +478,19 @@
 
         <div class="note">
           <b>V1 说明（非常重要）：</b><br>
-          1) 你现在生成的 <span class="mono">dref_code</span> 只是 V1 的“前端可用占位”，用于跑通 UI/流程；<br>
-          2) 真正的返佣统计必须以后端为准（Stripe webhook + DB 记账 + 佣金结算）；<br>
-          3) 税务：美国通常需要对代理/推广者做合规收集（例如 W-9/W-8BEN 等），V1 仅做说明占位；<br>
-          4) 我们的原则不变：不碰你已定型的订阅/支付代码，只在外围增加模块与接口。
+          1) 推荐码默认“固定不变”（后端真相源优先）；V1 若后端未接入会回退本地占位；<br>
+          2) 真正的返佣统计必须以后端为准（Stripe webhook + DB 台账 + 结算状态机）；<br>
+          3) 税务：根据身份收集 W-9 / W-8BEN / W-8BEN-E（V1 先做身份与状态采集）；<br>
+          4) 原则不变：不碰你已定型的订阅/支付代码，只在外围增加模块与接口。
         </div>
       </div>
     </div>
 
-    <!-- Right: status + kpis + actions -->
+    <!-- Right: status + compliance + kpis -->
     <div class="card">
       <div class="hd">
         <h2>Account & Status</h2>
-        <p>读取你的订阅状态（来自后端 <span class="mono">/api/subscription/status</span>），并给出下一步动作建议。</p>
+        <p>读取你的订阅状态（来自后端 <span class="mono">/api/subscription/status</span>），并展示签约/税务/返佣闭环的状态。</p>
       </div>
       <div class="bd">
         <div class="kpis">
@@ -401,44 +503,122 @@
             <div class="v" id="kpiAccess">—</div>
           </div>
           <div class="kpi">
-            <div class="t">Referrals (V1 placeholder)</div>
-            <div class="v" id="kpiRefs">0</div>
+            <div class="t">Referrals</div>
+            <div class="v" id="kpiRefs">—</div>
           </div>
           <div class="kpi">
-            <div class="t">Commission (V1 placeholder)</div>
-            <div class="v" id="kpiComm">$0</div>
+            <div class="t">Commission (net)</div>
+            <div class="v" id="kpiComm">—</div>
+          </div>
+        </div>
+
+        <!-- Compliance status -->
+        <div class="subgrid">
+          <div class="mini">
+            <div class="t">
+              <span>Agreement</span>
+              <span id="agTag" class="tag"><span class="dot warn"></span> Pending</span>
+            </div>
+            <div class="v" id="agText">Not accepted</div>
+            <div class="desc">V1：记录协议版本 + 接受时间（后端优先；未接入则本地占位）。</div>
+            <div class="btnrow">
+              <button class="btn secondary" id="btnAgreementOpen">Open</button>
+              <button class="btn" id="btnAgreementAccept">I Accept</button>
+            </div>
+          </div>
+
+          <div class="mini">
+            <div class="t">
+              <span>Tax Profile</span>
+              <span id="taxTag" class="tag"><span class="dot warn"></span> Pending</span>
+            </div>
+            <div class="v" id="taxText">Not submitted</div>
+            <div class="desc">选择身份类型（US/Non-US × Individual/Entity），并提交税务资料状态。</div>
+
+            <div class="grid2" style="margin-top:10px;">
+              <div class="field">
+                <label>Tax Type（身份类型）</label>
+                <select id="taxType" class="select">
+                  <option value="">— Select —</option>
+                  <option value="us_individual">US Individual（W-9）</option>
+                  <option value="us_entity">US Entity（W-9）</option>
+                  <option value="nonus_individual">Non-US Individual（W-8BEN）</option>
+                  <option value="nonus_entity">Non-US Entity（W-8BEN-E）</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Tax Status</label>
+                <select id="taxStatus" class="select">
+                  <option value="pending">Pending</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="verified">Verified</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="btnrow">
+              <button class="btn secondary" id="btnTaxSave">Save</button>
+              <button class="btn secondary" id="btnTaxGuide">Guide</button>
+            </div>
           </div>
         </div>
 
         <div class="btnrow" style="margin-top:12px;">
           <button class="btn secondary" id="btnRefreshStatus">Refresh Status（刷新状态）</button>
-          <button class="btn secondary" id="btnAgreement">Open Agreement（代理协议占位）</button>
+          <button class="btn secondary" id="btnPullServer">Sync from Server（尝试拉取后端）</button>
         </div>
 
         <div style="margin-top:14px;" class="note">
-          <b>后续 V2/V3 会做：</b><br>
-          • 代理协议签署（电子签）<br>
-          • 真实推荐码签发（后端）<br>
-          • 点击/注册/付费归因（后端）<br>
-          • 返佣明细与续费持续返佣<br>
-          • 税务合规表单与年度对账（1099/等）
+          <b>后端接入路线（你后面发 routes.py 我再帮你落地）：</b><br>
+          • 推荐码签发：<span class="mono">GET /api/referral/code?user_id=</span><br>
+          • 签约记录：<span class="mono">POST /api/referral/agreements/accept</span><br>
+          • 税务身份：<span class="mono">POST /api/referral/profile</span><br>
+          • 汇总统计：<span class="mono">GET /api/referral/summary?user_id=</span><br>
+          • 返佣台账：Stripe webhook 记账（invoice.paid / refunded / disputes）
         </div>
       </div>
     </div>
   </div>
 
   <div class="footer">
-    © <span id="yy"></span> Darrius FinTech Inc. · Affiliate V1 (static) · This page is informational and for internal workflow validation.
+    © <span id="yy"></span> Darrius FinTech Inc. · Affiliate V1 · This page is informational and for internal workflow validation.
+  </div>
+
+  <!-- Agreement modal -->
+  <div id="modalMask" class="modal-mask" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-hd">
+        <b>Affiliate Agreement (V1 Draft)</b>
+        <button class="btn secondary" id="btnModalClose">Close</button>
+      </div>
+      <div class="modal-bd" id="modalBody">
+        <p><b>Summary (V1)</b></p>
+        <ul>
+          <li><b>Commission:</b> default 20% of <b>net revenue</b> (exclude tax, exclude refunds/chargebacks).</li>
+          <li><b>Attribution:</b> first-touch by default (initial referral code captured).</li>
+          <li><b>Anti-fraud:</b> self-referral is not eligible.</li>
+          <li><b>Tax:</b> US affiliates may need W-9; non-US may need W-8 forms.</li>
+          <li><b>Termination:</b> platform may suspend/terminate for fraud or policy violations.</li>
+        </ul>
+        <p class="note">V2：将替换为正式协议（版本化）+ 电子签 + 可审计记录。</p>
+      </div>
+    </div>
   </div>
 
   <script>
     (() => {
       'use strict';
 
-      // --------- Config (你现在的后端域名) ----------
+      // ---------------- Config ----------------
       const API_BASE = 'https://darrius-api.onrender.com';
 
-      // --------- Utilities ----------
+      // Logo asset path (change if needed)
+      const LOGO_SRC = 'assets/logo.png';
+
+      // Agreement version (frontend placeholder; backend should be source of truth)
+      const AGREEMENT_VERSION = 'affiliate_v1_2026-02-05';
+
+      // ---------------- Utilities ----------------
       const $ = (id) => document.getElementById(id);
 
       function nowYear(){ return String(new Date().getFullYear()); }
@@ -447,14 +627,13 @@
         try{ return JSON.parse(s); } catch(e){ return null; }
       }
 
-      // 很轻的 hash：用于 V1 本地 dref_code（不作为安全用途）
+      // light hash for local fallback only
       function hash36(str){
         let h = 2166136261;
         for (let i=0; i<str.length; i++){
           h ^= str.charCodeAt(i);
           h += (h<<1) + (h<<4) + (h<<7) + (h<<8) + (h<<24);
         }
-        // unsigned
         h = (h >>> 0);
         return h.toString(36);
       }
@@ -503,6 +682,30 @@
         }
       }
 
+      function saveAffiliateProfileLocal(userId, profile){
+        try{
+          localStorage.setItem(`affiliate_profile_${userId}`, JSON.stringify(profile || {}));
+        }catch(e){}
+      }
+      function loadAffiliateProfileLocal(userId){
+        try{
+          const s = localStorage.getItem(`affiliate_profile_${userId}`) || '';
+          return safeJSONParse(s) || {};
+        }catch(e){ return {}; }
+      }
+
+      function saveAgreementLocal(userId, payload){
+        try{
+          localStorage.setItem(`affiliate_agreement_${userId}`, JSON.stringify(payload || {}));
+        }catch(e){}
+      }
+      function loadAgreementLocal(userId){
+        try{
+          const s = localStorage.getItem(`affiliate_agreement_${userId}`) || '';
+          return safeJSONParse(s) || {};
+        }catch(e){ return {}; }
+      }
+
       function buildReferralLink(dref, landing){
         const base = window.location.origin;
         const path = landing || '/';
@@ -511,11 +714,94 @@
         return u.toString();
       }
 
+      async function httpJSON(url, opts){
+        const res = await fetch(url, opts);
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        let data = null;
+        if (ct.includes('application/json')) data = await res.json();
+        else data = await res.text();
+        return { ok: res.ok, status: res.status, data };
+      }
+
       async function fetchSubStatus(userId){
         if (!userId) return { ok:false, status:'none', has_access:false };
         const u = `${API_BASE}/api/subscription/status?user_id=${encodeURIComponent(userId)}`;
-        const res = await fetch(u, { method:'GET', credentials:'omit' });
-        return await res.json();
+        const r = await httpJSON(u, { method:'GET', credentials:'omit' });
+        return (r && r.data) || { status:'unknown', has_access:false };
+      }
+
+      async function tryFetchServerDref(userId){
+        // Optional server endpoint: /api/referral/code?user_id=...
+        const u = `${API_BASE}/api/referral/code?user_id=${encodeURIComponent(userId)}`;
+        try{
+          const r = await httpJSON(u, { method:'GET', credentials:'omit' });
+          if (r.ok && r.data && typeof r.data === 'object'){
+            const code = r.data.dref_code || r.data.code || '';
+            if (code) return { ok:true, code, source:'server' };
+          }
+          return { ok:false, code:'', source:'server' };
+        }catch(e){
+          return { ok:false, code:'', source:'server' };
+        }
+      }
+
+      async function tryFetchServerSummary(userId){
+        // Optional server endpoint: /api/referral/summary?user_id=...
+        const u = `${API_BASE}/api/referral/summary?user_id=${encodeURIComponent(userId)}`;
+        try{
+          const r = await httpJSON(u, { method:'GET', credentials:'omit' });
+          if (r.ok && r.data && typeof r.data === 'object'){
+            return { ok:true, data:r.data };
+          }
+        }catch(e){}
+        return { ok:false, data:null };
+      }
+
+      async function tryPostAgreementAccept(userId){
+        // Optional server endpoint: /api/referral/agreements/accept
+        const u = `${API_BASE}/api/referral/agreements/accept`;
+        const payload = {
+          user_id: userId,
+          agreement_version: AGREEMENT_VERSION,
+          accepted_at: new Date().toISOString(),
+          // best-effort audit fields
+          user_agent: navigator.userAgent || '',
+        };
+        try{
+          const r = await httpJSON(u, {
+            method:'POST',
+            credentials:'omit',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (r.ok) return { ok:true, data:r.data };
+          return { ok:false, data:r.data };
+        }catch(e){
+          return { ok:false, data:null };
+        }
+      }
+
+      async function tryPostTaxProfile(userId, taxType, taxStatus){
+        // Optional server endpoint: /api/referral/profile
+        const u = `${API_BASE}/api/referral/profile`;
+        const payload = {
+          user_id: userId,
+          tax_type: taxType,
+          tax_status: taxStatus,
+          updated_at: new Date().toISOString()
+        };
+        try{
+          const r = await httpJSON(u, {
+            method:'POST',
+            credentials:'omit',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (r.ok) return { ok:true, data:r.data };
+          return { ok:false, data:r.data };
+        }catch(e){
+          return { ok:false, data:null };
+        }
       }
 
       function applyStatusUI(payload){
@@ -526,7 +812,6 @@
         $('kpiAccess').textContent = hasAccess ? 'ON' : 'OFF';
         setPill(status, hasAccess);
 
-        // V1: 仅展示模式占位
         const badge = $('modeBadge');
         if (hasAccess) {
           badge.className = 'badge ok';
@@ -537,12 +822,52 @@
         }
       }
 
+      function setAgreementUI(state){
+        // state: { accepted: bool, accepted_at, version }
+        const tag = $('agTag');
+        const text = $('agText');
+        const accepted = !!state?.accepted;
+
+        if (accepted){
+          tag.innerHTML = '<span class="dot ok"></span> Accepted';
+          tag.style.borderColor = 'rgba(43,226,166,.25)';
+          text.textContent = `Accepted · ${state.accepted_at ? new Date(state.accepted_at).toLocaleString() : '—'}`;
+        } else {
+          tag.innerHTML = '<span class="dot warn"></span> Pending';
+          tag.style.borderColor = 'rgba(255,204,102,.25)';
+          text.textContent = 'Not accepted';
+        }
+      }
+
+      function setTaxUI(profile){
+        const tag = $('taxTag');
+        const text = $('taxText');
+
+        const taxType = profile?.tax_type || '';
+        const taxStatus = (profile?.tax_status || 'pending').toLowerCase();
+
+        $('taxType').value = taxType || '';
+        $('taxStatus').value = taxStatus || 'pending';
+
+        if (taxStatus === 'verified'){
+          tag.innerHTML = '<span class="dot ok"></span> Verified';
+          tag.style.borderColor = 'rgba(43,226,166,.25)';
+          text.textContent = taxType ? `${taxType} · Verified` : 'Verified';
+        } else if (taxStatus === 'submitted'){
+          tag.innerHTML = '<span class="dot warn"></span> Submitted';
+          tag.style.borderColor = 'rgba(255,204,102,.25)';
+          text.textContent = taxType ? `${taxType} · Submitted` : 'Submitted';
+        } else {
+          tag.innerHTML = '<span class="dot warn"></span> Pending';
+          tag.style.borderColor = 'rgba(255,204,102,.25)';
+          text.textContent = taxType ? `${taxType} · Pending` : 'Not submitted';
+        }
+      }
+
       function tryAutoFillUserId(){
-        // 1) URL ?user_id=
         const q = getParam('user_id');
         if (q) return q;
 
-        // 2) localStorage/sessionStorage
         const loc = loadLocal();
         if (loc.userId) return loc.userId;
 
@@ -551,7 +876,6 @@
           if (s1) return s1;
         }catch(e){}
 
-        // 3) opener window 读取（如果同源且有写）
         try{
           if (window.opener && window.opener.location && window.opener.location.origin === window.location.origin){
             const v = window.opener.localStorage.getItem('darrius_user_id') || '';
@@ -563,28 +887,55 @@
       }
 
       function tryAutoFillDref(){
-        // 1) URL ?dref=
         const q = getParam('dref');
         if (q) return q;
 
-        // 2) localStorage
         const loc = loadLocal();
         if (loc.drefCode) return loc.drefCode;
 
         return '';
       }
 
-      // --------- init ----------
+      function localGenerateDref(userId){
+        return 'DREF_' + hash36(userId + '::darrius::v1').toUpperCase();
+      }
+
+      function setKpiSummary(summary){
+        // Expected future payload: { referrals: n, commission_net: number/string }
+        if (!summary){
+          $('kpiRefs').textContent = '—';
+          $('kpiComm').textContent = '—';
+          return;
+        }
+        const refs = summary.referrals ?? summary.total_referrals ?? '—';
+        const comm = summary.commission_net ?? summary.commission ?? '—';
+        $('kpiRefs').textContent = String(refs);
+        if (typeof comm === 'number') $('kpiComm').textContent = `$${comm.toFixed(2)}`;
+        else $('kpiComm').textContent = String(comm);
+      }
+
+      // ---------------- init ----------------
       $('yy').textContent = nowYear();
 
-      $('btnBack').addEventListener('click', () => {
-        // 回到主页（你也可以改成 /index.html）
-        window.location.href = '/';
-      });
+      // Logo fallback: if missing, use gradient background via data URI
+      try{
+        $('brandLogo').src = LOGO_SRC;
+        $('brandLogo').addEventListener('error', () => {
+          // fallback: keep a subtle gradient block
+          $('brandLogo').removeAttribute('src');
+          $('brandLogo').style.background = 'linear-gradient(135deg, var(--accentA), var(--accentB))';
+        }, { once:true });
+      }catch(e){}
 
-      $('btnAgreement').addEventListener('click', () => {
-        alert('Agreement (placeholder)\n\nV2: 这里将接入代理协议签署（e-sign）与税务条款确认。');
-      });
+      $('btnBack').addEventListener('click', () => { window.location.href = '/'; });
+
+      // Modal
+      const modalMask = $('modalMask');
+      function openModal(){ modalMask.style.display = 'flex'; }
+      function closeModal(){ modalMask.style.display = 'none'; }
+      $('btnAgreementOpen').addEventListener('click', openModal);
+      $('btnModalClose').addEventListener('click', closeModal);
+      modalMask.addEventListener('click', (e) => { if (e.target === modalMask) closeModal(); });
 
       const initUserId = tryAutoFillUserId();
       const initDref = tryAutoFillDref();
@@ -592,27 +943,42 @@
       $('userId').value = initUserId || '';
       $('drefCode').value = initDref || '';
 
-      // 初始显示链接
-      const landingSel = $('landing');
-      const landing = landingSel.value;
-      const link0 = buildReferralLink($('drefCode').value.trim(), landing);
+      // Load local agreement/profile placeholders
+      if (initUserId){
+        const ag = loadAgreementLocal(initUserId);
+        setAgreementUI(ag);
+
+        const prof = loadAffiliateProfileLocal(initUserId);
+        setTaxUI(prof);
+      } else {
+        setAgreementUI({ accepted:false });
+        setTaxUI({ tax_status:'pending' });
+      }
+
+      // Initial link
+      const link0 = buildReferralLink($('drefCode').value.trim(), $('landing').value);
       $('refLink').textContent = ($('drefCode').value.trim() ? link0 : '—');
 
-      // 初始拉一次订阅状态
+      // Initial pull status
       (async () => {
         try{
           if (!initUserId){
             applyStatusUI({ status:'none', has_access:false });
+            setKpiSummary(null);
             return;
           }
           const payload = await fetchSubStatus(initUserId);
           applyStatusUI(payload);
+
+          const summary = await tryFetchServerSummary(initUserId);
+          setKpiSummary(summary.ok ? summary.data : null);
         }catch(e){
           applyStatusUI({ status:'unknown', has_access:false });
+          setKpiSummary(null);
         }
       })();
 
-      // --------- actions ----------
+      // ---------------- actions ----------------
       $('btnGenerate').addEventListener('click', async () => {
         const userId = $('userId').value.trim();
         if (!userId){
@@ -620,8 +986,16 @@
           return;
         }
 
-        // V1: 本地生成
-        const code = 'DREF_' + hash36(userId + '::darrius::v1').toUpperCase();
+        // 1) try server code first (source of truth)
+        let code = '';
+        const sv = await tryFetchServerDref(userId);
+        if (sv.ok && sv.code){
+          code = sv.code;
+        } else {
+          // 2) fallback local V1
+          code = localGenerateDref(userId);
+        }
+
         $('drefCode').value = code;
 
         const link = buildReferralLink(code, $('landing').value);
@@ -629,10 +1003,14 @@
 
         saveLocal(userId, code);
 
-        // 同时刷新订阅状态
+        // refresh subscription status + summary
         try{
           const payload = await fetchSubStatus(userId);
           applyStatusUI(payload);
+        }catch(e){}
+        try{
+          const summary = await tryFetchServerSummary(userId);
+          setKpiSummary(summary.ok ? summary.data : null);
         }catch(e){}
       });
 
@@ -646,7 +1024,6 @@
           await navigator.clipboard.writeText(text);
           alert('Copied ✅');
         }catch(e){
-          // fallback
           const ta = document.createElement('textarea');
           ta.value = text;
           document.body.appendChild(ta);
@@ -676,6 +1053,9 @@
         $('drefCode').value = '';
         $('refLink').textContent = '—';
         applyStatusUI({ status:'none', has_access:false });
+        setKpiSummary(null);
+        setAgreementUI({ accepted:false });
+        setTaxUI({ tax_status:'pending' });
       });
 
       $('btnRefreshStatus').addEventListener('click', async () => {
@@ -692,7 +1072,102 @@
         }
       });
 
-      // 当用户改 landing / dref 时，实时刷新链接显示
+      $('btnPullServer').addEventListener('click', async () => {
+        const userId = $('userId').value.trim();
+        if (!userId){
+          alert('Please input User ID first.');
+          return;
+        }
+        // Pull server dref + summary (best-effort)
+        try{
+          const sv = await tryFetchServerDref(userId);
+          if (sv.ok && sv.code){
+            $('drefCode').value = sv.code;
+            $('refLink').textContent = buildReferralLink(sv.code, $('landing').value);
+            saveLocal(userId, sv.code);
+          }
+        }catch(e){}
+        try{
+          const summary = await tryFetchServerSummary(userId);
+          setKpiSummary(summary.ok ? summary.data : null);
+        }catch(e){}
+        alert('Sync attempted ✅ (server endpoints may not be enabled yet)');
+      });
+
+      $('btnAgreementAccept').addEventListener('click', async () => {
+        const userId = $('userId').value.trim();
+        if (!userId){
+          alert('Please input User ID first.');
+          return;
+        }
+        if (!confirm('Confirm acceptance of the Affiliate Agreement (V1)?')) return;
+
+        // 1) try server record
+        const r = await tryPostAgreementAccept(userId);
+        const acceptedAt = new Date().toISOString();
+
+        if (r.ok){
+          // If server returns canonical fields, prefer them
+          const serverAcceptedAt = (r.data && typeof r.data === 'object' && (r.data.accepted_at || r.data.acceptedAt)) || acceptedAt;
+          const state = { accepted:true, accepted_at: serverAcceptedAt, version: AGREEMENT_VERSION, source:'server' };
+          saveAgreementLocal(userId, state);
+          setAgreementUI(state);
+          alert('Agreement accepted ✅ (server)');
+          return;
+        }
+
+        // 2) fallback local placeholder
+        const state = { accepted:true, accepted_at: acceptedAt, version: AGREEMENT_VERSION, source:'local' };
+        saveAgreementLocal(userId, state);
+        setAgreementUI(state);
+        alert('Agreement accepted ✅ (local placeholder; backend not enabled yet)');
+      });
+
+      $('btnTaxSave').addEventListener('click', async () => {
+        const userId = $('userId').value.trim();
+        if (!userId){
+          alert('Please input User ID first.');
+          return;
+        }
+        const taxType = $('taxType').value;
+        const taxStatus = $('taxStatus').value;
+        if (!taxType){
+          alert('Please select Tax Type first.');
+          return;
+        }
+
+        // 1) try server save
+        const r = await tryPostTaxProfile(userId, taxType, taxStatus);
+        const profile = { tax_type: taxType, tax_status: taxStatus, updated_at: new Date().toISOString() };
+
+        if (r.ok){
+          saveAffiliateProfileLocal(userId, { ...profile, source:'server' });
+          setTaxUI(profile);
+          alert('Tax profile saved ✅ (server)');
+          return;
+        }
+
+        // 2) fallback local
+        saveAffiliateProfileLocal(userId, { ...profile, source:'local' });
+        setTaxUI(profile);
+        alert('Tax profile saved ✅ (local placeholder; backend not enabled yet)');
+      });
+
+      $('btnTaxGuide').addEventListener('click', () => {
+        alert(
+`Tax Guide (V1)
+
+Choose your affiliate type:
+- US Individual / US Entity: W-9
+- Non-US Individual: W-8BEN
+- Non-US Entity: W-8BEN-E
+
+V1 only stores status + type.
+V2 will collect actual forms and payout details.`
+        );
+      });
+
+      // Live link update
       $('landing').addEventListener('change', () => {
         const dref = $('drefCode').value.trim();
         $('refLink').textContent = dref ? buildReferralLink(dref, $('landing').value) : '—';
@@ -701,12 +1176,20 @@
       $('drefCode').addEventListener('input', () => {
         const dref = $('drefCode').value.trim();
         $('refLink').textContent = dref ? buildReferralLink(dref, $('landing').value) : '—';
-        // 同步保存
         saveLocal($('userId').value.trim(), dref);
       });
 
       $('userId').addEventListener('input', () => {
-        saveLocal($('userId').value.trim(), $('drefCode').value.trim());
+        const userId = $('userId').value.trim();
+        saveLocal(userId, $('drefCode').value.trim());
+        // load local agreement/profile for this user
+        if (userId){
+          setAgreementUI(loadAgreementLocal(userId));
+          setTaxUI(loadAffiliateProfileLocal(userId));
+        } else {
+          setAgreementUI({ accepted:false });
+          setTaxUI({ tax_status:'pending' });
+        }
       });
 
     })();
