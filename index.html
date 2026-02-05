@@ -964,6 +964,123 @@
 <!-- 4) boot MUST be last -->
 <script src="js/boot.js?v=20260203_fix1"></script>
 
+<!-- 4) boot MUST be last -->
+<script src="js/boot.js?v=20260203_fix1"></script>
+
+<!-- ✅ TF Sync (UI only, stable) : INSERT HERE (line ~966) -->
+<script>
+/**
+ * TF Sync (UI only, stable)
+ * Goal:
+ *  - #tf select is the SINGLE source of truth
+ *  - Top quick buttons always reflect #tf
+ *  - Clicking top quick updates #tf and triggers same load path as "Symbol Load"
+ * Safety: never throws
+ */
+(function tfSync(){
+  'use strict';
+  function safe(fn){ try { return fn(); } catch(e){ return null; } }
+
+  function normalizeTf(v){
+    v = String(v || '').trim();
+    if (!v) return '';
+    if (v === '1M') return '1M';
+    return v.toLowerCase();
+  }
+
+  function setTopActive(tf){
+    tf = normalizeTf(tf);
+    var wrap = document.getElementById('tfQuick');
+    if (!wrap) return;
+    var btns = wrap.querySelectorAll('.tfBtn');
+    btns.forEach(function(b){
+      var v = normalizeTf(b.getAttribute('data-tf'));
+      if (v === tf) b.classList.add('active');
+      else b.classList.remove('active');
+    });
+  }
+
+  function getSelect(){ return document.getElementById('tf'); }
+  function getLoadBtn(){ return document.getElementById('loadBtn'); }
+
+  // init
+  safe(function(){
+    var sel = getSelect();
+    if (!sel) return;
+    setTopActive(sel.value);
+  });
+
+  // select -> top
+  safe(function(){
+    var sel = getSelect();
+    if (!sel) return;
+    sel.addEventListener('change', function(){
+      setTopActive(sel.value);
+    }, true);
+  });
+
+  // top -> select + load
+  safe(function(){
+    var wrap = document.getElementById('tfQuick');
+    var sel  = getSelect();
+    if (!wrap || !sel) return;
+
+    wrap.addEventListener('click', function(e){
+      var btn = e.target && e.target.closest ? e.target.closest('.tfBtn') : null;
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      var tf = btn.getAttribute('data-tf');
+      if (!tf) return;
+
+      var want = (tf === '1M') ? '1M' : tf.toLowerCase();
+      sel.value = want;
+
+      setTopActive(sel.value);
+
+      var loadBtn = getLoadBtn();
+      if (loadBtn) loadBtn.click();
+    }, true);
+  });
+
+  // keep in sync if other scripts change #tf programmatically
+  safe(function(){
+    var sel = getSelect();
+    if (!sel) return;
+    var last = normalizeTf(sel.value);
+    setInterval(function(){
+      var now = normalizeTf(sel.value);
+      if (now && now !== last){
+        last = now;
+        setTopActive(sel.value);
+      }
+    }, 400);
+  });
+})();
+</script>
+
+<!-- ✅ Affiliate card click -->
+<script>
+  (() => {
+    function ready(fn){
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+      else fn();
+    }
+    ready(() => {
+      const card = document.getElementById('affiliateCard');
+      if (!card) return;
+      card.style.cursor = 'pointer';
+      if (card.__AFF_BOUND__) return;
+      card.__AFF_BOUND__ = true;
+      card.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = '/affiliate.html';
+      }, true);
+    });
+  })();
+</script>
 
   <!-- ✅ Affiliate card click -->
   <script>
