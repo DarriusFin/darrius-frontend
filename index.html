@@ -57,9 +57,9 @@
       --gradBrand: linear-gradient(90deg, rgba(43,226,166,1) 0%, rgba(76,194,255,1) 100%);
       --gradBrandSoft: linear-gradient(90deg, rgba(43,226,166,.18) 0%, rgba(76,194,255,.18) 100%);
 
-      /* ✅ 你要调大/调小 Logo，就改这两行 */
+      /* ✅ Logo size */
       --logoBase: 35px;
-      --logoScale: 3.5; /* ✅ 3.5倍 */
+      --logoScale: 3.5;
     }
 
     *{ box-sizing:border-box; }
@@ -99,7 +99,6 @@
       min-width:420px;
     }
 
-    /* ✅ Logo：统一为图片容器 + 变量控制大小；去掉旋转光晕 */
     .logoBox{
       width: calc(var(--logoBase) * var(--logoScale));
       height: calc(var(--logoBase) * var(--logoScale));
@@ -515,6 +514,7 @@
       padding:12px 12px;
       border-radius: var(--r12);
       cursor:pointer;
+      user-select:none;
       background: var(--gradBrand);
       box-shadow: var(--shadow2);
       transition: transform .06s ease, filter .15s ease;
@@ -531,6 +531,7 @@
       padding:11px 12px;
       border-radius: var(--r12);
       cursor:pointer;
+      user-select:none;
       background: rgba(0,0,0,.14);
       transition: transform .06s ease, filter .15s ease;
     }
@@ -549,7 +550,6 @@
     .note b{ color: var(--text); }
     .hidden{ display:none !important; }
 
-    /* ✅ TradingView attribution relocated to Control Center bottom (compliance area) */
     .tvAttr{
       margin-top: 10px;
       padding: 10px 10px 0 10px;
@@ -581,7 +581,6 @@
       box-shadow: var(--shadow2) !important;
     }
 
-    /* ===== Subscription Access Badge ===== */
     .accessBadge {
       padding: 2px 8px;
       border-radius: 10px;
@@ -593,20 +592,6 @@
     .accessBadge.TRIAL  { background: rgba(241, 196, 15, .18); color: #f1c40f; }
     .accessBadge.EXPIRED{ background: rgba(231, 76, 60, .18); color: #e74c3c; }
     .accessBadge.UNKNOWN{ background: rgba(149, 165, 166, .18); color: #95a5a6; }
-
-    /* ===== Gate Banner (small) ===== */
-    #gateBanner{
-      margin-top:10px;
-      padding:10px 12px;
-      border-radius:12px;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(255,90,90,.10);
-      color: rgba(234,240,247,.92);
-      font-size:12px;
-      line-height:1.4;
-    }
-    #gateBanner b{ color: rgba(234,240,247,.98); }
-    #gateBanner a{ color: rgba(76,194,255,.95); }
 
     @media (max-width: 1180px){
       body{ overflow:auto; }
@@ -621,7 +606,6 @@
 </head>
 
 <body>
-  <!-- Header -->
   <div id="topbar">
     <div id="brand">
       <div class="logoBox" aria-hidden="true">
@@ -770,13 +754,15 @@
       </div>
 
       <div class="panelBody">
+        <!-- Data Source -->
         <div class="card">
           <div class="cardTitle"><b>Data Source · 数据源</b><span class="small">预留接口</span></div>
           <div class="field">
             <div class="label"><span>Source · 来源</span><span class="small">第三方实盘</span></div>
-            <select id="dataSource">
-              <option value="demo">Demo (Local)</option>
-              <option value="third">Twelve Pro (Delayed)</option>
+
+            <!-- ✅ 彻底移除 Demo(local)，强制 Twelve Pro -->
+            <select id="dataSource" disabled>
+              <option value="third" selected>Twelve Pro (Delayed)</option>
             </select>
           </div>
 
@@ -786,6 +772,7 @@
           </div>
         </div>
 
+        <!-- Market/TF -->
         <div class="card">
           <div class="cardTitle"><b>Market · 品种与周期</b><span class="small">Chart</span></div>
 
@@ -825,14 +812,9 @@
             <b>Note:</b> EMA/AUX parameters are internal.<br/>
             <b>说明：</b>EMA/AUX 参数为内部策略要素，系统按周期自动适配。
           </div>
-
-          <!-- ✅ Gate Banner (UI only) -->
-          <div id="gateBanner" class="hidden">
-            <b>Locked:</b> 未订阅仅允许查看默认示例 <b>TSLA · 1D</b>。<br/>
-            请先到 <a href="/account.html#plans">Account → Plans</a> 开通订阅后解锁更多品种与周期。
-          </div>
         </div>
 
+        <!-- Subscription -->
         <div class="card">
           <div class="cardTitle">
             <b>Subscription · 订阅选择</b>
@@ -873,6 +855,7 @@
           </div>
         </div>
 
+        <!-- Share/Export -->
         <div class="card">
           <div class="cardTitle"><b>Share & Export · 分享与导出</b><span class="small">Utilities</span></div>
           <button class="btnGhost" id="copyLinkBtn">Copy Share Link · 复制分享链接</button>
@@ -884,37 +867,27 @@
           </div>
         </div>
 
-        <!-- ✅ TradingView Attribution (relocated to a fixed compliance area; not in main chart scene) -->
+        <!-- TradingView Attribution slot -->
         <div id="tvAttribution" class="tvAttr hidden">
           <span class="tvAttrLabel">Chart:</span>
           <a id="tvAttrLink" href="https://www.tradingview.com/" target="_blank" rel="noreferrer">Charting by TradingView</a>
         </div>
-
       </div>
     </div>
   </div>
 
   <!-- =========================
-       GLOBALS (must be before external JS if they read API_BASE on load)
+       GLOBALS
        ========================= -->
   <script>
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
 
-    // ✅ SINGLE SOURCE OF TRUTH: 默认 Symbol/TF 以后只改这里
     window.__DEFAULT_SYMBOL__ = "TSLA";
     window.__DEFAULT_TF__ = "1d";
 
-    // ✅ Gate: 未授权时，强制只允许默认示例（UI层）
-    // 你后端/upgrade.guard.js 会给 __ENTITLEMENT__；这里做“兜底锁”
-    window.__GATE_DEFAULT_ONLY__ = true;
-
-    // ✅ Upgrade 跳转目标（给 upgrade.guard.js 用）
-    window.__UPGRADE_URL__ = "account.html#plans";
-
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
-    // ✅ load logo (fallback list)
     (function(){
       const img = document.getElementById('logoImg');
       if (!img) return;
@@ -924,7 +897,6 @@
       img.src = candidates[0];
     })();
 
-    // ✅ ensure default symbol/tf applied if input exists and blank (best-effort)
     (function(){
       try{
         const symEl = document.getElementById("symbol");
@@ -963,209 +935,25 @@
   <!-- =========================
        SCRIPTS (ORDER IS CRITICAL)
        ========================= -->
-
-  <!-- ✅ Upgrade guard MUST be before chart.core.js -->
+  <script>
+    window.__UPGRADE_URL__ = "account.html#plans";
+  </script>
   <script src="js/upgrade.guard.js"></script>
 
-  <!-- ✅ Step 1A: Disable Demo(local) source (UI only, minimal invasive) -->
-  <script>
-  /* ==================================
-   * STEP 1A: Disable Demo(local) source
-   * ================================== */
-  (function () {
-    'use strict';
-    function safe(fn){ try { return fn(); } catch(e){ return null; } }
-
-    function hasEntitlement(){
-      const e = window.__ENTITLEMENT__ || window.__DARRIUS_ENTITLEMENT__ || null;
-      if (!e) return false;
-      // 允许多种schema：active / entitled / access
-      if (e.active === true) return true;
-      if (e.entitled === true) return true;
-      if (e.access && (e.access === 'active' || e.access === 'trial')) return true;
-      if (e.status && (String(e.status).toLowerCase() === 'active' || String(e.status).toLowerCase() === 'trial')) return true;
-      return false;
-    }
-
-    function allowDemo(){
-      // 仅 DEV 或明确 allow_demo 才保留 demo
-      if (window.__DEV__ === true) return true;
-      const e = window.__ENTITLEMENT__ || window.__DARRIUS_ENTITLEMENT__ || null;
-      return !!(e && e.allow_demo);
-    }
-
-    function removeDemoOption(){
-      const sel = document.getElementById('dataSource');
-      if (!sel) return false;
-      const opts = Array.from(sel.options || []);
-      let removed = false;
-      opts.forEach(opt => {
-        const v = String(opt.value || '').toLowerCase();
-        const t = String(opt.text || '').toLowerCase();
-        if (v === 'demo' || t.includes('demo') || t.includes('local')) {
-          opt.remove();
-          removed = true;
-        }
-      });
-      // 若当前值是 demo，强制切到 third
-      if (String(sel.value || '').toLowerCase() === 'demo') {
-        sel.value = 'third';
-        // 触发 change（若 boot.js 有监听）
-        try { sel.dispatchEvent(new Event('change', {bubbles:true})); } catch(_){}
-      }
-      return removed;
-    }
-
-    function enforce(){
-      if (allowDemo()) return;
-      removeDemoOption();
-    }
-
-    // 初次 + 重试（因为某些脚本可能后面重建 select）
-    safe(enforce);
-    let tries = 0;
-    const t = setInterval(() => {
-      tries += 1;
-      safe(enforce);
-      if (tries >= 80) clearInterval(t);
-    }, 200);
-
-    // 若 entitlement 后到（upgrade.guard.js 异步），也要再 enforce 一次
-    window.addEventListener('darrius:entitlementReady', () => safe(enforce), true);
-  })();
-  </script>
-
-  <!-- ✅ Step 1B: Gate lock (UI only) - 未授权只允许默认 TSLA 1D -->
-  <script>
-  (function gateLock(){
-    'use strict';
-    function safe(fn){ try { return fn(); } catch(e){ return null; } }
-
-    function normalizeTf(v){
-      v = String(v || '').trim();
-      if (!v) return '';
-      if (v === '1M') return '1M';
-      return v.toLowerCase();
-    }
-
-    function getEnt(){
-      return window.__ENTITLEMENT__ || window.__DARRIUS_ENTITLEMENT__ || null;
-    }
-
-    function isUnlocked(){
-      const e = getEnt();
-      if (!e) return false;
-      if (e.allow_full === true) return true;
-      if (e.active === true) return true;
-      if (e.entitled === true) return true;
-      if (e.access && (e.access === 'active' || e.access === 'trial')) return true;
-      if (e.status && (String(e.status).toLowerCase() === 'active' || String(e.status).toLowerCase() === 'trial')) return true;
-      return false;
-    }
-
-    function applyLock(locked){
-      const sym = document.getElementById('symbol');
-      const tf  = document.getElementById('tf');
-      const btn = document.getElementById('loadBtn');
-      const ds  = document.getElementById('dataSource');
-      const banner = document.getElementById('gateBanner');
-
-      if (banner) banner.classList.toggle('hidden', !locked);
-
-      if (!locked) {
-        // 解锁：允许编辑（保留你原逻辑）
-        if (sym) sym.disabled = false;
-        if (tf) tf.disabled = false;
-        if (btn) btn.disabled = false;
-        if (ds) ds.disabled = false; // dataSource 是否禁用你可自行决定
-        return;
-      }
-
-      // 锁定：强制回默认
-      const defSym = String(window.__DEFAULT_SYMBOL__ || 'TSLA').trim() || 'TSLA';
-      const defTf  = normalizeTf(window.__DEFAULT_TF__ || '1d') || '1d';
-
-      if (sym) {
-        sym.value = defSym;
-        sym.disabled = true;
-      }
-      if (tf) {
-        tf.value = (defTf === '1M') ? '1M' : defTf;
-        tf.disabled = true;
-      }
-      if (ds) {
-        // 强制 third（若存在）
-        const hasThird = Array.from(ds.options || []).some(o => String(o.value||'').toLowerCase()==='third');
-        if (hasThird) ds.value = 'third';
-        ds.disabled = true; // 锁住，避免用户切换
-      }
-
-      // Load 仍允许点一次以刷新默认图（但禁止换别的）
-      if (btn) {
-        btn.disabled = false;
-      }
-
-      // 顶部 quick tf 按钮：禁止点击（否则你 TF Sync 会触发 load）
-      const tfQuick = document.getElementById('tfQuick');
-      if (tfQuick) {
-        tfQuick.style.pointerEvents = 'none';
-        tfQuick.style.opacity = '0.65';
-      }
-    }
-
-    function enforce(){
-      if (!window.__GATE_DEFAULT_ONLY__) return;
-      const unlocked = isUnlocked();
-      applyLock(!unlocked);
-    }
-
-    // 初次 + 重试
-    safe(enforce);
-    let tries = 0;
-    const timer = setInterval(() => {
-      tries += 1;
-      safe(enforce);
-      if (tries >= 120) clearInterval(timer);
-    }, 200);
-
-    // entitlement ready 事件（若 upgrade.guard.js 有抛）
-    window.addEventListener('darrius:entitlementReady', () => safe(enforce), true);
-
-    // 若用户尝试通过脚本改值，也拉回默认
-    safe(() => {
-      const sym = document.getElementById('symbol');
-      const tf  = document.getElementById('tf');
-      if (sym) sym.addEventListener('input', enforce, true);
-      if (tf)  tf.addEventListener('change', enforce, true);
-    });
-  })();
-  </script>
-
-  <!-- 1) chart core -->
   <script src="js/chart.core.js?v=20260203_fix1"></script>
 
-  <!-- 2) overlays -->
   <script src="js/market.pulse.js?v=20260203a"></script>
   <script src="js/darrius.mutant.js?v=20260212"></script>
 
-  <!-- 3) subscription/referral (保持不动) -->
   <script src="js/subscription.js?v=20260202"></script>
   <script src="js/referral.client.js?v=20260129"></script>
   <script src="js/referral.checkout.js?v=20260129"></script>
 
-  <!-- 4) boot MUST be last (只保留一次) -->
+  <!-- ✅ boot MUST be last (只保留一次！) -->
   <script src="js/boot.js?v=20260203_fix1"></script>
 
   <!-- ✅ TF Sync (UI only, stable) -->
   <script>
-  /**
-   * TF Sync (UI only, stable)
-   * Goal:
-   *  - #tf select is the SINGLE source of truth
-   *  - Top quick buttons always reflect #tf
-   *  - Clicking top quick updates #tf and triggers same load path as "Symbol Load"
-   * Safety: never throws
-   */
   (function tfSync(){
     'use strict';
     function safe(fn){ try { return fn(); } catch(e){ return null; } }
@@ -1192,14 +980,12 @@
     function getSelect(){ return document.getElementById('tf'); }
     function getLoadBtn(){ return document.getElementById('loadBtn'); }
 
-    // init
     safe(function(){
       var sel = getSelect();
       if (!sel) return;
       setTopActive(sel.value);
     });
 
-    // select -> top
     safe(function(){
       var sel = getSelect();
       if (!sel) return;
@@ -1208,14 +994,12 @@
       }, true);
     });
 
-    // top -> select + load
     safe(function(){
       var wrap = document.getElementById('tfQuick');
       var sel  = getSelect();
       if (!wrap || !sel) return;
 
       wrap.addEventListener('click', function(e){
-        // 如果 gateLock 把 pointerEvents 关了，这里不会触发
         var btn = e.target && e.target.closest ? e.target.closest('.tfBtn') : null;
         if (!btn) return;
         e.preventDefault();
@@ -1226,15 +1010,13 @@
 
         var want = (tf === '1M') ? '1M' : tf.toLowerCase();
         sel.value = want;
-
         setTopActive(sel.value);
 
         var loadBtn = getLoadBtn();
-        if (loadBtn) loadBtn.click();
+        if (loadBtn && !loadBtn.disabled) loadBtn.click();
       }, true);
     });
 
-    // keep in sync if other scripts change #tf programmatically
     safe(function(){
       var sel = getSelect();
       if (!sel) return;
@@ -1250,26 +1032,26 @@
   })();
   </script>
 
-  <!-- ✅ Affiliate card click (只保留一次) -->
+  <!-- ✅ Affiliate card click（只保留一份！） -->
   <script>
-    (function(){
-      function ready(fn){
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
-        else fn();
-      }
-      ready(function(){
-        const card = document.getElementById('affiliateCard');
-        if (!card) return;
-        card.style.cursor = 'pointer';
-        if (card.__AFF_BOUND__) return;
-        card.__AFF_BOUND__ = true;
-        card.addEventListener('click', function(e){
-          e.preventDefault();
-          e.stopPropagation();
-          window.location.href = '/affiliate.html';
-        }, true);
-      });
-    })();
+  (function(){
+    function ready(fn){
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+      else fn();
+    }
+    ready(function(){
+      var card = document.getElementById('affiliateCard');
+      if (!card) return;
+      card.style.cursor = 'pointer';
+      if (card.__AFF_BOUND__) return;
+      card.__AFF_BOUND__ = true;
+      card.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = '/affiliate.html';
+      }, true);
+    });
+  })();
   </script>
 
   <!-- ✅ Bind referral after bootstrap (safe, best-effort) -->
@@ -1307,7 +1089,7 @@
   })();
   </script>
 
-  <!-- ✅ TradingView attribution relocation (compliance: visible in right panel, removed from main chart scene) -->
+  <!-- ✅ TradingView attribution relocation -->
   <script>
   (function relocateTvAttribution(){
     'use strict';
@@ -1376,6 +1158,64 @@
       const ob = new MutationObserver(() => safe(relocate));
       ob.observe(chartRoot, {childList:true, subtree:true});
     });
+  })();
+  </script>
+
+  <!-- ✅ HARD GATE ENFORCER (final safety net)
+       - 未订阅：锁 symbol/tf/loadBtn
+       - 已订阅/试用：解锁
+       依赖 window.__ENTITLEMENT__（upgrade.guard.js 会写）
+  -->
+  <script>
+  (function darriusGateEnforcer(){
+    'use strict';
+    function safe(fn){ try { return fn(); } catch(e){ return null; } }
+
+    function isEntitled(ent){
+      if (!ent) return false;
+      if (ent.entitled === true || ent.active === true || ent.ok === true) return true;
+      const s = String(ent.status || ent.sub_status || ent.subscription_status || '').toLowerCase();
+      if (s === 'active' || s === 'trialing' || s === 'trial') return true;
+      const a = String(ent.access || ent.access_status || '').toLowerCase();
+      if (a === 'active' || a === 'trial') return true;
+      return false;
+    }
+
+    function apply(lock){
+      const sym = document.getElementById('symbol');
+      const tf  = document.getElementById('tf');
+      const btn = document.getElementById('loadBtn');
+
+      // dataSource 永远锁为 third
+      const ds  = document.getElementById('dataSource');
+      if (ds){
+        ds.value = 'third';
+        ds.disabled = true;
+      }
+
+      if (sym) sym.disabled = !!lock;
+      if (tf)  tf.disabled  = !!lock;
+      if (btn) btn.disabled = !!lock;
+    }
+
+    // 初始：先按当前 entitlement 判定一次（未知就锁，避免漏锁）
+    safe(function(){
+      const ent = window.__ENTITLEMENT__;
+      apply(!isEntitled(ent));
+    });
+
+    // 轮询：等待 upgrade.guard / subscription 状态刷新后自动切换
+    let last = null;
+    setInterval(function(){
+      safe(function(){
+        const ent = window.__ENTITLEMENT__ || null;
+        const now = isEntitled(ent) ? 'UNLOCK' : 'LOCK';
+        if (now !== last){
+          last = now;
+          apply(now === 'LOCK');
+        }
+      });
+    }, 500);
   })();
   </script>
 
