@@ -783,7 +783,7 @@
           <div class="cardTitle"><b>Market · 品种与周期</b><span class="small">Chart</span></div>
 
           <div class="field">
-            <div class="label"><span>Symbol · 品种</span><span class="small">(如 TSLA / AAPL)</span></div>
+            <div class="label"><span>Symbol · 品种</span><span class="small">(e.g., TSLA / AAPL)</span></div>
             <input id="symbol" value="TSLA"/>
           </div>
 
@@ -816,7 +816,7 @@
 
           <div class="note" style="margin-top:8px">
             <b>Note:</b> EMA/AUX parameters are internal.<br/>
-            <b>说明：</b>EMA/AUX 参数为内部策略要素，系统按周期自动适配。
+            <b>说明：</b>EMA/AUX 参数为内部策略要素，按周期自动适配。
           </div>
         </div>
 
@@ -833,12 +833,12 @@
           </div>
 
           <div class="field">
-            <div class="label"><span><b>User ID</b> · 用户ID</span><span class="small">（必填）</span></div>
+            <div class="label"><span><b>User ID</b> · 用户ID</span><span class="small">（Required 必填）</span></div>
             <input id="userId" placeholder/>
           </div>
 
           <div class="field">
-            <div class="label"><span>Email · 邮箱</span><span class="small">（必填）</span></div>
+            <div class="label"><span>Email · 邮箱</span><span class="small">（Required 必填）</span></div>
           <input id="email" placeholder/>
           </div>
 
@@ -868,8 +868,8 @@
           <div style="height:10px"></div>
           <button class="btnGhost" id="exportBtn">Export PNG · 导出图片（含图表）</button>
           <div class="note" style="margin-top:10px">
-            <b>Note:</b> Export depends on browser canvas support. For maximum stability, move export to backend rendering.<br/>
-            <b>说明：</b>导出依赖浏览器对 canvas 截图支持；若受限，可改为后端渲染导出（更稳定）。
+            <b>Note:</b> Export depends on browser canvas support. <br/>
+            <b>说明：</b>导出依赖浏览器对 canvas 截图支持。
           </div>
         </div>
 
