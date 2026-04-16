@@ -1,30 +1,13 @@
 /* =========================================================================
  * FILE: darrius-frontend/js/chart.core.js
- * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.04 + DATASOURCE-WIRING (FIXED) + META-BADGE (MINIMAL)
+ * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.04 + SAFE TIME LOCALIZATION PATCH
  *
- * Goals (NO-SECRETS):
- *  - NO EMA/AUX/signal algorithm in frontend.
- *  - Frontend ONLY fetches snapshot from backend and renders:
- *      - candles
- *      - ema_series / aux_series (optional)
- *      - markers from signals (B/S/eB/eS)
- *
- * Key fixes in this version:
- *  1) ✅ DataSource wiring: read #dataSource and append &source=...
- *  2) ✅ Auto reload on dataSource change
- *  3) Snapshot schema compatibility
- *  4) LightweightCharts v4/v5 series API compatibility
- *  5) Trend coloring: up-trend => green, down-trend => red (by close vs prevClose)
- *  6) EMA/AUX distinct colors
- *  7) Markers compatibility: v4 setMarkers() / v5 createSeriesMarkers()
- *  8) Glow Badge Overlay for B/S/eB/eS (DOM overlay; no chart internals touched)
- *  9) ✅ MINIMAL meta badge: read snap.meta.provider + delayed_minutes (safe try/catch; no chart logic touched)
- *
- * NOTE:
- *  - Default API endpoint used here: /api/market/snapshot
- *  - DataSource value expected (recommended):
- *      demo | twelve | massive
- *    (we also tolerate "3rd-party", "delayed" etc -> treated as twelve)
+ * SAFE PATCH NOTES:
+ *  - KEEP backend / subscription / entitlement / billing untouched
+ *  - KEEP snapshot fetch / signal logic / badge logic untouched
+ *  - ONLY add front-end display localization:
+ *      1) UTC timestamp display -> America/New_York
+ *      2) force English numeric format (avoid 中文“日” / “4月16日”)
  * ========================================================================= */
 
 (function () {
@@ -40,6 +23,10 @@
     tf: "1d",
     limit: 600,
   };
+
+  // ✅ Display timezone / locale (SAFE: display only)
+  const DISPLAY_TIMEZONE = "America/New_York";
+  const DISPLAY_LOCALE = "en-US";
 
   // NOTE: 你要求“上涨趋势全绿/下跌趋势全红”
   // 这里用最小定义：close >= prevClose => UP(绿)，否则 DOWN(红)
@@ -111,6 +98,109 @@
       if ($("priceText") && lastClose != null) $("priceText").textContent = Number(lastClose).toFixed(2);
       setHint("Market snapshot loaded · 已加载市场快照");
     });
+  }
+
+  // -----------------------------
+  // SAFE TIME LOCALIZATION HELPERS
+  // - Display only
+  // - Do NOT mutate backend data / raw time / signals
+  // -----------------------------
+  function isBusinessDayObj(v) {
+    return !!v && typeof v === "object" &&
+      Number.isFinite(Number(v.year)) &&
+      Number.isFinite(Number(v.month)) &&
+      Number.isFinite(Number(v.day));
+  }
+
+  function toDateFromChartTime(time) {
+    // LightweightCharts time may be:
+    // 1) unix seconds (number)
+    // 2) businessDay object {year, month, day}
+    // 3) string date
+    if (typeof time === "number" && Number.isFinite(time)) {
+      return new Date(time * 1000); // UTC timestamp seconds
+    }
+
+    if (typeof time === "string" && time.trim()) {
+      const s = time.trim();
+
+      // numeric string => unix seconds
+      if (/^\d+$/.test(s)) {
+        const n = Number(s);
+        if (Number.isFinite(n)) return new Date(n * 1000);
+      }
+
+      // yyyy-mm-dd -> interpret as UTC date
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const [y, m, d] = s.split("-").map(Number);
+        return new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+      }
+
+      // fall back
+      const d = new Date(s);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+
+    if (isBusinessDayObj(time)) {
+      return new Date(Date.UTC(
+        Number(time.year),
+        Number(time.month) - 1,
+        Number(time.day),
+        0, 0, 0
+      ));
+    }
+
+    return null;
+  }
+
+  function getZonedParts(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+
+    const parts = new Intl.DateTimeFormat(DISPLAY_LOCALE, {
+      timeZone: DISPLAY_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(date);
+
+    const map = {};
+    for (const p of parts) {
+      if (p.type !== "literal") map[p.type] = p.value;
+    }
+    return map;
+  }
+
+  function formatNYDateTime(time) {
+    const date = toDateFromChartTime(time);
+    const p = getZonedParts(date);
+    if (!p) return "";
+
+    // lock to English numeric style, avoid 中文“日”
+    return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+  }
+
+  function formatNYDateOnly(time) {
+    const date = toDateFromChartTime(time);
+    const p = getZonedParts(date);
+    if (!p) return "";
+    return `${p.year}-${p.month}-${p.day}`;
+  }
+
+  function formatNYTickMark(time) {
+    const date = toDateFromChartTime(time);
+    const p = getZonedParts(date);
+    if (!p) return "";
+
+    // Intraday unix time -> shorter axis label
+    if (typeof time === "number" || (typeof time === "string" && /^\d+$/.test(time.trim()))) {
+      return `${p.month}-${p.day} ${p.hour}:${p.minute}`;
+    }
+
+    // Business day / date string
+    return `${p.month}-${p.day}`;
   }
 
   // -----------------------------
@@ -530,7 +620,21 @@
     const chart = LW.createChart(el, {
       layout: { background: { color: "transparent" }, textColor: "#d1d4dc" },
       grid: { vertLines: { color: "transparent" }, horzLines: { color: "transparent" } },
-      timeScale: { timeVisible: true, secondsVisible: false },
+
+      // ✅ SAFE PATCH: display only
+      localization: {
+        locale: DISPLAY_LOCALE,
+        timeFormatter: (time) => formatNYDateTime(time),
+      },
+
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+
+        // ✅ SAFE PATCH: axis labels in English numeric format
+        tickMarkFormatter: (time /*, tickMarkType, locale */) => formatNYTickMark(time),
+      },
+
       rightPriceScale: { borderVisible: false },
       crosshair: { mode: 1 },
     });
@@ -602,13 +706,13 @@
   // Network: fetch snapshot
   // -----------------------------
   async function fetchSnapshot(symbol, tf, limit) {
-    const source = readSourceFromUI(); // ✅ NEW
+    const source = readSourceFromUI(); // ✅ KEEP
 
     const url =
       `${API_BASE}/api/market/snapshot?symbol=${encodeURIComponent(symbol)}` +
       `&tf=${encodeURIComponent(tf)}` +
       `&limit=${encodeURIComponent(String(limit || DEFAULTS.limit))}` +
-      (source ? `&source=${encodeURIComponent(source)}` : ""); // ✅ NEW
+      (source ? `&source=${encodeURIComponent(source)}` : ""); // ✅ KEEP
 
     console.log("[ChartCore] FETCH", url);
 
@@ -692,6 +796,10 @@
       timeToX: (t) => safeRun("timeToX", () => S.chart.timeScale().timeToCoordinate(t)),
       priceToY: (p) => safeRun("priceToY", () => S.candle.priceToCoordinate(p)),
       getSnapshot: () => (window.__DARRIUS_CHART_STATE__ || null),
+
+      // ✅ optional helpers for any external tooltip/debug use
+      formatDisplayTime: (t) => formatNYDateTime(t),
+      formatDisplayDate: (t) => formatNYDateOnly(t),
     };
 
     safeRun("badgeOverlay", () => {
@@ -700,7 +808,7 @@
     });
 
     safeRun("emit", () => {
-      window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: snapshot }));
+      window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: snapshot } }));
     });
   }
 
