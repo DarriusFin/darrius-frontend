@@ -6,7 +6,8 @@
  *  - DO NOT touch backend / subscription / billing / entitlement
  *  - DO NOT touch fetchSnapshot / API params / signal logic / badge logic
  *  - ONLY add front-end display localization for chart time text
- *  - DO NOT use tickMarkFormatter (to reduce rendering compatibility risk)
+ *  - Intraday TFs (5m/15m/30m/1h/4h): display in America/New_York
+ *  - Higher TFs (1D/1W/1M): display DATE LABEL ONLY, NO timezone shift
  * ========================================================================= */
 
 (function () {
@@ -23,7 +24,6 @@
     limit: 600,
   };
 
-  // ✅ SAFE: display-only timezone/locale
   const DISPLAY_TIMEZONE = "America/New_York";
   const DISPLAY_LOCALE = "en-US";
 
@@ -96,92 +96,6 @@
       if ($("priceText") && lastClose != null) $("priceText").textContent = Number(lastClose).toFixed(2);
       setHint("Market snapshot loaded · 已加载市场快照");
     });
-  }
-
-  // -----------------------------
-  // SAFE TIME LOCALIZATION HELPERS
-  // Display only. Do NOT mutate raw bar/signal time.
-  // -----------------------------
-  function isBusinessDayObj(v) {
-    return !!v && typeof v === "object" &&
-      Number.isFinite(Number(v.year)) &&
-      Number.isFinite(Number(v.month)) &&
-      Number.isFinite(Number(v.day));
-  }
-
-  function toDateFromChartTime(time) {
-    // LightweightCharts time may be:
-    // 1) unix seconds (number)
-    // 2) businessDay object {year, month, day}
-    // 3) numeric string
-    // 4) yyyy-mm-dd string
-    if (typeof time === "number" && Number.isFinite(time)) {
-      return new Date(time * 1000);
-    }
-
-    if (typeof time === "string" && time.trim()) {
-      const s = time.trim();
-
-      if (/^\d+$/.test(s)) {
-        const n = Number(s);
-        if (Number.isFinite(n)) return new Date(n * 1000);
-      }
-
-      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-        const [y, m, d] = s.split("-").map(Number);
-        return new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
-      }
-
-      const dt = new Date(s);
-      if (!Number.isNaN(dt.getTime())) return dt;
-    }
-
-    if (isBusinessDayObj(time)) {
-      return new Date(Date.UTC(
-        Number(time.year),
-        Number(time.month) - 1,
-        Number(time.day),
-        0, 0, 0
-      ));
-    }
-
-    return null;
-  }
-
-  function getZonedParts(date) {
-    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
-
-    const parts = new Intl.DateTimeFormat(DISPLAY_LOCALE, {
-      timeZone: DISPLAY_TIMEZONE,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).formatToParts(date);
-
-    const map = {};
-    for (const p of parts) {
-      if (p.type !== "literal") map[p.type] = p.value;
-    }
-    return map;
-  }
-
-  function formatNYDateTime(time) {
-    const date = toDateFromChartTime(time);
-    const p = getZonedParts(date);
-    if (!p) return "";
-
-    // lock display to numeric English style; avoid “4月16日 / 16日”
-    return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
-  }
-
-  function formatNYDateOnly(time) {
-    const date = toDateFromChartTime(time);
-    const p = getZonedParts(date);
-    if (!p) return "";
-    return `${p.year}-${p.month}-${p.day}`;
   }
 
   // -----------------------------
@@ -565,138 +479,143 @@
     pollInFlight: false,
   };
 
+  // -----------------------------
+  // Time display helpers
+  // - Intraday TFs: convert to New York time
+  // - 1D / 1W / 1M: show date label only, no timezone shift
+  // -----------------------------
   function pad2(n) {
-  return String(n).padStart(2, "0");
-}
-
-function normalizeTFName(tf) {
-  return String(tf || "").trim().toLowerCase();
-}
-
-function isDateOnlyTF(tf) {
-  const t = normalizeTFName(tf);
-  return t === "1d" || t === "1w" || t === "1m";
-}
-
-function getCurrentTFSafe() {
-  try {
-    return normalizeTFName(
-      (S && S.lastSnapshot && S.lastSnapshot.tf) ||
-      getTF(S.opts.tfElId) ||
-      DEFAULTS.tf
-    );
-  } catch (e) {
-    return normalizeTFName(DEFAULTS.tf);
-  }
-}
-
-function isBusinessDayObj(v) {
-  return !!v && typeof v === "object" &&
-    Number.isFinite(Number(v.year)) &&
-    Number.isFinite(Number(v.month)) &&
-    Number.isFinite(Number(v.day));
-}
-
-function extractDateLabel(time) {
-  // businessDay: { year, month, day }
-  if (isBusinessDayObj(time)) {
-    return `${time.year}-${pad2(time.month)}-${pad2(time.day)}`;
+    return String(n).padStart(2, "0");
   }
 
-  // yyyy-mm-dd
-  if (typeof time === "string" && /^\d{4}-\d{2}-\d{2}$/.test(time.trim())) {
-    return time.trim();
+  function normalizeTFName(tf) {
+    return String(tf || "").trim().toLowerCase();
   }
 
-  // unix seconds / numeric string -> use UTC calendar date only
-  let d = null;
-
-  if (typeof time === "number" && Number.isFinite(time)) {
-    d = new Date(time * 1000);
-  } else if (typeof time === "string" && /^\d+$/.test(time.trim())) {
-    d = new Date(Number(time.trim()) * 1000);
-  } else if (typeof time === "string" && time.trim()) {
-    const tmp = new Date(time.trim());
-    if (!Number.isNaN(tmp.getTime())) d = tmp;
+  function isDateOnlyTF(tf) {
+    const t = normalizeTFName(tf);
+    return t === "1d" || t === "1w" || t === "1m";
   }
 
-  if (!d || Number.isNaN(d.getTime())) return "";
-
-  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
-}
-
-function toIntradayDate(time) {
-  if (typeof time === "number" && Number.isFinite(time)) {
-    return new Date(time * 1000);
+  function getCurrentTFSafe() {
+    try {
+      return normalizeTFName(
+        (S && S.lastSnapshot && S.lastSnapshot.tf) ||
+        getTF(S.opts.tfElId) ||
+        DEFAULTS.tf
+      );
+    } catch (e) {
+      return normalizeTFName(DEFAULTS.tf);
+    }
   }
 
-  if (typeof time === "string" && time.trim()) {
-    const s = time.trim();
+  function isBusinessDayObj(v) {
+    return !!v && typeof v === "object" &&
+      Number.isFinite(Number(v.year)) &&
+      Number.isFinite(Number(v.month)) &&
+      Number.isFinite(Number(v.day));
+  }
 
-    if (/^\d+$/.test(s)) {
-      const n = Number(s);
-      if (Number.isFinite(n)) return new Date(n * 1000);
+  function extractDateLabel(time) {
+    // businessDay: { year, month, day }
+    if (isBusinessDayObj(time)) {
+      return `${time.year}-${pad2(time.month)}-${pad2(time.day)}`;
     }
 
-    const d = new Date(s);
-    if (!Number.isNaN(d.getTime())) return d;
+    // yyyy-mm-dd
+    if (typeof time === "string" && /^\d{4}-\d{2}-\d{2}$/.test(time.trim())) {
+      return time.trim();
+    }
+
+    // unix seconds / numeric string -> use UTC calendar date only
+    let d = null;
+
+    if (typeof time === "number" && Number.isFinite(time)) {
+      d = new Date(time * 1000);
+    } else if (typeof time === "string" && /^\d+$/.test(time.trim())) {
+      d = new Date(Number(time.trim()) * 1000);
+    } else if (typeof time === "string" && time.trim()) {
+      const tmp = new Date(time.trim());
+      if (!Number.isNaN(tmp.getTime())) d = tmp;
+    }
+
+    if (!d || Number.isNaN(d.getTime())) return "";
+
+    return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
   }
 
-  return null;
-}
+  function toIntradayDate(time) {
+    if (typeof time === "number" && Number.isFinite(time)) {
+      return new Date(time * 1000);
+    }
 
-function getNYParts(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+    if (typeof time === "string" && time.trim()) {
+      const s = time.trim();
 
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
+      if (/^\d+$/.test(s)) {
+        const n = Number(s);
+        if (Number.isFinite(n)) return new Date(n * 1000);
+      }
 
-  const map = {};
-  for (const p of parts) {
-    if (p.type !== "literal") map[p.type] = p.value;
-  }
-  return map;
-}
+      const d = new Date(s);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
 
-function formatDisplayTimeByTF(time) {
-  const tf = getCurrentTFSafe();
-
-  // 1D / 1W / 1M: date label only, NO timezone shift
-  if (isDateOnlyTF(tf)) {
-    return extractDateLabel(time);
+    return null;
   }
 
-  // intraday: New York time
-  const d = toIntradayDate(time);
-  const p = getNYParts(d);
-  if (!p) return "";
+  function getNYParts(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
 
-  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
-}
+    const parts = new Intl.DateTimeFormat(DISPLAY_LOCALE, {
+      timeZone: DISPLAY_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(date);
 
-function formatTickByTF(time) {
-  const tf = getCurrentTFSafe();
-
-  // 1D / 1W / 1M: date label only
-  if (isDateOnlyTF(tf)) {
-    return extractDateLabel(time);
+    const map = {};
+    for (const p of parts) {
+      if (p.type !== "literal") map[p.type] = p.value;
+    }
+    return map;
   }
 
-  // intraday: HH:mm
-  const d = toIntradayDate(time);
-  const p = getNYParts(d);
-  if (!p) return "";
+  function formatDisplayTimeByTF(time) {
+    const tf = getCurrentTFSafe();
 
-  return `${p.hour}:${p.minute}`;
-}
-  
+    // ✅ 1D / 1W / 1M: date label only, NO timezone shift
+    if (isDateOnlyTF(tf)) {
+      return extractDateLabel(time);
+    }
+
+    // ✅ intraday: New York time
+    const d = toIntradayDate(time);
+    const p = getNYParts(d);
+    if (!p) return "";
+
+    return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+  }
+
+  function formatTickByTF(time) {
+    const tf = getCurrentTFSafe();
+
+    // ✅ 1D / 1W / 1M: date label only
+    if (isDateOnlyTF(tf)) {
+      return extractDateLabel(time);
+    }
+
+    // ✅ intraday: HH:mm
+    const d = toIntradayDate(time);
+    const p = getNYParts(d);
+    if (!p) return "";
+
+    return `${p.hour}:${p.minute}`;
+  }
+
   // -----------------------------
   // Ensure chart (v4/v5 compatible)
   // -----------------------------
@@ -715,31 +634,30 @@ function formatTickByTF(time) {
       return false;
     }
 
-const chart = LW.createChart(el, {
-  layout: { background: { color: "transparent" }, textColor: "#d1d4dc" },
-  grid: { vertLines: { color: "transparent" }, horzLines: { color: "transparent" } },
+    const chart = LW.createChart(el, {
+      layout: { background: { color: "transparent" }, textColor: "#d1d4dc" },
+      grid: { vertLines: { color: "transparent" }, horzLines: { color: "transparent" } },
 
-  // ✅ only display text conversion; lower risk than tickMarkFormatter
- localization: {
-  locale: "en-US",
-  timeFormatter: (time) => formatDisplayTimeByTF(time),
-},
+      localization: {
+        locale: "en-US",
+        timeFormatter: (time) => formatDisplayTimeByTF(time),
+      },
 
-timeScale: {
-  timeVisible: true,
-  secondsVisible: false,
-  tickMarkFormatter: (time) => {
-    try {
-      return formatTickByTF(time);
-    } catch (e) {
-      return "";
-    }
-  },
-},
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+        tickMarkFormatter: (time) => {
+          try {
+            return formatTickByTF(time);
+          } catch (e) {
+            return "";
+          }
+        },
+      },
 
-  rightPriceScale: { borderVisible: false },
-  crosshair: { mode: 1 },
-});
+      rightPriceScale: { borderVisible: false },
+      crosshair: { mode: 1 },
+    });
 
     let candle;
     if (typeof chart.addCandlestickSeries === "function") {
@@ -898,9 +816,8 @@ timeScale: {
       priceToY: (p) => safeRun("priceToY", () => S.candle.priceToCoordinate(p)),
       getSnapshot: () => (window.__DARRIUS_CHART_STATE__ || null),
 
-      // optional helper only
-      formatDisplayTime: (t) => formatNYDateTime(t),
-      formatDisplayDate: (t) => formatNYDateOnly(t),
+      formatDisplayTime: (t) => formatDisplayTimeByTF(t),
+      formatDisplayDate: (t) => extractDateLabel(t),
     };
 
     safeRun("badgeOverlay", () => {
