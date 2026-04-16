@@ -583,24 +583,46 @@
       return false;
     }
 
-    const chart = LW.createChart(el, {
-      layout: { background: { color: "transparent" }, textColor: "#d1d4dc" },
-      grid: { vertLines: { color: "transparent" }, horzLines: { color: "transparent" } },
+const chart = LW.createChart(el, {
+  layout: { background: { color: "transparent" }, textColor: "#d1d4dc" },
+  grid: { vertLines: { color: "transparent" }, horzLines: { color: "transparent" } },
 
-      // ✅ only display text conversion; lower risk than tickMarkFormatter
-      localization: {
-        locale: DISPLAY_LOCALE,
-        timeFormatter: (time) => formatNYDateTime(time),
-      },
+  // ✅ only display text conversion; lower risk than tickMarkFormatter
+  localization: {
+    locale: DISPLAY_LOCALE,
+    timeFormatter: (time) => formatNYDateTime(time),
+  },
 
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-      },
+  timeScale: {
+    timeVisible: true,
+    secondsVisible: false,
+    tickMarkFormatter: (time) => {
+      try {
+        const d = toDateFromChartTime(time);
+        if (!d) return "";
 
-      rightPriceScale: { borderVisible: false },
-      crosshair: { mode: 1 },
-    });
+        const parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/New_York",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).formatToParts(d);
+
+        const map = {};
+        for (const p of parts) {
+          if (p.type !== "literal") map[p.type] = p.value;
+        }
+
+        return `${map.hour}:${map.minute}`;
+      } catch (e) {
+        return "";
+      }
+    },
+  },
+
+  rightPriceScale: { borderVisible: false },
+  crosshair: { mode: 1 },
+});
 
     let candle;
     if (typeof chart.addCandlestickSeries === "function") {
