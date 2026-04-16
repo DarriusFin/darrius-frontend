@@ -1,13 +1,12 @@
 /* =========================================================================
  * FILE: darrius-frontend/js/chart.core.js
- * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.04 + SAFE TIME LOCALIZATION PATCH
+ * DarriusAI - ChartCore (RENDER-ONLY) v2026.02.04 + SAFE NY-TIME DISPLAY PATCH
  *
- * SAFE PATCH NOTES:
- *  - KEEP backend / subscription / entitlement / billing untouched
- *  - KEEP snapshot fetch / signal logic / badge logic untouched
- *  - ONLY add front-end display localization:
- *      1) UTC timestamp display -> America/New_York
- *      2) force English numeric format (avoid 中文“日” / “4月16日”)
+ * SAFE PATCH PRINCIPLES:
+ *  - DO NOT touch backend / subscription / billing / entitlement
+ *  - DO NOT touch fetchSnapshot / API params / signal logic / badge logic
+ *  - ONLY add front-end display localization for chart time text
+ *  - DO NOT use tickMarkFormatter (to reduce rendering compatibility risk)
  * ========================================================================= */
 
 (function () {
@@ -24,7 +23,7 @@
     limit: 600,
   };
 
-  // ✅ Display timezone / locale (SAFE: display only)
+  // ✅ SAFE: display-only timezone/locale
   const DISPLAY_TIMEZONE = "America/New_York";
   const DISPLAY_LOCALE = "en-US";
 
@@ -55,7 +54,6 @@
   };
 
   // ✅ 位置微调：让它“贴近K线”但不压住
-  // 你觉得还要更近：把 18 改 14；更远：改 22~30
   const BADGE_OFFSET_ABOVE_MAIN_PX  = 18; // S
   const BADGE_OFFSET_ABOVE_EARLY_PX = 16; // eS
   const BADGE_OFFSET_BELOW_MAIN_PX  = 18; // B
@@ -102,8 +100,7 @@
 
   // -----------------------------
   // SAFE TIME LOCALIZATION HELPERS
-  // - Display only
-  // - Do NOT mutate backend data / raw time / signals
+  // Display only. Do NOT mutate raw bar/signal time.
   // -----------------------------
   function isBusinessDayObj(v) {
     return !!v && typeof v === "object" &&
@@ -116,29 +113,27 @@
     // LightweightCharts time may be:
     // 1) unix seconds (number)
     // 2) businessDay object {year, month, day}
-    // 3) string date
+    // 3) numeric string
+    // 4) yyyy-mm-dd string
     if (typeof time === "number" && Number.isFinite(time)) {
-      return new Date(time * 1000); // UTC timestamp seconds
+      return new Date(time * 1000);
     }
 
     if (typeof time === "string" && time.trim()) {
       const s = time.trim();
 
-      // numeric string => unix seconds
       if (/^\d+$/.test(s)) {
         const n = Number(s);
         if (Number.isFinite(n)) return new Date(n * 1000);
       }
 
-      // yyyy-mm-dd -> interpret as UTC date
       if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
         const [y, m, d] = s.split("-").map(Number);
         return new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
       }
 
-      // fall back
-      const d = new Date(s);
-      if (!Number.isNaN(d.getTime())) return d;
+      const dt = new Date(s);
+      if (!Number.isNaN(dt.getTime())) return dt;
     }
 
     if (isBusinessDayObj(time)) {
@@ -178,7 +173,7 @@
     const p = getZonedParts(date);
     if (!p) return "";
 
-    // lock to English numeric style, avoid 中文“日”
+    // lock display to numeric English style; avoid “4月16日 / 16日”
     return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
   }
 
@@ -189,23 +184,8 @@
     return `${p.year}-${p.month}-${p.day}`;
   }
 
-  function formatNYTickMark(time) {
-    const date = toDateFromChartTime(time);
-    const p = getZonedParts(date);
-    if (!p) return "";
-
-    // Intraday unix time -> shorter axis label
-    if (typeof time === "number" || (typeof time === "string" && /^\d+$/.test(time.trim()))) {
-      return `${p.month}-${p.day} ${p.hour}:${p.minute}`;
-    }
-
-    // Business day / date string
-    return `${p.month}-${p.day}`;
-  }
-
   // -----------------------------
-  // ✅ MINIMAL META BADGE (10 lines try/catch, no chart impact)
-  // - Writes window.__DATA_SOURCE_BADGE__ only (optional DOM if #dataSourceBadge exists)
+  // ✅ MINIMAL META BADGE
   // -----------------------------
   function updateMetaBadge(snap) {
     try {
@@ -224,34 +204,28 @@
   function readSourceFromUI() {
     const el = $("dataSource");
     const v = (el && el.value ? String(el.value) : "").trim();
-    if (!v) return "";                 // 空 => 后端走默认
+    if (!v) return "";
     if (v === "demo") return "demo";
     if (v === "twelve") return "twelve";
     if (v === "massive") return "massive";
 
-    // 兼容你当前 UI 文案/旧 value（如果你现在 value 不是 twelve）
     if (/third|3rd|delay|provider/i.test(v)) return "twelve";
 
-    return v; // 兜底
+    return v;
   }
 
   // -----------------------------
   // Snapshot schema compatibility
   // -----------------------------
   function normalizeSnapshot(raw) {
-    // Accept different shapes:
-    // { ok, bars, ema_series?, aux_series?, signals? }
-    // { ok, data: { bars... } }  etc.
     const snap = raw && raw.data ? raw.data : raw;
 
     const ok = (snap && snap.ok === true) || (snap && snap.ok === 1);
     const bars = snap?.bars || snap?.candles || snap?.ohlcv || [];
 
-    // allow ema/aux series
     const ema_series = snap?.ema_series || snap?.ema || [];
     const aux_series = snap?.aux_series || snap?.aux || snap?.aux_series_fast || [];
 
-    // allow signals keys
     const signals = snap?.signals || snap?.sigs || snap?.markers || [];
 
     const meta = snap?.meta || {};
@@ -299,7 +273,6 @@
   }
 
   function buildCloseMap(bars) {
-    // time -> close
     const m = new Map();
     (bars || []).forEach(b => {
       const t = Number(b?.time);
@@ -313,8 +286,6 @@
   // Signals -> markers (anchor only)
   // -----------------------------
   function mapSignalsToMarkers(signals) {
-    // We keep tiny markers as "anchors" but hide text.
-    // Visual badge is rendered by DOM overlay (below).
     const out = [];
     (signals || []).forEach((s) => {
       const side = normSide(s);
@@ -329,17 +300,14 @@
         time: t,
         position: isBuy ? "belowBar" : "aboveBar",
         shape: "circle",
-        // anchor color (not the final look)
         color: isBuy ? BADGE_STYLE.buyBg : BADGE_STYLE.sellBg,
-        text: "",                 // IMPORTANT: hide tiny text
-        size: (side === "B" || side === "S") ? 2 : 1, // tiny dot anchor
+        text: "",
+        size: (side === "B" || side === "S") ? 2 : 1,
       });
     });
     return out;
   }
 
-  // v4: series.setMarkers(markers)
-  // v5: const m = LightweightCharts.createSeriesMarkers(series, markers); m.setMarkers(markers)
   function setSeriesMarkersCompat(series, markers) {
     const LW = window.LightweightCharts;
 
@@ -425,8 +393,6 @@
           .darrius-badge .t{
             transform: translateY(-.5px);
           }
-
-          /* ✅ only LAST TWO: pulse + stronger glow */
           .darrius-badge.pulse{
             animation: darriusBadgePulse 1.25s ease-in-out infinite;
             will-change: transform, filter, opacity;
@@ -621,7 +587,7 @@
       layout: { background: { color: "transparent" }, textColor: "#d1d4dc" },
       grid: { vertLines: { color: "transparent" }, horzLines: { color: "transparent" } },
 
-      // ✅ SAFE PATCH: display only
+      // ✅ only display text conversion; lower risk than tickMarkFormatter
       localization: {
         locale: DISPLAY_LOCALE,
         timeFormatter: (time) => formatNYDateTime(time),
@@ -630,9 +596,6 @@
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-
-        // ✅ SAFE PATCH: axis labels in English numeric format
-        tickMarkFormatter: (time /*, tickMarkType, locale */) => formatNYTickMark(time),
       },
 
       rightPriceScale: { borderVisible: false },
@@ -706,13 +669,13 @@
   // Network: fetch snapshot
   // -----------------------------
   async function fetchSnapshot(symbol, tf, limit) {
-    const source = readSourceFromUI(); // ✅ KEEP
+    const source = readSourceFromUI();
 
     const url =
       `${API_BASE}/api/market/snapshot?symbol=${encodeURIComponent(symbol)}` +
       `&tf=${encodeURIComponent(tf)}` +
       `&limit=${encodeURIComponent(String(limit || DEFAULTS.limit))}` +
-      (source ? `&source=${encodeURIComponent(source)}` : ""); // ✅ KEEP
+      (source ? `&source=${encodeURIComponent(source)}` : "");
 
     console.log("[ChartCore] FETCH", url);
 
@@ -746,7 +709,6 @@
     const snap = normalizeSnapshot(rawSnap);
     if (!snap.ok) throw new Error("snapshot_not_ok");
 
-    // ✅ minimal badge (read meta only; safe)
     updateMetaBadge(snap);
 
     let bars = snap.bars || [];
@@ -797,7 +759,7 @@
       priceToY: (p) => safeRun("priceToY", () => S.candle.priceToCoordinate(p)),
       getSnapshot: () => (window.__DARRIUS_CHART_STATE__ || null),
 
-      // ✅ optional helpers for any external tooltip/debug use
+      // optional helper only
       formatDisplayTime: (t) => formatNYDateTime(t),
       formatDisplayDate: (t) => formatNYDateOnly(t),
     };
@@ -808,7 +770,7 @@
     });
 
     safeRun("emit", () => {
-      window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: snapshot } }));
+      window.dispatchEvent(new CustomEvent("darrius:chartUpdated", { detail: snapshot }));
     });
   }
 
@@ -861,7 +823,6 @@
 
     ensureChart();
 
-    // ✅ Auto reload when user switches Data Source
     safeRun("bindDataSource", () => {
       const ds = $("dataSource");
       if (ds && !ds.__chartcoreBound) {
@@ -873,7 +834,6 @@
     load();
   }
 
-  // expose
   window.ChartCore = { init, load, applyToggles, exportPNG };
 
 })();
