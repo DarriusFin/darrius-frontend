@@ -565,6 +565,138 @@
     pollInFlight: false,
   };
 
+  function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function normalizeTFName(tf) {
+  return String(tf || "").trim().toLowerCase();
+}
+
+function isDateOnlyTF(tf) {
+  const t = normalizeTFName(tf);
+  return t === "1d" || t === "1w" || t === "1m";
+}
+
+function getCurrentTFSafe() {
+  try {
+    return normalizeTFName(
+      (S && S.lastSnapshot && S.lastSnapshot.tf) ||
+      getTF(S.opts.tfElId) ||
+      DEFAULTS.tf
+    );
+  } catch (e) {
+    return normalizeTFName(DEFAULTS.tf);
+  }
+}
+
+function isBusinessDayObj(v) {
+  return !!v && typeof v === "object" &&
+    Number.isFinite(Number(v.year)) &&
+    Number.isFinite(Number(v.month)) &&
+    Number.isFinite(Number(v.day));
+}
+
+function extractDateLabel(time) {
+  // businessDay: { year, month, day }
+  if (isBusinessDayObj(time)) {
+    return `${time.year}-${pad2(time.month)}-${pad2(time.day)}`;
+  }
+
+  // yyyy-mm-dd
+  if (typeof time === "string" && /^\d{4}-\d{2}-\d{2}$/.test(time.trim())) {
+    return time.trim();
+  }
+
+  // unix seconds / numeric string -> use UTC calendar date only
+  let d = null;
+
+  if (typeof time === "number" && Number.isFinite(time)) {
+    d = new Date(time * 1000);
+  } else if (typeof time === "string" && /^\d+$/.test(time.trim())) {
+    d = new Date(Number(time.trim()) * 1000);
+  } else if (typeof time === "string" && time.trim()) {
+    const tmp = new Date(time.trim());
+    if (!Number.isNaN(tmp.getTime())) d = tmp;
+  }
+
+  if (!d || Number.isNaN(d.getTime())) return "";
+
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+}
+
+function toIntradayDate(time) {
+  if (typeof time === "number" && Number.isFinite(time)) {
+    return new Date(time * 1000);
+  }
+
+  if (typeof time === "string" && time.trim()) {
+    const s = time.trim();
+
+    if (/^\d+$/.test(s)) {
+      const n = Number(s);
+      if (Number.isFinite(n)) return new Date(n * 1000);
+    }
+
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
+  return null;
+}
+
+function getNYParts(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const map = {};
+  for (const p of parts) {
+    if (p.type !== "literal") map[p.type] = p.value;
+  }
+  return map;
+}
+
+function formatDisplayTimeByTF(time) {
+  const tf = getCurrentTFSafe();
+
+  // 1D / 1W / 1M: date label only, NO timezone shift
+  if (isDateOnlyTF(tf)) {
+    return extractDateLabel(time);
+  }
+
+  // intraday: New York time
+  const d = toIntradayDate(time);
+  const p = getNYParts(d);
+  if (!p) return "";
+
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+}
+
+function formatTickByTF(time) {
+  const tf = getCurrentTFSafe();
+
+  // 1D / 1W / 1M: date label only
+  if (isDateOnlyTF(tf)) {
+    return extractDateLabel(time);
+  }
+
+  // intraday: HH:mm
+  const d = toIntradayDate(time);
+  const p = getNYParts(d);
+  if (!p) return "";
+
+  return `${p.hour}:${p.minute}`;
+}
+  
   // -----------------------------
   // Ensure chart (v4/v5 compatible)
   // -----------------------------
@@ -588,37 +720,22 @@ const chart = LW.createChart(el, {
   grid: { vertLines: { color: "transparent" }, horzLines: { color: "transparent" } },
 
   // ✅ only display text conversion; lower risk than tickMarkFormatter
-  localization: {
-    locale: DISPLAY_LOCALE,
-    timeFormatter: (time) => formatNYDateTime(time),
+ localization: {
+  locale: "en-US",
+  timeFormatter: (time) => formatDisplayTimeByTF(time),
+},
+
+timeScale: {
+  timeVisible: true,
+  secondsVisible: false,
+  tickMarkFormatter: (time) => {
+    try {
+      return formatTickByTF(time);
+    } catch (e) {
+      return "";
+    }
   },
-
-  timeScale: {
-    timeVisible: true,
-    secondsVisible: false,
-    tickMarkFormatter: (time) => {
-      try {
-        const d = toDateFromChartTime(time);
-        if (!d) return "";
-
-        const parts = new Intl.DateTimeFormat("en-US", {
-          timeZone: "America/New_York",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }).formatToParts(d);
-
-        const map = {};
-        for (const p of parts) {
-          if (p.type !== "literal") map[p.type] = p.value;
-        }
-
-        return `${map.hour}:${map.minute}`;
-      } catch (e) {
-        return "";
-      }
-    },
-  },
+},
 
   rightPriceScale: { borderVisible: false },
   crosshair: { mode: 1 },
