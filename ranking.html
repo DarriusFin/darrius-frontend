@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+
+  <title>
+    DarriusAI · Ranking Engine
+  </title>
+
+  <style>
+    :root{
+      --bg:#0b0f17;
+      --panel:#121a28;
+      --border:rgba(255,255,255,.10);
+      --text:#eaf0f7;
+      --muted:#8e9aab;
+      --brand:#2be2a6;
+    }
+
+    *{
+      box-sizing:border-box;
+    }
+
+    body{
+      margin:0;
+      min-height:100vh;
+      background:var(--bg);
+      color:var(--text);
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+    }
+
+    #topbar{
+      height:78px;
+      padding:0 20px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom:1px solid var(--border);
+      background:#0f1622;
+    }
+
+    .brand{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+
+    .brandLine1{
+      font-size:18px;
+      font-weight:700;
+    }
+
+    .accent{
+      color:var(--brand);
+    }
+
+    .brandLine2{
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .topRight{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+
+    .pill{
+      padding:9px 12px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(18,26,40,.65);
+      font-size:12px;
+    }
+
+    .btnTop{
+      padding:9px 14px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      background:#121a28;
+      color:var(--text);
+      cursor:pointer;
+    }
+
+    #main{
+      padding:16px;
+    }
+
+    .panel{
+      min-height:300px;
+      border:1px solid var(--border);
+      border-radius:18px;
+      background:
+        linear-gradient(
+          180deg,
+          rgba(18,26,40,.92),
+          rgba(15,23,38,.88)
+        );
+      overflow:hidden;
+    }
+
+    .panelHeader{
+      padding:14px;
+
+      border-bottom:
+        1px solid rgba(255,255,255,.06);
+
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+
+      font-weight:700;
+    }
+
+    .panelBody{
+      padding:16px;
+      color:var(--muted);
+    }
+
+    .rankingRow{
+      display:grid;
+      grid-template-columns:
+          60px
+          240px
+          160px
+          160px
+          120px
+          140px
+          160px
+          1fr;
+
+      column-gap:24px;
+      align-items:center;
+      min-height:56px;
+      padding:0 16px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      cursor: pointer;
+      transition:
+        background 0.15s ease,
+        transform 0.15s ease;
+    }
+
+    .rankingRow:hover {
+      background: rgba(
+        255,
+        255,
+        255,
+        0.035
+      );
+      transform: translateY(-1px);
+    }
+
+    .rankingRow:last-child{
+      border-bottom:none;
+    }
+
+    .rankNumber{
+      font-size:14px;
+      font-weight:700;
+      color:var(--muted);
+    }
+
+    .rankSymbol{
+      font-size:16px;
+      font-weight:700;
+      color:var(--text);
+    }
+
+    .rankMetric{
+      display:flex;
+      flex-direction:column;
+      gap:3px;
+    }
+
+    .metricLabel{
+      font-size:10px;
+      text-transform:uppercase;
+      color:var(--muted);
+    }
+
+    .metricValue{
+      font-size:14px;
+      font-weight:700;
+      color:var(--text);
+    }
+
+    .rankingRow.top1{
+      background:
+        linear-gradient(
+          90deg,
+          rgba(43,226,166,.12),
+          rgba(43,226,166,0)
+        );
+    }
+
+    .rankingRow.top2{
+      background:
+        linear-gradient(
+          90deg,
+          rgba(118,167,255,.09),
+          rgba(118,167,255,0)
+        );
+    }
+
+    .rankingRow.top3{
+      background:
+        linear-gradient(
+          90deg,
+          rgba(184,132,255,.08),
+          rgba(184,132,255,0)
+        );
+    }
+
+    .top1 .rankNumber{
+      color:var(--brand);
+    }
+
+    .top1 .rankSymbol{
+      color:var(--brand);
+    }
+
+    .top1 .rankMetric:first-of-type .metricValue{
+      color:var(--brand);
+    }
+
+    .top2 .rankNumber{
+      color:#9fc2ff;
+    }
+
+    .top3 .rankNumber{
+      color:#c5a5ff;
+    }
+
+    .signalB{
+      color:#2be2a6;
+    }
+
+    .signalEB{
+      color:#7ee8c4;
+    }
+
+    .signalES{
+      color:#ffb86b;
+    }
+
+    .signalS{
+      color:#ff6b7a;
+    }
+
+    .signalNeutral{
+      color:var(--muted);
+    }
+
+    .mutantUp{
+      color:#2be2a6;
+    }
+
+    .mutantDown{
+      color:#ff6b7a;
+    }
+
+    .mutantNeutral{
+      color:var(--muted);
+    }
+
+    .pulseBullish{
+      color:#2be2a6;
+    }
+
+    .pulseBearish{
+      color:#ff6b7a;
+    }
+
+    .pulseNeutral{
+      color:var(--muted);
+    }
+
+    .stateBadge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+
+      min-width:54px;
+      height:24px;
+
+      padding:0 9px;
+
+      border-radius:999px;
+      border:1px solid currentColor;
+
+      font-size:11px;
+      font-weight:700;
+      line-height:1;
+
+      background:rgba(255,255,255,.025);
+    }
+
+    .snapshotTime{
+      color:var(--muted);
+      font-size:11px;
+      font-weight:400;
+    }
+
+    .btnTop.activeTimeframe {
+      border-color: #2be2a6;
+      color: #2be2a6;
+      background: rgba(43, 226, 166, 0.08);
+    }
+
+    .rankingDisclaimer {
+      margin: 10px 14px 0;
+      padding: 0 0 10px;
+      font-size: 14px;
+      line-height: 1.55;
+      color: #8f9bad;
+    }
+
+    .disclaimerTitle {
+      margin-bottom: 5px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #dce6f2;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="topbar">
+
+    <div class="brand">
+      <div class="brandLine1">
+        <span class="accent">
+          DarriusAI
+        </span>
+        · Ranking Engine
+      </div>
+
+      <div class="brandLine2">
+        Top 10 Rankings
+      </div>
+    </div>
+
+    <div class="topRight">
+
+      <div
+        class="pill"
+        id="timeframePill"
+      >
+        US_CORE_500 · 1H
+      </div>
+
+      <button
+        class="btnTop"
+        id="tf1hBtn"
+      >
+        1H
+      </button>
+
+      <button
+        class="btnTop"
+        id="tf1dBtn"
+      >
+        1D
+      </button>
+
+      <button
+        class="btnTop"
+        id="backBtn"
+      >
+        ← Back to Dashboard
+      </button>
+
+    </div>
+  </div>
+
+
+  <div id="main">
+
+    <div class="panel">
+
+      <div class="panelHeader">
+        <span>
+          DarriusAI Top 10
+        </span>
+
+        <span
+          id="snapshotTime"
+          class="snapshotTime"
+        >
+          Updated: —
+        </span>
+      </div>
+
+      <div class="panelBody">
+        <div id="rankingList">
+          Loading ranking data...
+        </div>
+      </div>
+
+        </div>
+
+
+    <div class="rankingDisclaimer">
+      <div class="disclaimerTitle">
+        Disclaimer
+      </div>
+
+      <div>
+        1. Rankings are specific to the selected timeframe and may differ across timeframes.
+      </div>
+
+      <div>
+        2. Rankings may change over time as market conditions and underlying data change.
+      </div>
+
+      <div>
+        3. Rankings are provided for informational purposes only and do not constitute investment advice or a basis for investment decisions.
+      </div>
+    </div>
+
+  <script>
+
+    document
+      .getElementById("backBtn")
+      .addEventListener(
+        "click",
+        () => {
+          window.history.back();
+        }
+      );
+
+    let currentTimeframe = "1h";
+
+    const timeframePill =
+      document.getElementById(
+        "timeframePill"
+      );
+
+    const tf1hBtn =
+      document.getElementById(
+        "tf1hBtn"
+      );
+
+    const tf1dBtn =
+      document.getElementById(
+        "tf1dBtn"
+      );
+
+function setTimeframe(timeframe) {
+  currentTimeframe = timeframe;
+
+  tf1hBtn.classList.toggle(
+    "activeTimeframe",
+    timeframe === "1h"
+  );
+
+  tf1dBtn.classList.toggle(
+    "activeTimeframe",
+    timeframe === "1d"
+  );
+
+  timeframePill.textContent =
+    `US_CORE_500 · ${timeframe.toUpperCase()}`;
+
+  const rankingList =
+    document.getElementById(
+      "rankingList"
+    );
+
+  rankingList.textContent =
+    "Loading ranking data...";
+
+  loadRanking();
+}
+
+function openRankingDetail(symbol, timeframe) {
+  const params = new URLSearchParams({
+    symbol: symbol,
+    timeframe: timeframe
+  });
+
+  window.location.href =
+    `ranking_detail.html?${params.toString()}`;
+}
+
+tf1hBtn.addEventListener(
+  "click",
+  () => {
+    setTimeframe("1h");
+  }
+);
+
+
+tf1dBtn.addEventListener(
+  "click",
+  () => {
+    setTimeframe("1d");
+  }
+);
+
+setTimeframe("1h");
+
+    async function loadRanking() {
+      const rankingList =
+        document.getElementById(
+          "rankingList"
+        );
+
+      try {
+        const response = await fetch(
+          `https://darrius-api.onrender.com/api/ranking/top?limit=10&timeframe=${encodeURIComponent(currentTimeframe)}`
+        );
+
+        const data =
+          await response.json();
+
+        const snapshotTime =
+          document.getElementById(
+            "snapshotTime"
+          );
+
+        if (data.generated_at) {
+          const generatedAt =
+            new Date(data.generated_at);
+
+          const ageMs =
+            Date.now() - generatedAt.getTime();
+
+          const ageMinutes =
+            Math.max(
+              0,
+              Math.floor(
+                ageMs / 60000
+              )
+            );
+
+          let ageText;
+
+          if (ageMinutes < 60) {
+            ageText =
+              `${ageMinutes}m ago`;
+          } else if (ageMinutes < 1440) {
+            ageText =
+              `${Math.floor(
+                ageMinutes / 60
+              )}h ago`;
+          } else {
+            ageText =
+              `${Math.floor(
+                ageMinutes / 1440
+              )}d ago`;
+          }
+
+          const formattedTime =
+            new Intl.DateTimeFormat(
+              undefined,
+              {
+                year: "numeric",
+                month: "numeric",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                timeZoneName: "short",
+              }
+            ).format(generatedAt);
+
+          snapshotTime.textContent =
+            `Updated: ${formattedTime} · ${ageText}`;
+        }
+        if (!response.ok || !data.ok) {
+          throw new Error(
+            data.message ||
+            "Failed to load ranking"
+          );
+        }
+
+        rankingList.innerHTML =
+          data.items
+            .map(
+              item => `
+                <div
+                  class="rankingRow ${
+                    item.rank === 1
+                      ? "top1"
+                      : item.rank === 2
+                        ? "top2"
+                        : item.rank === 3
+                          ? "top3"
+                          : ""
+                  }"
+                  onclick="openRankingDetail('${item.symbol}', '${data.timeframe || currentTimeframe}')"
+                >
+
+                  <div class="rankNumber">
+                    #${item.rank}
+                  </div>
+
+                  <div class="rankSymbol">
+                    ${item.symbol}
+                  </div>
+
+                  <div class="rankMetric">
+                    <div class="metricLabel">
+                      Rank Score
+                    </div>
+
+                    <div class="metricValue">
+                      ${item.rank_score}
+                    </div>
+                  </div>
+
+                  <div class="rankMetric">
+                    <div class="metricLabel">
+                      Confidence
+                    </div>
+
+                    <div class="metricValue">
+                      ${item.confidence}
+                    </div>
+                  </div>
+
+                  <div class="rankMetric">
+                    <div class="metricLabel">
+                      Signal
+                    </div>
+
+                    <div>
+                      <span class="stateBadge ${
+                        item.signal === "B"
+                          ? "signalB"
+                          : item.signal === "eB"
+                            ? "signalEB"
+                            : item.signal === "eS"
+                              ? "signalES"
+                              : item.signal === "S"
+                                ? "signalS"
+                                : "signalNeutral"
+                      }">
+                        ${item.signal ?? "—"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="rankMetric">
+                    <div class="metricLabel">
+                      Mutant
+                    </div>
+
+                    <div>
+                      <span class="stateBadge ${
+                        item.mutant_state === "UP"
+                          ? "mutantUp"
+                          : item.mutant_state === "DOWN"
+                            ? "mutantDown"
+                            : "mutantNeutral"
+                      }">
+                        ${item.mutant_state ?? "—"}
+                      </span>
+                    </div>
+                  </div>
+
+                    <div class="rankMetric">
+                      <div class="metricLabel">
+                        Market Pulse
+                      </div>
+
+                      <div>
+                        <span class="stateBadge ${
+                          item.market_pulse_label === "Bullish"
+                            ? "pulseBullish"
+                            : item.market_pulse_label === "Bearish"
+                              ? "pulseBearish"
+                              : "pulseNeutral"
+                        }">
+                          ${item.market_pulse_label ?? "—"}
+                        </span>
+                      </div>
+                    </div>
+                </div>
+              `
+            )
+            .join("");
+
+      } catch (error) {
+        rankingList.textContent =
+          "Ranking unavailable: "
+          + error.message;
+      }
+    }
+
+
+</script>
+
+</body>
+</html>
