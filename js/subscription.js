@@ -428,6 +428,7 @@
 
     // For this new policy: email is strongly recommended/required for full UX
     if (!user_id && !email) {
+      window.__ENTITLEMENT__ = null;
       setSubStatusText("DEMO · please input User ID + Email");
       if (manageBtn) manageBtn.disabled = true;
       return;
@@ -443,6 +444,10 @@
         : `?user_id=${encodeURIComponent(user_id)}`;
 
       const policy = await apiGet(`/api/subscription/status${qs}`);
+
+      // Make backend subscription policy the shared source of truth
+      window.__ENTITLEMENT__ = policy;
+
       applyPolicyToStatusText(policy, user_id, email);
 
       // Dispatch event for other modules (keep)
@@ -452,6 +457,7 @@
 
       if (isAdmin()) log(`✅ policy: ${JSON.stringify({ bucket: policy.bucket, has_access: policy.has_access, plan_key: policy.plan_key, data_mode: policy.data_mode })}`);
     } catch (e) {
+      window.__ENTITLEMENT__ = null;
       setSubStatusText("UNKNOWN · status endpoint unavailable");
       if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
     }
