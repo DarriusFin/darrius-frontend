@@ -187,6 +187,30 @@
         if (typeof window.ChartCore.load === "function") window.ChartCore.load();
       });
 
+      $("rankEngineBtn")?.addEventListener("click", () => {
+        const userId = $("userId")?.value?.trim() || "";
+
+        if (!userId) {
+          alert("请先填写 User ID，再查看 Rank Engine。");
+          $("userId")?.focus?.();
+          return;
+        }
+
+        const policy = window.__ENTITLEMENT__;
+
+        if (!policy) {
+          alert("账户权限状态尚未加载，请稍后再试。");
+          return;
+        }
+
+        if (!policy.has_access) {
+          alert("Rank Engine 尚未解锁，请先完成订阅或试用验证。");
+          return;
+        }
+
+        window.location.href = "ranking.html";
+      });
+
       try {
         if (typeof window.ChartCore.init === "function") {
           window.ChartCore.init({
