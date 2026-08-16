@@ -201,7 +201,7 @@
 
     /* ===== Main Layout ===== */
     #main{
-      height: calc(100vh - 78px);
+      height: calc(100vh - 156px);
       padding:16px;
       display:grid;
       grid-template-columns: 330px 1fr 380px;
@@ -602,6 +602,125 @@
       #tfQuick{ justify-content:flex-start; }
       #chartPanel .panelBody{ overflow:auto; }
     }
+
+    /* Update Announcement */
+    .updateAnnouncement{
+      position:relative;
+      margin:16px 18px 0;
+      padding:14px 16px;
+      display:flex;
+      align-items:center;
+      gap:14px;
+
+      border:1px solid rgba(92, 169, 255, 0.28);
+      border-radius:14px;
+
+      background:
+        linear-gradient(
+          135deg,
+          rgba(46, 116, 255, 0.14),
+          rgba(16, 23, 38, 0.92)
+        );
+
+      box-shadow:0 10px 30px rgba(0,0,0,0.18);
+    }
+
+    .updateAnnouncementBadge{
+      flex:0 0 auto;
+
+      padding:5px 8px;
+      border-radius:7px;
+
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.08em;
+
+      color:#fff;
+      background:var(--brand1);
+    }
+
+    .updateAnnouncementContent{
+      flex:1;
+      min-width:0;
+    }
+
+    .updateAnnouncementTitle{
+      font-size:14px;
+      font-weight:800;
+      color:var(--text);
+    }
+
+    .updateAnnouncementDesc{
+      margin-top:3px;
+      font-size:12px;
+      line-height:1.45;
+      color:var(--muted);
+    }
+
+    .updateAnnouncementAction{
+      flex:0 0 auto;
+
+      border:1px solid rgba(92, 169, 255, 0.35);
+      border-radius:9px;
+
+      padding:8px 12px;
+
+      font:inherit;
+      font-size:12px;
+      font-weight:700;
+
+      color:#fff;
+      background:rgba(46, 116, 255, 0.20);
+
+      cursor:pointer;
+    }
+
+    .updateAnnouncementAction:hover{
+      background:rgba(46, 116, 255, 0.32);
+    }
+
+    .updateAnnouncementClose{
+      flex:0 0 auto;
+
+      width:30px;
+      height:30px;
+
+      border:0;
+      border-radius:8px;
+
+      font-size:20px;
+      line-height:1;
+
+      color:var(--muted);
+      background:transparent;
+
+      cursor:pointer;
+    }
+
+    .updateAnnouncementClose:hover{
+      color:var(--text);
+      background:rgba(255,255,255,0.06);
+    }
+
+    @media (max-width: 760px){
+      .updateAnnouncement{
+        align-items:flex-start;
+        flex-wrap:wrap;
+      }
+
+      .updateAnnouncementContent{
+        flex:1 1 calc(100% - 60px);
+      }
+
+      .updateAnnouncementAction{
+        margin-left:38px;
+      }
+
+      .updateAnnouncementClose{
+        position:absolute;
+        right:24px;
+      }
+    }
   </style>
 </head>
 
@@ -630,6 +749,38 @@
       <div id="copyright">© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
     </div>
   </div>
+
+  <!-- UPDATE ANNOUNCEMENT -->
+  <div id="updateAnnouncement" class="updateAnnouncement">
+    <div class="updateAnnouncementBadge">NEW</div>
+
+    <div class="updateAnnouncementContent">
+      <div class="updateAnnouncementTitle">
+        Rank Engine · Top 10 已上线
+      </div>
+      <div class="updateAnnouncementDesc">
+        AI-assisted stock ranking is now available for eligible accounts.
+      </div>
+    </div>
+
+    <button
+      type="button"
+      id="announcementRankBtn"
+      class="updateAnnouncementAction"
+    >
+      Explore · 立即查看
+    </button>
+
+    <button
+      type="button"
+      id="announcementCloseBtn"
+      class="updateAnnouncementClose"
+      aria-label="关闭更新公告"
+    >
+      ×
+    </button>
+  </div>
+
 
   <div id="main">
     <!-- LEFT -->
@@ -964,7 +1115,7 @@
   <script src="js/referral.checkout.js?v=20260129"></script>
 
   <!-- ✅ boot MUST be last (只保留一次！) -->
-  <script src="js/boot.js?v=20260203_fix1"></script>
+  <script src="js/boot.js?v=20260815_rank_announce1"></script>
 
   <!-- ✅ TF Sync (UI only, stable) -->
   <script>

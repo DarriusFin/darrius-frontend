@@ -211,6 +211,40 @@
         window.location.href = "ranking.html";
       });
 
+      const syncMainHeight = () => {
+        const banner = $("updateAnnouncement");
+        const main = $("main");
+
+        if (!main) return;
+
+        if (!banner || banner.style.display === "none") {
+          main.style.height = "calc(100vh - 78px)";
+          return;
+        }
+
+        const styles = window.getComputedStyle(banner);
+        const marginTop = parseFloat(styles.marginTop) || 0;
+        const marginBottom = parseFloat(styles.marginBottom) || 0;
+        const bannerSpace =
+          banner.getBoundingClientRect().height + marginTop + marginBottom;
+
+        main.style.height = `calc(100vh - ${78 + bannerSpace}px)`;
+      };
+
+      syncMainHeight();
+      window.addEventListener("resize", syncMainHeight);
+
+      $("announcementRankBtn")?.addEventListener("click", () => {
+        $("rankEngineBtn")?.click();
+      });
+
+      $("announcementCloseBtn")?.addEventListener("click", () => {
+        const banner = $("updateAnnouncement");
+
+        if (banner) banner.style.display = "none";
+        syncMainHeight();
+      });
+
       try {
         if (typeof window.ChartCore.init === "function") {
           window.ChartCore.init({
