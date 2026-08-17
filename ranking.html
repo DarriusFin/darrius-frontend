@@ -562,7 +562,7 @@ setTimeframe("1h");
 
           const formattedTime =
             new Intl.DateTimeFormat(
-              undefined,
+              "en-US",
               {
                 year: "numeric",
                 month: "numeric",
@@ -570,6 +570,8 @@ setTimeframe("1h");
                 hour: "2-digit",
                 minute: "2-digit",
                 second: "2-digit",
+                hourCycle: "h23",
+                timeZone: "America/New_York",
                 timeZoneName: "short",
               }
             ).format(generatedAt);

@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DarriusAI · Inflection Hunter | AI 拐点决策系统</title>
+  <title>DarriusAI · Inflection Hunter | AI Decision System</title>
 
   <!-- Lightweight Charts (required by chart.core.js) -->
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
@@ -83,43 +83,64 @@
     /* ===== Header ===== */
     #topbar{
       height:78px;
-      padding:0 18px;
+      padding:0 16px;
       display:flex;
       align-items:center;
       justify-content:space-between;
-      border-bottom:1px solid var(--border);
-      background: rgba(10,15,23,.55);
-      backdrop-filter: blur(10px);
+      gap:16px;
+
+      border-bottom:1px solid rgba(255,255,255,.08);
+
+      background:
+        radial-gradient(900px 500px at 12% 10%, rgba(76, 194, 255, .10), transparent 60%),
+        radial-gradient(900px 520px at 88% 12%, rgba(43, 226, 166, .10), transparent 60%),
+        var(--bg);
     }
 
     #brand{
       display:flex;
       align-items:center;
       gap:14px;
-      min-width:420px;
+      min-width:0;
     }
 
     .logoBox{
-      width: calc(var(--logoBase) * var(--logoScale));
-      height: calc(var(--logoBase) * var(--logoScale));
-      border-radius: 18px;
-      overflow:hidden;
-      border:1px solid rgba(255,255,255,.12);
-      box-shadow: 0 14px 30px rgba(0,0,0,.30);
-      background: rgba(0,0,0,.12);
-      flex:0 0 auto;
+      width:64px;
+      height:64px;
+      flex:0 0 64px;
+
       display:flex;
       align-items:center;
       justify-content:center;
+
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;
+      background:rgba(255,255,255,.03);
+
+      box-shadow:0 6px 18px rgba(0,0,0,.18);
+      overflow:hidden;
     }
-    .logoBox img{
+
+    #logoImg{
       width:100%;
       height:100%;
       object-fit:cover;
       display:block;
+
+      transform:scale(1.82);
+      transform-origin:center;
+
+      border-radius:14px;
     }
 
-    #brandText{ line-height:1.08; }
+    #brandText{
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      gap:6px;
+    }
+
     #brandLine1{
       font-weight:950;
       letter-spacing:.3px;
@@ -348,34 +369,61 @@
     .gaugeCenter .lbl{ margin-top:2px; font-size:12px; color: var(--muted); }
 
     /* ===== Signal box ===== */
+    /* Signal status refinement */
     .signalBox{
-      border-radius: var(--r14);
-      overflow:hidden;
-      border:1px solid rgba(255,255,255,.08);
+      display:flex;
+      flex-direction:column;
+      gap:10px;
     }
+
     .signal{
       display:flex;
+      align-items:center;
       justify-content:space-between;
-      gap:10px;
-      padding:12px;
-      background: rgba(0,0,0,.16);
-      border-left: 4px solid rgba(255,255,255,.10);
-    }
-    .signal.buy{ border-left-color: var(--brand1); }
-    .signal.sell{ border-left-color: var(--danger); }
-    .signal.neutral{ border-left-color: rgba(255,255,255,.14); }
-    .signal .side{ font-weight:950; letter-spacing:.4px; }
-    .signal .meta{ margin-top:6px; font-size:12px; color:var(--muted); line-height:1.35; }
+      gap:12px;
 
+      padding:12px 14px;
+
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+
+      background:rgba(255,255,255,.025);
+      box-shadow:none;
+    }
+
+    .signal.buy{
+      border-color:rgba(43,226,166,.25);
+    }
+
+    .signal.sell{
+      border-color:rgba(255,90,110,.25);
+    }
+
+    .signal.neutral{
+      border-color:rgba(255,255,255,.08);
+    }
+
+    .signal .side{
+      font-size:15px;
+      font-weight:750;
+    }
+
+    .signal .meta{
+      font-size:11px;
+      color:var(--muted);
+    }
+
+    /* ===== Left footer disclaimer ===== */
     /* ===== Left footer disclaimer ===== */
     #leftDisclaimer{
       margin-top:12px;
-      padding-top:12px;
-      border-top:1px solid rgba(255,255,255,.06);
+      padding-top:10px;
+      border-top:1px solid rgba(255,255,255,.07);
       font-size:11px;
       line-height:1.55;
-      color: rgba(234,240,247,.74);
+      color:rgba(234,240,247,.74);
     }
+
     #leftDisclaimer b{ color: rgba(234,240,247,.92); }
     #leftDisclaimer .mut{ color: rgba(234,240,247,.62); }
 
@@ -721,6 +769,157 @@
         right:24px;
       }
     }
+
+    /* Control Center hierarchy cleanup */
+    #rightPanel .panelBody{
+      padding:0 12px 12px;
+    }
+
+    #rightPanel .card{
+      margin:0;
+      padding:14px 10px;
+
+      border:0;
+      border-radius:0;
+
+      background:transparent;
+      box-shadow:none;
+    }
+
+    #rightPanel .card + .card{
+      border-top:1px solid rgba(255,255,255,.07);
+    }
+
+    #rightPanel .note{
+      line-height:1.45;
+    }
+
+    /* Right panel section titles */
+    #rightPanel .cardTitle{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+    }
+
+    #rightPanel .cardTitle b{
+      font-size:12px;
+      font-weight:750;
+      letter-spacing:.01em;
+      color:var(--text);
+    }
+
+    #rightPanel .cardTitle .small{
+      font-size:10px;
+      font-weight:500;
+      color:var(--muted);
+    }
+
+    .disclosureDetails{
+      margin:0;
+    }
+
+    .disclosureDetails summary{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+
+      padding:6px 2px;
+      cursor:pointer;
+      list-style:none;
+
+      border-radius:6px;
+
+      transition:background .15s ease;
+    }
+
+    .disclosureDetails summary:hover{
+      background:rgba(255,255,255,.035);
+    }
+
+    .disclosureDetails summary::-webkit-details-marker{
+      display:none;
+    }
+
+    .disclosureTitle{
+      font-size:11px;
+      font-weight:700;
+      color:rgba(234,240,247,.72);
+    }
+
+    .disclosureAction{
+      display:flex;
+      align-items:center;
+      gap:4px;
+
+      font-size:10px;
+      font-weight:500;
+      color:rgba(234,240,247,.42);
+    }
+
+    .disclosureChevron{
+      display:inline-block;
+
+      font-size:15px;
+      line-height:1;
+
+      transition:transform .18s ease;
+    }
+
+    .disclosureDetails[open] .disclosureChevron{
+      transform:rotate(90deg);
+    }
+
+    .disclosureDetails[open] .disclosureAction{
+      color:rgba(234,240,247,.60);
+    }
+
+    .disclosureContent{
+      margin-top:7px;
+      padding:10px 11px;
+
+      border-radius:8px;
+      background:rgba(255,255,255,.018);
+
+      font-size:10px;
+      line-height:1.55;
+      color:var(--muted);
+    }
+
+
+    .disclosureSupport{
+      margin-top:10px;
+    }
+
+    .disclosureContent a{
+      color:var(--brand1);
+      text-decoration:none;
+    }
+
+    .footerLinks{
+      display:flex;
+      align-items:center;
+      flex-wrap:wrap;
+      gap:5px;
+
+      margin-top:9px;
+
+      font-size:10px;
+      line-height:1.35;
+
+      color:rgba(234,240,247,.40);
+    }
+
+    .footerLinks a{
+      color:rgba(109,190,255,.72);
+      text-decoration:none;
+    }
+
+    .footerLinks a:hover{
+      color:var(--brand1);
+    }
   </style>
 </head>
 
@@ -735,8 +934,8 @@
           <span class="accent">DarriusAI</span> · Inflection Hunter
         </div>
         <div id="brandLine2">
-          <span class="chip brand">AI 拐点决策系统</span>
-          <span class="chip">拐点猎手</span>
+          <span class="chip brand">AI Decision System</span>
+          <span class="chip">Inflection Hunter</span>
         </div>
       </div>
     </div>
@@ -750,12 +949,12 @@
         class="pill"
         style="text-decoration:none; cursor:pointer;"
       >
-        User Manual · 用户手册
+        User Manual
       </a>
 
       <div id="statusBadge" class="pill">
         <span class="dot"></span>
-        <span id="statusText">Ready · 前端就绪</span>
+        <span id="statusText">Dashboard Ready</span>
       </div>
       <div id="copyright">© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
     </div>
@@ -767,8 +966,9 @@
 
     <div class="updateAnnouncementContent">
       <div class="updateAnnouncementTitle">
-        Rank Engine · Top 10 已上线
+        Rank Engine · Top 10 is now available
       </div>
+
       <div class="updateAnnouncementDesc">
         AI-assisted stock ranking is now available for eligible accounts.
       </div>
@@ -779,14 +979,14 @@
       id="announcementRankBtn"
       class="updateAnnouncementAction"
     >
-      Explore · 立即查看
+      Explore
     </button>
 
     <button
       type="button"
       id="announcementCloseBtn"
       class="updateAnnouncementClose"
-      aria-label="关闭更新公告"
+      aria-label="Close update announcement"
     >
       ×
     </button>
@@ -797,7 +997,7 @@
     <!-- LEFT -->
     <div class="panel" id="leftPanel">
       <div class="panelHeader">
-        <div class="h">Market Pulse · 市场情绪 <span class="tag" id="pulseTag">LIVE</span></div>
+        <div class="h">Market Pulse <span class="tag" id="pulseTag">LIVE</span></div>
       </div>
       <div class="panelBody">
         <div class="card">
@@ -825,71 +1025,103 @@
         </div>
 
         <div class="card">
-          <div class="cardTitle"><b>Risk Copilot · 风险助手</b><span class="small" id="riskMode">Auto</span></div>
+          <div class="cardTitle"><b>Risk Copilot</b><span class="small" id="riskMode">Auto</span></div>
           <div class="kv">
-            <span>Entry · 入场</span><b id="riskEntry">—</b>
-            <span>Stop · 止损</span><b id="riskStop" style="color:var(--danger)">—</b>
-            <span>Targets · 目标</span><b id="riskTargets">—</b>
-            <span>Confidence · 强度</span><b id="riskConf">—</b>
-            <span>Backtest WinRate · 回测胜率</span><b id="riskWR">—</b>
+            <span>Entry</span><b id="riskEntry">—</b>
+            <span>Stop</span><b id="riskStop" style="color:var(--danger)">—</b>
+            <span>Targets</span><b id="riskTargets">—</b>
+            <span>Confidence</span><b id="riskConf">—</b>
+            <span>Backtest Win Rate</span><b id="riskWR">—</b>
           </div>
         </div>
 
         <div class="signalBox">
           <div class="signal neutral" id="signalRow">
             <div>
-              <div class="side" id="signalSide">Waiting…</div>
-              <div class="meta" id="signalMeta">Waiting for confirmation…<br/>等待确认…</div>
+              <div class="side" id="signalSide">No Active Signal</div>
+              <div class="meta" id="signalMeta">Awaiting confirmation</div>
             </div>
+
             <div style="text-align:right">
               <div style="font-weight:950" id="signalPx">—</div>
               <div class="meta" id="signalTf">TF: —</div>
             </div>
           </div>
-
-          <button
-            class="btn"
-            id="rankEngineBtn"
-            style="width:100%; margin-top:10px;"
-          >
-            Rank Engine · Top 10
-          </button>
         </div>
+
+        <button
+          class="btn"
+          id="rankEngineBtn"
+          style="width:100%; margin-top:10px;"
+        >
+          Open Rank Engine
+        </button>
 
         <!-- Affiliate -->
         <div class="card" id="affiliateCard" style="margin-top:12px">
-          <div class="cardTitle"><b>Affiliate · 推荐人</b><span class="small">入口</span></div>
-          <button class="btnGhost" id="affiliateBtn">Affiliate / 推荐入口</button>
+          <div class="cardTitle"><b>Affiliate</b><span class="small">Program</span></div>
+          <button class="btnGhost" id="affiliateBtn">Affiliate</button>
           <div class="note" style="margin-top:10px">
             <b>Note:</b> Commission terms are disclosed only in the dashboard and agreement.<br/>
-            <b>说明：</b>返佣比例与结算规则仅在后台与合同中呈现。
           </div>
         </div>
 
         <div id="leftDisclaimer">
-          <div>
-            <b>Disclaimer:</b> Informational use only. Not investment advice. No offer or solicitation to buy/sell any security, futures, FX, crypto, or other financial instrument.
-            Signals are algorithmic estimates and may be inaccurate, delayed, or incomplete. Past performance is not indicative of future results. You are solely responsible for your trading decisions and risk.
-          </div>
-          <div style="margin-top:8px">
-            <b>免责声明：</b> 本系统仅用于信息展示，不构成任何投资建议、要约或招揽。算法信号可能存在误差、延迟或不完整；历史表现不代表未来收益。任何交易决策与风险均由用户自行承担。
-          </div>
-          <br>
-<div style="margin-top:6px">
-  Customer Support / 客服支持:
-  <a href="mailto:support@darrius.ai">support@darrius.ai</a>
-</div>
+          <details class="disclosureDetails">
+            <summary>
+              <span class="disclosureTitle">Risk Disclosure</span>
 
-          <div class="mut" style="margin-top:8px">
-            Links:
-            <a href="https://darrius.ai" target="_blank" rel="noreferrer">darrius.ai</a> ·
-            <a href="#" onclick="alert('后续可接：Terms / Privacy / Contact');return false;">Terms</a> ·
-            <a href="#" onclick="alert('后续可接：Privacy Policy');return false;">Privacy</a> ·
-            <a href="#" onclick="alert('support@darrius.ai');return false;">Support</a>
+              <span class="disclosureAction">
+                View details
+                <span class="disclosureChevron">›</span>
+              </span>
+            </summary>
+
+            <div class="disclosureContent">
+              Informational use only. Not investment advice. No offer or solicitation
+              to buy or sell any security, futures, FX, crypto, or other financial
+              instrument.
+
+              <div style="margin-top:8px;">
+                Signals are algorithmic estimates and may be inaccurate, delayed, or
+                incomplete. Past performance is not indicative of future results.
+                You are solely responsible for your trading decisions and risk.
+              </div>
+
+              <div class="disclosureSupport">
+                Customer Support:
+                <a href="mailto:support@darrius.ai">support@darrius.ai</a>
+              </div>
+            </div>
+          </details>
+
+          <div class="footerLinks">
+            <a href="https://darrius.ai" target="_blank" rel="noreferrer">
+              DarriusAI
+            </a>
+
+            <span>·</span>
+
+            <a href="#" onclick="alert('Terms page coming soon'); return false;">
+              Terms
+            </a>
+
+            <span>·</span>
+
+            <a href="#" onclick="alert('Privacy Policy page coming soon'); return false;">
+              Privacy
+            </a>
+
+            <span>·</span>
+
+            <a href="mailto:support@darrius.ai">
+              Support
+            </a>
           </div>
         </div>
-      </div>
-    </div>
+
+          </div>  <!-- panelBody -->
+          </div>  <!-- leftPanel -->
 
     <!-- CENTER -->
     <div class="panel" id="chartPanel">
@@ -926,15 +1158,15 @@
     <!-- RIGHT -->
     <div class="panel" id="rightPanel">
       <div class="panelHeader">
-        <div class="h">Control Center · 控制台</div>
+        <div class="h">Control Center</div>
       </div>
 
       <div class="panelBody">
         <!-- Data Source -->
         <div class="card">
-          <div class="cardTitle"><b>Data Source · 数据源</b><span class="small">合规数据</span></div>
+          <div class="cardTitle"><b>Data Source</b><span class="small">Licensed Data</span></div>
           <div class="field">
-            <div class="label"><span>Source · 来源</span><span class="small">第三方实盘</span></div>
+            <div class="label"><span>Source</span><span class="small">Third-Party Market Data</span></div>
 
             <!-- ✅ 彻底移除 Demo(local)，强制 Twelve Pro -->
             <select id="dataSource" disabled>
@@ -943,35 +1175,34 @@
           </div>
 
           <div class="note">
-            <b>Note:</b> Twelve Pro market data. All data is legally licensed and proxied via backend.<br/>
-            <b>说明：</b> 使用 Twelve Data Pro 数据行情，合规展示。
+            Licensed market data provided via Twelve Data Pro.<br/>
           </div>
         </div>
 
         <!-- Market/TF -->
         <div class="card">
-          <div class="cardTitle"><b>Market · 品种与周期</b><span class="small">Chart</span></div>
+          <div class="cardTitle"><b>Market</b><span class="small">Chart</span></div>
 
           <div class="field">
-            <div class="label"><span>Symbol · 品种</span><span class="small">(e.g., TSLA / AAPL)</span></div>
+            <div class="label"><span>Symbol</span><span class="small">(e.g., TSLA / AAPL)</span></div>
             <input id="symbol" value="TSLA"/>
           </div>
 
           <div class="field">
-            <div class="label"><span>Timeframe · 周期</span></div>
+            <div class="label"><span>Timeframe</span></div>
             <select id="tf">
-              <option value="5m">5m · 5分钟</option>
-              <option value="15m">15m · 15分钟</option>
-              <option value="30m">30m · 30分钟</option>
-              <option value="1h">1h · 1小时</option>
-              <option value="4h">4h · 4小时</option>
-              <option value="1d" selected>1d · 日线</option>
-              <option value="1w">1w · 周线</option>
-              <option value="1M">1M · 月线</option>
+              <option value="5m">5 Minutes</option>
+              <option value="15m">15 Minutes</option>
+              <option value="30m">30 Minutes</option>
+              <option value="1h">1 Hour</option>
+              <option value="4h">4 Hours</option>
+              <option value="1d">1 Day</option>
+              <option value="1w">1 Week</option>
+              <option value="1M">1 Month</option>
             </select>
           </div>
 
-          <button class="btn" id="loadBtn">Symbol Load · 股票查询</button>
+          <button class="btn" id="loadBtn">Symbol Load</button>
 
           <div class="row2">
             <label class="btnGhost" style="display:flex;align-items:center;justify-content:center;gap:8px;">
@@ -986,60 +1217,69 @@
 
           <div class="note" style="margin-top:8px">
             <b>Note:</b> EMA/AUX parameters are internal.<br/>
-            <b>说明：</b>EMA/AUX 参数为内部策略要素，按周期自动适配。
           </div>
         </div>
 
         <!-- Subscription -->
         <div class="card">
           <div class="cardTitle">
-            <b>Subscription · 订阅选择</b>
-            <span class="small" id="planStatus">从后端拉取…</span>
+            <b>Subscription</b>
+            <span class="small" id="planStatus">Loading plans...</span>
           </div>
 
           <div class="note" style="margin-top:-2px;margin-bottom:10px">
             <b>Note:</b> Trial requires a valid card. If payment is not completed when the trial ends, access will be disabled automatically.<br/>
-            <b>说明：</b>试用需绑定信用卡；到期未付费会自动取消权限。
           </div>
 
           <div class="field">
-            <div class="label"><span><b>User ID</b> · 用户ID</span><span class="small">（Required 必填）</span></div>
+            <div class="label"><span><b>User ID</b></span><span class="small">Required</span></div>
             <input id="userId" placeholder/>
           </div>
 
           <div class="field">
-            <div class="label"><span>Email · 邮箱</span><span class="small">（Required 必填）</span></div>
+            <div class="label"><span>Email</span><span class="small">Required</span></div>
           <input id="email" placeholder/>
           </div>
 
           <div class="field">
-            <div class="label"><span>Plan · 套餐</span><span class="small">—</span></div>
+            <div class="label"><span>Plan</span><span class="small">—</span></div>
             <select id="planSelect">
               <option value="">Loading…</option>
             </select>
           </div>
 
           <div class="row2" style="margin-top:0">
-            <button class="btn" id="subscribeBtn" disabled>Order Start · 订单开通</button>
-            <button class="btnGhost" id="manageBtn" disabled>Order Manage · 订单管理</button>
+            <button class="btn" id="subscribeBtn" disabled>Subscribe</button>
+            <button class="btnGhost" id="manageBtn" disabled>Manage Plan</button>
           </div>
 
-          <div class="note" style="margin-top:10px">
-            <b>Subscription Status：</b>
-            <span id="subStatusText" style="margin-left:6px;color:rgba(234,240,247,.88)">Unknown</span>
-            <span id="accessBadge" class="accessBadge UNKNOWN hidden" style="margin-left:8px;">UNKNOWN</span>
+          <div class="note" style="margin-top:10px;">
+            <b>Status:</b>
+            <span id="subStatusText">Unknown</span>
+
+            <span
+              id="accessBadge"
+              class="accessBadge UNKNOWN hidden"
+            >
+              UNKNOWN
+            </span>
           </div>
         </div>
 
-        <!-- Share/Export -->
+        <!-- Share & Export -->
         <div class="card">
-          <div class="cardTitle"><b>Share & Export · 分享与导出</b><span class="small">Utilities</span></div>
-          <button class="btnGhost" id="copyLinkBtn">Copy Share Link · 复制分享链接</button>
-          <div style="height:10px"></div>
-          <button class="btnGhost" id="exportBtn">Export PNG · 导出图片（含图表）</button>
-          <div class="note" style="margin-top:10px">
-            <b>Note:</b> Export depends on browser canvas support. <br/>
-            <b>说明：</b>导出依赖浏览器对 canvas 截图支持。
+          <div class="cardTitle">
+            <b>Share & Export</b>
+          </div>
+
+          <div class="row2">
+            <button class="btnGhost" id="copyLinkBtn">
+              Copy Link
+            </button>
+
+            <button class="btnGhost" id="exportBtn">
+              Export PNG
+            </button>
           </div>
         </div>
 
@@ -1121,12 +1361,12 @@
   <script src="js/market.pulse.js?v=20260203a"></script>
   <script src="js/darrius.mutant.js?v=20260212"></script>
 
-  <script src="js/subscription.js?v=20260202"></script>
+  <script src="js/subscription.js?v=20260816_ui_refresh2"></script>
   <script src="js/referral.client.js?v=20260129"></script>
   <script src="js/referral.checkout.js?v=20260129"></script>
 
   <!-- ✅ boot MUST be last (只保留一次！) -->
-  <script src="js/boot.js?v=20260815_rank_announce1"></script>
+  <script src="js/boot.js?v=20260816_ui_refresh1"></script>
 
   <!-- ✅ TF Sync (UI only, stable) -->
   <script>

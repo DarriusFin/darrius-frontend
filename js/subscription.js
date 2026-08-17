@@ -196,7 +196,7 @@
       sel.appendChild(opt);
     }
 
-    setPlanStatusText(`已加载 ${PLANS.length} 个计划`);
+    setPlanStatusText(`${PLANS.length} Plans Available`);
     const subBtn = $(IDS.subscribeBtn);
     if (subBtn) subBtn.disabled = PLANS.length === 0;
   }
@@ -248,7 +248,7 @@
 
   async function initPlans() {
     try {
-      setPlanStatusText("从后端拉取…");
+      setPlanStatusText("Loading plans...");
       const plans = await loadPlansPreferred();
       populatePlans(plans);
       setStatusBadge("API OK", true);
@@ -258,13 +258,13 @@
       try {
         const plans = await loadPlansLegacy();
         populatePlans(plans);
-        setPlanStatusText(`已加载 ${plans.length} 个计划（legacy fallback）`);
+        setPlanStatusText(`${plans.length} Plans Available`);
         log(`⚠️ plans: loaded from /billing/prices fallback (${plans.length})`);
         return;
       } catch (e2) {
         const fallback = getLocalFallbackPlans();
         populatePlans(fallback);
-        setPlanStatusText("已加载计划（local fallback）");
+        setPlanStatusText("Plans Available");
         setStatusBadge("API Degraded", false);
         if (isAdmin()) log(`❌ initPlans failed: ${e1.message} / ${e2.message} -> local fallback`);
       }
@@ -318,14 +318,14 @@
     const override = (($(IDS.priceOverride) && $(IDS.priceOverride).value) || "").trim();
 
     if (!user_id) {
-      alert("User ID 必填（用于绑定 Stripe 订阅到你的系统用户）。");
+      alert("User ID is required to link your subscription to your account.");
       $(IDS.userId)?.focus?.();
       return;
     }
 
     // ✅ Email required (your new policy)
     if (!email) {
-      alert("Email 必填（用于匹配 Stripe customer_email / 开通 Portal）。");
+      alert("Email is required to match your Stripe customer and enable the Billing Portal.");
       $(IDS.email)?.focus?.();
       return;
     }
@@ -344,7 +344,7 @@
     }
 
     if (!price_id) {
-      alert("未找到 price_id（计划价格 ID）。请刷新页面或联系管理员。");
+      alert("Price ID was not found. Please refresh the page or contact support.");
       return;
     }
 
@@ -365,7 +365,11 @@
     } catch (e) {
       setStatusBadge("Network/API error", false);
       if (isAdmin()) log(`❌ subscribe failed: ${e.message}`);
-      alert("订阅失败：网络错误/后端接口报错。\n\n错误：\n" + e.message);
+      alert(
+        "Subscription failed due to a network or server error.\n\n" +
+        "Error:\n" +
+        e.message
+      );
     }
   }
 
@@ -429,7 +433,7 @@
     // For this new policy: email is strongly recommended/required for full UX
     if (!user_id && !email) {
       window.__ENTITLEMENT__ = null;
-      setSubStatusText("DEMO · please input User ID + Email");
+      setSubStatusText("Demo access — enter User ID and Email");
       if (manageBtn) manageBtn.disabled = true;
       return;
     }
@@ -477,11 +481,11 @@
 
     // Your new policy: email required for portal UX
     if (!email && !user_id) {
-      alert("请先填写 Email（建议）或 User ID，再打开订阅管理。");
+      alert("Enter your Email or User ID before opening subscription management.");
       return;
     }
     if (!email) {
-      alert("Email 必填（用于打开 Billing Portal 更稳定）。");
+      alert("Email is required to open the Billing Portal.");
       $(IDS.email)?.focus?.();
       return;
     }
@@ -493,9 +497,9 @@
       window.location.href = data.url;
     } catch (e) {
       alert(
-        "订阅管理（Customer Portal）暂未开通或接口未部署。\n\n" +
-        "后端需要提供：POST /api/billing/portal -> 返回 {url}\n\n" +
-        "错误：\n" +
+        "Subscription management is currently unavailable or the Billing Portal endpoint has not been deployed.\n\n" +
+        "The backend must provide: POST /api/billing/portal and return {url}.\n\n" +
+        "Error:\n" +
         e.message
       );
       if (isAdmin()) log(`❌ open portal: ${e.message}`);
