@@ -84,9 +84,9 @@
     const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
     try {
       await navigator.clipboard.writeText(url);
-      alert("已复制分享链接：\n" + url);
+      alert("Share link copied:\n" + url);
     } catch (_) {
-      prompt("复制失败，请手动复制：", url);
+      prompt("Copy failed. Please copy the link manually:", url);
     }
   }
 
@@ -97,21 +97,21 @@
         window.ChartCore.exportPNG();
         return;
       }
-      alert("导出功能将在最终 ChartCore 版本中统一提供。");
+      alert("Export will be available in the final ChartCore release.");
     } catch (e) {
-      alert("导出失败：" + e.message);
+      alert("Export failed: " + e.message);
     }
   }
 
   // ---------- optional: affiliate entry ----------
   function openAffiliate() {
     alert(
-      "Affiliate 入口（合规版）：\n\n" +
-        "下一步建议：\n" +
-        "1) /affiliate/register（选择 US / non-US 身份）\n" +
-        "2) 电子签署：W-9/1099 或 W-8 系列 + 合作协议\n" +
-        "3) /affiliate/dashboard（推荐数、结算、发票/对账）\n\n" +
-        "注：返佣比例与结算规则不在前端公开展示（商业机密）。"
+      "Affiliate Program:\n\n" +
+        "Next steps:\n" +
+        "1) Complete affiliate registration and select US or non-US status.\n" +
+        "2) Complete electronic tax and partnership documents.\n" +
+        "3) Access the affiliate dashboard for referrals, settlements, and invoices.\n\n" +
+        "Commission rates and settlement terms are disclosed only in the dashboard and agreement."
     );
   }
 
@@ -136,7 +136,7 @@
       const email = $("email")?.value?.trim() || "";
 
       if (!userId) {
-        alert("请先填写 User ID，再进入账户管理。");
+        alert("Enter your User ID before opening account management.");
         $("userId")?.focus?.();
         return;
       }
@@ -191,7 +191,7 @@
         const userId = $("userId")?.value?.trim() || "";
 
         if (!userId) {
-          alert("请先填写 User ID，再查看 Rank Engine。");
+          alert("Enter your User ID before opening Rank Engine.");
           $("userId")?.focus?.();
           return;
         }
@@ -199,12 +199,12 @@
         const policy = window.__ENTITLEMENT__;
 
         if (!policy) {
-          alert("账户权限状态尚未加载，请稍后再试。");
+          alert("Account access status is still loading. Please try again shortly.");
           return;
         }
 
         if (!policy.has_access) {
-          alert("Rank Engine 尚未解锁，请先完成订阅或试用验证。");
+          alert("Rank Engine is not unlocked for this account. Please activate a subscription or trial first.");
           return;
         }
 
@@ -291,7 +291,7 @@
     $("exportBtn")?.addEventListener("click", exportPNG);
     $("affiliateBtn")?.addEventListener("click", openAffiliate);
 
-    setStatus("Ready · 前端已就绪", true);
+    setStatus("Dashboard Ready", true);
   }
 
   if (document.readyState === "loading") {

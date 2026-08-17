@@ -134,9 +134,6 @@ a:hover{ text-decoration:underline; }
   background: rgba(15,21,34,.75);
   font-weight:900;
 }
-.signal.buy{ border-left:6px solid var(--green); }
-.signal.sell{ border-left:6px solid var(--red); }
-.signal.neutral{ border-left:6px solid rgba(255,255,255,.18); color:var(--muted); font-weight:700; }
 
 .chartTop{
   display:flex;
