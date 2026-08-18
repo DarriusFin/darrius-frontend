@@ -89,7 +89,7 @@
 
     safe(() => {
       const hint = $('hintText');
-      if (hint) hint.textContent = 'Market snapshot loaded · 已加载市场快照';
+      if (hint) hint.textContent = "Market snapshot loaded";
     });
   }
 
