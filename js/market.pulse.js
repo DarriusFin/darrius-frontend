@@ -30,7 +30,7 @@
     neuPct: null,
     netInflow: null,
     pulseGaugeMask: null,
-    signalMeta: null,
+
 
     // Risk Copilot
     riskEntry: null,
@@ -50,7 +50,7 @@
     DOM.neuPct = $('neuPct');
     DOM.netInflow = $('netInflow');
     DOM.pulseGaugeMask = $('pulseGaugeMask');
-    DOM.signalMeta = $('signalMeta');
+
 
     DOM.riskEntry = $('riskEntry');
     DOM.riskStop = $('riskStop');
@@ -275,10 +275,6 @@
 
       setGaugeVisual(score, label);
 
-      // small meta line (optional)
-      if (DOM.signalMeta) {
-        DOM.signalMeta.textContent = `Sentiment: ${label}`;
-      }
     });
   }
 

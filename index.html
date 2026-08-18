@@ -816,84 +816,27 @@
       color:var(--muted);
     }
 
-    .disclosureDetails{
-      margin:0;
-    }
-
-    .disclosureDetails summary{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-
-      padding:6px 2px;
-      cursor:pointer;
-      list-style:none;
-
-      border-radius:6px;
-
-      transition:background .15s ease;
-    }
-
-    .disclosureDetails summary:hover{
-      background:rgba(255,255,255,.035);
-    }
-
-    .disclosureDetails summary::-webkit-details-marker{
-      display:none;
-    }
-
-    .disclosureTitle{
+    .disclaimerBlock{
       font-size:11px;
-      font-weight:700;
-      color:rgba(234,240,247,.72);
+      line-height:1.5;
+      color:rgba(234,240,247,.64);
     }
 
-    .disclosureAction{
-      display:flex;
-      align-items:center;
-      gap:4px;
-
-      font-size:10px;
-      font-weight:500;
-      color:rgba(234,240,247,.42);
+    .disclaimerTitle{
+      margin-bottom:6px;
+      font-weight:750;
+      color:rgba(234,240,247,.84);
     }
 
-    .disclosureChevron{
-      display:inline-block;
-
-      font-size:15px;
-      line-height:1;
-
-      transition:transform .18s ease;
-    }
-
-    .disclosureDetails[open] .disclosureChevron{
-      transform:rotate(90deg);
-    }
-
-    .disclosureDetails[open] .disclosureAction{
-      color:rgba(234,240,247,.60);
-    }
-
-    .disclosureContent{
+    .disclaimerText + .disclaimerText{
       margin-top:7px;
-      padding:10px 11px;
-
-      border-radius:8px;
-      background:rgba(255,255,255,.018);
-
-      font-size:10px;
-      line-height:1.55;
-      color:var(--muted);
     }
 
-
-    .disclosureSupport{
-      margin-top:10px;
+    .disclaimerSupport{
+      margin-top:8px;
     }
 
-    .disclosureContent a{
+    .disclaimerBlock a{
       color:var(--brand1);
       text-decoration:none;
     }
@@ -1035,20 +978,6 @@
           </div>
         </div>
 
-        <div class="signalBox">
-          <div class="signal neutral" id="signalRow">
-            <div>
-              <div class="side" id="signalSide">No Active Signal</div>
-              <div class="meta" id="signalMeta">Awaiting confirmation</div>
-            </div>
-
-            <div style="text-align:right">
-              <div style="font-weight:950" id="signalPx">—</div>
-              <div class="meta" id="signalTf">TF: —</div>
-            </div>
-          </div>
-        </div>
-
         <button
           class="btn"
           id="rankEngineBtn"
@@ -1067,33 +996,26 @@
         </div>
 
         <div id="leftDisclaimer">
-          <details class="disclosureDetails">
-            <summary>
-              <span class="disclosureTitle">Risk Disclosure</span>
+          <div class="disclaimerBlock">
+            <div class="disclaimerTitle">Disclaimer</div>
 
-              <span class="disclosureAction">
-                View details
-                <span class="disclosureChevron">›</span>
-              </span>
-            </summary>
-
-            <div class="disclosureContent">
-              Informational use only. Not investment advice. No offer or solicitation
-              to buy or sell any security, futures, FX, crypto, or other financial
-              instrument.
-
-              <div style="margin-top:8px;">
-                Signals are algorithmic estimates and may be inaccurate, delayed, or
-                incomplete. Past performance is not indicative of future results.
-                You are solely responsible for your trading decisions and risk.
-              </div>
-
-              <div class="disclosureSupport">
-                Customer Support:
-                <a href="mailto:support@darrius.ai">support@darrius.ai</a>
-              </div>
+            <div class="disclaimerText">
+              For informational purposes only. Nothing on this platform constitutes
+              investment advice, a recommendation, or an offer or solicitation to buy
+              or sell any security or financial instrument.
             </div>
-          </details>
+
+            <div class="disclaimerText">
+              Signals and analytics are algorithmic estimates and may be inaccurate,
+              delayed, or incomplete. Past performance is not indicative of future
+              results. You are solely responsible for your investment decisions and risk.
+            </div>
+
+            <div class="disclaimerSupport">
+              Support:
+              <a href="mailto:support@darrius.ai">support@darrius.ai</a>
+            </div>
+          </div>
 
           <div class="footerLinks">
             <a href="https://darrius.ai" target="_blank" rel="noreferrer">
@@ -1354,9 +1276,9 @@
   <script>
     window.__UPGRADE_URL__ = "account.html#plans";
   </script>
-  <script src="js/upgrade.guard.js"></script>
+  <script src="js/upgrade.guard.js?v=20260818_dashboard_cleanup1"></script>
 
-  <script src="js/chart.core.js?v=20260203_fix1"></script>
+  <script src="js/chart.core.js?v=20260818_dashboard_cleanup1"></script>
 
   <script src="js/market.pulse.js?v=20260203a"></script>
   <script src="js/darrius.mutant.js?v=20260212"></script>

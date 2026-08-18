@@ -94,7 +94,7 @@
     safeRun("topText", () => {
       if ($("symText")) $("symText").textContent = sym;
       if ($("priceText") && lastClose != null) $("priceText").textContent = Number(lastClose).toFixed(2);
-      setHint("Market snapshot loaded · 已加载市场快照");
+      setHint("Market snapshot loaded");
     });
   }
 
@@ -841,7 +841,7 @@
       const limit = DEFAULTS.limit;
 
       const ds = readSourceFromUI();
-      setHint(`Loading snapshot… / 加载中… (source=${ds || "default"})`);
+      setHint("Loading market snapshot...");
 
       const raw = await fetchSnapshot(symbol, tf, limit);
       renderSnapshot(symbol, tf, raw);
