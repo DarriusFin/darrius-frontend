@@ -85,9 +85,14 @@
   // -----------------------------
   async function apiGet(path) {
     const url = `${API_BASE}${path}`;
-    const resp = await fetch(url, { method: "GET" });
+    const resp = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+    });
+
     const txt = await resp.text();
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 260)}`);
+
     const j = safeJsonParse(txt);
     return j !== null ? j : txt;
   }
@@ -96,11 +101,14 @@
     const url = `${API_BASE}${path}`;
     const resp = await fetch(url, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload || {}),
     });
+
     const txt = await resp.text();
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 260)}`);
+
     const j = safeJsonParse(txt);
     return j !== null ? j : { raw: txt };
   }
@@ -450,48 +458,94 @@
   }
 
   async function refreshSubscriptionStatus() {
-    const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
-    const email = normEmail((($(IDS.email) && $(IDS.email).value) || ""));
+    const user_id =
+      (($(IDS.userId) && $(IDS.userId).value) || "").trim();
+
+    const email =
+      normEmail((($(IDS.email) && $(IDS.email).value) || ""));
+
     const manageBtn = $(IDS.manageBtn);
 
-    // Require both User ID and Email before checking subscription status
-    if (!user_id || !email) {
-      window.__ENTITLEMENT__ = null;
-      setSubStatusText("Enter User ID and Email to check subscription");
-      if (manageBtn) manageBtn.disabled = true;
-      return;
-    }
-
-    if (manageBtn) manageBtn.disabled = false;
-    setSubStatusText("CHECKING...");
-
     try {
-      const qs =
-        `?email=${encodeURIComponent(email)}` +
-        `&user_id=${encodeURIComponent(user_id)}`;
+      let policy = null;
 
-      const policy = await apiGet(`/api/subscription/status${qs}`);
+      // Signed-in users: subscription identity comes from server session.
+      if (window.__AUTH_USER_ID__) {
+        setSubStatusText("CHECKING...");
 
-      // Make backend subscription policy the shared source of truth
+        policy = await apiGet("/api/subscription/me");
+      } else {
+        // Legacy / not-yet-signed-in flow.
+        if (!user_id || !email) {
+          window.__ENTITLEMENT__ = null;
+
+          setSubStatusText(
+            "Sign in to check your subscription"
+          );
+
+          if (manageBtn) {
+            manageBtn.disabled = true;
+          }
+
+          return;
+        }
+
+        setSubStatusText("CHECKING...");
+
+        const qs =
+          `?email=${encodeURIComponent(email)}` +
+          `&user_id=${encodeURIComponent(user_id)}`;
+
+        policy =
+          await apiGet(`/api/subscription/status${qs}`);
+      }
+
       window.__ENTITLEMENT__ = policy;
 
-      // Only allow Billing Portal when the account has an active subscription
       if (manageBtn) {
         manageBtn.disabled = !policy?.has_access;
       }
 
-      applyPolicyToStatusText(policy, user_id, email);
+      applyPolicyToStatusText(
+        policy,
+        policy?.user_id || user_id,
+        email
+      );
 
-      // Dispatch event for other modules (keep)
       try {
-        window.dispatchEvent(new CustomEvent("darrius:subscription-status", { detail: policy }));
+        window.dispatchEvent(
+          new CustomEvent(
+            "darrius:subscription-status",
+            { detail: policy }
+          )
+        );
       } catch (_) {}
 
-      if (isAdmin()) log(`✅ policy: ${JSON.stringify({ bucket: policy.bucket, has_access: policy.has_access, plan_key: policy.plan_key, data_mode: policy.data_mode })}`);
+      if (isAdmin()) {
+        log(
+          `✅ policy: ${JSON.stringify({
+            bucket: policy?.bucket,
+            has_access: policy?.has_access,
+            plan_key: policy?.plan_key,
+            data_mode: policy?.data_mode,
+            lookup: policy?.lookup,
+          })}`
+        );
+      }
     } catch (e) {
       window.__ENTITLEMENT__ = null;
-      setSubStatusText("UNKNOWN · status endpoint unavailable");
-      if (isAdmin()) log(`⚠️ status endpoint issue: ${e.message}`);
+
+      setSubStatusText(
+        "Unable to load subscription status"
+      );
+
+      if (manageBtn) {
+        manageBtn.disabled = true;
+      }
+
+      if (isAdmin()) {
+        log(`⚠️ status endpoint issue: ${e.message}`);
+      }
     }
   }
 
@@ -560,6 +614,14 @@
     $(IDS.userId)?.addEventListener("change", scheduleRefreshStatus);
     $(IDS.email)?.addEventListener("input", scheduleRefreshStatus);
     $(IDS.email)?.addEventListener("change", scheduleRefreshStatus);
+
+    // AccountAuth fires this after /api/auth/session confirms the user.
+    window.addEventListener(
+      "darrius:auth-changed",
+      () => {
+        refreshSubscriptionStatus();
+      }
+    );
 
     refreshSubscriptionStatus();
   }
