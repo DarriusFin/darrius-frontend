@@ -4,7 +4,7 @@
  *
  * Updated v2026.01.31 (Email required + DataLabel UX + Portal by email)
  * - Status: GET /api/subscription/status?user_id= OR ?email=
- * - Portal: POST /api/billing/portal { user_id? , email? }
+ * - Portal: POST /api/billing/portal (session authenticated)
  * - Checkout: POST /billing/create-checkout-session  (keep your existing flow)
  *
  * Guarantees:
@@ -555,42 +555,38 @@
   }
 
   // -----------------------------
-  // ✅ Customer Portal (prefer email)
+  // Customer Portal (session authenticated)
   // -----------------------------
   async function openCustomerPortal() {
-    const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
-    const email = normEmail((($(IDS.email) && $(IDS.email).value) || ""));
-
-    // Your new policy: email required for portal UX
-    if (!email && !user_id) {
-      alert("Enter your Email or User ID before opening subscription management.");
-      return;
-    }
-    if (!email) {
-      alert("Email is required to open the Billing Portal.");
-      $(IDS.email)?.focus?.();
-      return;
-    }
-
     try {
-      // ✅ prefer email
-      const data = await apiPost("/api/billing/portal", { email, user_id: user_id || undefined });
-      if (!data || !data.url) throw new Error("No portal url");
+      const data = await apiPost(
+        "/api/billing/portal",
+        {}
+      );
+
+      if (!data || !data.url) {
+        throw new Error("No portal url");
+      }
+
       window.location.href = data.url;
     } catch (e) {
       const msg = String(e?.message || "");
 
-      if (msg.includes('"subscription_not_found"')) {
+      if (msg.includes('"authentication_required"')) {
+        alert("Please sign in before managing your subscription.");
+      } else if (msg.includes('"subscription_not_found"')) {
         alert("No active subscription was found for this account.");
       } else if (msg.includes('"no_stripe_customer_for_user"')) {
         alert("Billing management is not available for this account yet.");
-      } else if (msg.includes('"email_mismatch"')) {
-        alert("The User ID and Email do not match.");
       } else {
-        alert("Subscription management is temporarily unavailable. Please try again later.");
+        alert(
+          "Subscription management is temporarily unavailable. Please try again later."
+        );
       }
 
-      if (isAdmin()) log(`❌ open portal: ${msg}`);
+      if (isAdmin()) {
+        log(`❌ open portal: ${msg}`);
+      }
     }
   }
 
