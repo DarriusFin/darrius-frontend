@@ -361,6 +361,20 @@
       flex:1;
     }
 
+    .toolRailBtn[data-tool="account"]{
+      margin-top:8px;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+    }
+
+    .toolRailBtn[data-tool="account"]:not(.is-active){
+      color:rgba(234,240,247,.90);
+      background:rgba(76,194,255,.045);
+    }
+
+    .toolRailBtn[data-tool="account"]:not(.is-active):hover{
+      background:rgba(76,194,255,.085);
+    }
+
     .toolView{
       display:none;
       min-height:100%;
@@ -1425,53 +1439,6 @@
 
         </section>
 
-        <div id="leftDisclaimer" class="hidden">
-          <div class="disclaimerBlock">
-            <div class="disclaimerTitle">Disclaimer</div>
-
-            <div class="disclaimerText">
-              For informational purposes only. Nothing on this platform constitutes
-              investment advice, a recommendation, or an offer or solicitation to buy
-              or sell any security or financial instrument.
-            </div>
-
-            <div class="disclaimerText">
-              Signals and analytics are algorithmic estimates and may be inaccurate,
-              delayed, or incomplete. Past performance is not indicative of future
-              results. You are solely responsible for your investment decisions and risk.
-            </div>
-
-            <div class="disclaimerSupport">
-              Support:
-              <a href="mailto:support@darrius.ai">support@darrius.ai</a>
-            </div>
-          </div>
-
-          <div class="footerLinks">
-            <a href="https://darrius.ai" target="_blank" rel="noreferrer">
-              DarriusAI
-            </a>
-
-            <span>·</span>
-
-            <a href="#" onclick="alert('Terms page coming soon'); return false;">
-              Terms
-            </a>
-
-            <span>·</span>
-
-            <a href="#" onclick="alert('Privacy Policy page coming soon'); return false;">
-              Privacy
-            </a>
-
-            <span>·</span>
-
-            <a href="mailto:support@darrius.ai">
-              Support
-            </a>
-          </div>
-        </div>
-
           </div>  <!-- panelBody -->
           </div>  <!-- leftPanel -->
 
@@ -1715,6 +1682,53 @@
 
             </div>
 
+            <div id="leftDisclaimer">
+              <div class="disclaimerBlock">
+                <div class="disclaimerTitle">Disclaimer</div>
+
+                <div class="disclaimerText">
+                  For informational purposes only. Nothing on this platform constitutes
+                  investment advice, a recommendation, or an offer or solicitation to buy
+                  or sell any security or financial instrument.
+                </div>
+
+                <div class="disclaimerText">
+                  Signals and analytics are algorithmic estimates and may be inaccurate,
+                  delayed, or incomplete. Past performance is not indicative of future
+                  results. You are solely responsible for your investment decisions and risk.
+                </div>
+
+                <div class="disclaimerSupport">
+                  Support:
+                  <a href="mailto:support@darrius.ai">support@darrius.ai</a>
+                </div>
+              </div>
+
+              <div class="footerLinks">
+                <a href="https://darrius.ai" target="_blank" rel="noreferrer">
+                  DarriusAI
+                </a>
+
+                <span>·</span>
+
+                <a href="#" onclick="alert('Terms page coming soon'); return false;">
+                  Terms
+                </a>
+
+                <span>·</span>
+
+                <a href="#" onclick="alert('Privacy Policy page coming soon'); return false;">
+                  Privacy
+                </a>
+
+                <span>·</span>
+
+                <a href="mailto:support@darrius.ai">
+                  Support
+                </a>
+              </div>
+            </div>
+
           </div>
 
         </section>
@@ -1777,8 +1791,6 @@
           </svg>
         </button>
 
-        <div class="toolRailSpacer"></div>
-
         <button
           type="button"
           class="toolRailBtn"
@@ -1791,6 +1803,8 @@
             <path d="M4 21c1-5 4-7 8-7s7 2 8 7"/>
           </svg>
         </button>
+
+        <div class="toolRailSpacer"></div>
       </nav>
     </div>
   </div>
