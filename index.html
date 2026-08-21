@@ -222,12 +222,221 @@
 
     /* ===== Main Layout ===== */
     #main{
-      height: calc(100vh - 156px);
+      --tool-panel-width:320px;
+      --tool-rail-width:56px;
+
+      height:calc(100vh - 156px);
       padding:16px;
+
       display:grid;
-      grid-template-columns: 330px 1fr 380px;
-      gap:16px;
+      grid-template-columns:
+        minmax(0, 1fr)
+        calc(var(--tool-panel-width) + var(--tool-rail-width));
+
+      gap:12px;
       min-height:0;
+    }
+
+    #chartPanel{
+      min-width:0;
+      min-height:0;
+    }
+
+    #toolDock{
+      min-width:0;
+      min-height:0;
+
+      display:grid;
+      grid-template-columns:
+        var(--tool-panel-width)
+        var(--tool-rail-width);
+
+      overflow:hidden;
+
+      background:rgba(15,23,38,.88);
+      border:1px solid var(--border);
+      border-radius:var(--r18);
+      box-shadow:var(--shadow);
+    }
+
+    #toolPanel{
+      min-width:0;
+      min-height:0;
+      overflow:auto;
+      border-right:1px solid rgba(255,255,255,.06);
+
+      scrollbar-width:thin;
+      scrollbar-color:rgba(255,255,255,.14) transparent;
+    }
+
+    #toolPanel::-webkit-scrollbar{
+      width:5px;
+    }
+
+    #toolPanel::-webkit-scrollbar-track{
+      background:transparent;
+    }
+
+    #toolPanel::-webkit-scrollbar-thumb{
+      background:rgba(255,255,255,.14);
+      border-radius:999px;
+    }
+
+    #toolPanel::-webkit-scrollbar-thumb:hover{
+      background:rgba(255,255,255,.24);
+    }
+
+    #leftPanel,
+    #rightPanel{
+      min-height:auto;
+
+      border:0;
+      border-radius:0;
+      box-shadow:none;
+      background:transparent;
+      overflow:visible;
+    }
+
+    #leftPanel .panelBody,
+    #rightPanel .panelBody{
+      overflow:visible;
+    }
+
+    #toolRail{
+      min-height:0;
+      padding:8px 0;
+
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+
+      background:rgba(8,13,21,.46);
+    }
+
+    .toolRailBtn{
+      width:56px;
+      height:52px;
+
+      display:flex;
+      align-items:center;
+      justify-content:center;
+
+      padding:0;
+      border:0;
+      border-left:2px solid transparent;
+
+      background:transparent;
+      color:var(--muted);
+
+      cursor:pointer;
+      transition:
+        background .16s ease,
+        color .16s ease,
+        border-color .16s ease;
+    }
+
+    .toolRailBtn:hover{
+      color:var(--text);
+      background:rgba(255,255,255,.045);
+    }
+
+    .toolRailBtn.is-active{
+      color:var(--brand1);
+      border-left-color:var(--brand1);
+      background:rgba(43,226,166,.055);
+    }
+
+    .toolRailBtn svg{
+      width:19px;
+      height:19px;
+
+      fill:none;
+      stroke:currentColor;
+      stroke-width:1.7;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+
+    .toolRailSpacer{
+      flex:1;
+    }
+
+    .toolView{
+      display:none;
+      min-height:100%;
+    }
+
+    .toolView.is-active{
+      display:block;
+    }
+
+    .toolViewHeader{
+      min-height:52px;
+      padding:0 16px;
+
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+
+      border-bottom:1px solid rgba(255,255,255,.06);
+
+      font-size:12px;
+      font-weight:600;
+      letter-spacing:.02em;
+    }
+
+    .toolViewBody{
+      padding:20px 16px;
+    }
+
+    .toolViewFooter{
+      margin-top:18px;
+      padding-top:12px;
+
+      border-top:1px solid rgba(255,255,255,.06);
+
+      font-size:11px;
+      line-height:1.5;
+      color:var(--muted);
+    }
+
+    .toolViewMeta{
+      color:var(--muted);
+      font-size:10px;
+      font-weight:500;
+    }
+
+    .accountSection{
+      padding:18px 0;
+    }
+
+    .accountSection:first-child{
+      padding-top:0;
+    }
+
+    .accountSection + .accountSection{
+      border-top:1px solid rgba(255,255,255,.06);
+    }
+
+    .accountSectionHeader{
+      margin-bottom:14px;
+
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+
+    .accountSectionTitle{
+      font-size:12px;
+      font-weight:600;
+      color:var(--text);
+    }
+
+    .accountSectionMeta{
+      font-size:10px;
+      font-weight:500;
+      color:var(--muted);
     }
 
     .panel{
@@ -308,12 +517,26 @@
       font-size:12px;
       color: var(--muted);
     }
-    .kv b{ color: var(--text); font-weight:900; }
+    .kv b{
+      color:var(--text);
+      font-weight:600;
+      white-space:nowrap;
+      font-variant-numeric:tabular-nums;
+    }
 
     /* ===== Gauge ===== */
-    .gaugeWrap{ display:flex; gap:12px; align-items:center; }
+    .gaugeWrap{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:14px;
+      align-items:start;
+    }
+
     .gauge{
-      width:160px;height:160px;border-radius:50%;
+      width:136px;
+      height:136px;
+      margin:0 auto;
+      border-radius:50%;
       background:
         conic-gradient(
           rgba(43,226,166,1) 0deg,
@@ -444,6 +667,7 @@
       border-bottom:1px solid rgba(255,255,255,.06);
       background: rgba(0,0,0,.14);
       gap:12px;
+      flex-wrap:wrap;
     }
     #priceLine{
       display:flex;
@@ -491,6 +715,42 @@
       box-shadow: 0 0 0 4px rgba(76,194,255,.10);
       background: rgba(76,194,255,.10);
     }
+
+    #chartActions{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      flex:0 0 auto;
+    }
+
+    .chartActionBtn{
+      appearance:none;
+      border:1px solid rgba(255,255,255,.10);
+      background:transparent;
+      color:rgba(234,240,247,.78);
+      border-radius:8px;
+      padding:6px 9px;
+      font-size:12px;
+      font-weight:650;
+      line-height:1;
+      cursor:pointer;
+      white-space:nowrap;
+      transition:
+        background .15s ease,
+        border-color .15s ease,
+        color .15s ease;
+    }
+
+    .chartActionBtn:hover{
+      background:rgba(255,255,255,.05);
+      border-color:rgba(255,255,255,.16);
+      color:rgba(255,255,255,.96);
+    }
+
+    .chartActionBtn:active{
+      background:rgba(255,255,255,.08);
+    }
+
     #chartWrap{ position:relative; width:100%; flex: 1 1 auto; min-height: 0; }
     #chart{ position:absolute; inset:0; width:100%; height:100%; }
     #sigOverlay{ position:absolute; inset:0; pointer-events:none; z-index:20; }
@@ -555,37 +815,76 @@
 
     .btn{
       width:100%;
-      border:0;
-      color:#081119;
-      font-weight:950;
-      letter-spacing:.3px;
-      padding:12px 12px;
-      border-radius: var(--r12);
+      min-height:38px;
+      border:1px solid rgba(76,194,255,.28);
+      color:rgba(240,246,252,.96);
+      font-weight:700;
+      letter-spacing:0;
+      padding:9px 12px;
+      border-radius:8px;
       cursor:pointer;
       user-select:none;
-      background: var(--gradBrand);
-      box-shadow: var(--shadow2);
-      transition: transform .06s ease, filter .15s ease;
+      background:rgba(76,194,255,.10);
+      box-shadow:none;
+      transition:
+        background .15s ease,
+        border-color .15s ease,
+        color .15s ease;
     }
-    .btn:hover{ filter: brightness(1.04); }
-    .btn:active{ transform: translateY(1px); }
-    .btn:disabled{ opacity:.55; cursor:not-allowed; }
+
+    .btn:hover{
+      background:rgba(76,194,255,.15);
+      border-color:rgba(76,194,255,.40);
+    }
+
+    .btn:active{
+      background:rgba(76,194,255,.19);
+    }
+
+    .btn:disabled{
+      opacity:.38;
+      cursor:not-allowed;
+      background:rgba(255,255,255,.035);
+      border-color:rgba(255,255,255,.07);
+      color:rgba(234,240,247,.55);
+    }
 
     .btnGhost{
       width:100%;
-      border:1px solid rgba(255,255,255,.10);
-      color: var(--text);
-      font-weight:900;
-      padding:11px 12px;
-      border-radius: var(--r12);
+      min-height:38px;
+      border:1px solid rgba(255,255,255,.09);
+      color:rgba(234,240,247,.82);
+      font-weight:650;
+      letter-spacing:0;
+      padding:9px 12px;
+      border-radius:8px;
       cursor:pointer;
       user-select:none;
-      background: rgba(0,0,0,.14);
-      transition: transform .06s ease, filter .15s ease;
+      background:rgba(255,255,255,.025);
+      box-shadow:none;
+      transition:
+        background .15s ease,
+        border-color .15s ease,
+        color .15s ease;
     }
-    .btnGhost:hover{ filter: brightness(1.05); }
-    .btnGhost:active{ transform: translateY(1px); }
-    .btnGhost:disabled{ opacity:.55; cursor:not-allowed; }
+
+    .btnGhost:hover{
+      background:rgba(255,255,255,.055);
+      border-color:rgba(255,255,255,.15);
+      color:rgba(255,255,255,.96);
+    }
+
+    .btnGhost:active{
+      background:rgba(255,255,255,.075);
+    }
+
+    .btnGhost:disabled{
+      opacity:.34;
+      cursor:not-allowed;
+      background:transparent;
+      border-color:rgba(255,255,255,.06);
+      color:rgba(234,240,247,.45);
+    }
 
     .row2{
       display:grid;
@@ -641,10 +940,25 @@
     .accessBadge.EXPIRED{ background: rgba(231, 76, 60, .18); color: #e74c3c; }
     .accessBadge.UNKNOWN{ background: rgba(149, 165, 166, .18); color: #95a5a6; }
 
-    @media (max-width: 1180px){
+    @media (max-width:1180px){
       body{ overflow:auto; }
-      #main{ height:auto; grid-template-columns: 1fr; }
-      #chartWrap{ height: 560px; }
+
+      #main{
+        height:auto;
+        grid-template-columns:1fr;
+      }
+
+      #toolDock{
+        width:100%;
+        min-height:520px;
+        grid-template-columns:minmax(0, 1fr) var(--tool-rail-width);
+      }
+
+      #toolPanel{
+        overflow:visible;
+      }
+
+      #chartWrap{ height:560px; }
       #brand{ min-width:0; }
       #topRight{ min-width:0; }
       #tfQuick{ justify-content:flex-start; }
@@ -937,65 +1251,181 @@
 
 
   <div id="main">
+
+    <!-- CENTER -->
+    <div class="panel" id="chartPanel">
+      <div id="chartTop">
+
+        <div id="priceLine">
+          <span class="sym" id="symText">—</span>
+          <span id="priceText">—</span>
+        </div>
+
+        <div id="hintText">Loading…</div>
+
+        <div id="tfQuick">
+          <button class="tfBtn" data-tf="5m">5m</button>
+          <button class="tfBtn" data-tf="15m">15m</button>
+          <button class="tfBtn" data-tf="30m">30m</button>
+          <button class="tfBtn" data-tf="1h">1h</button>
+          <button class="tfBtn" data-tf="4h">4h</button>
+          <button class="tfBtn" data-tf="1d">1D</button>
+          <button class="tfBtn" data-tf="1w">1W</button>
+          <button class="tfBtn" data-tf="1M">1M</button>
+        </div>
+
+        <div id="chartActions">
+          <button
+            type="button"
+            class="chartActionBtn"
+            id="copyLinkBtn"
+            title="Copy chart link"
+          >
+            Share
+          </button>
+
+          <button
+            type="button"
+            class="chartActionBtn"
+            id="exportBtn"
+            title="Export chart as PNG"
+          >
+            Export
+          </button>
+        </div>
+
+      </div>
+
+      <div class="panelBody">
+        <div id="chartWrap">
+          <div id="chart"></div>
+          <div id="sigOverlay"></div>
+        </div>
+
+        <div id="mutantPanel">
+          <div id="mutantTitle">Darrius Mutant</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toolDock">
+      <div id="toolPanel">
     <!-- LEFT -->
     <div class="panel" id="leftPanel">
-      <div class="panelHeader">
-        <div class="h">Market Pulse <span class="tag" id="pulseTag">LIVE</span></div>
-      </div>
       <div class="panelBody">
-        <div class="card">
-          <div class="gaugeWrap">
-            <div class="gauge" id="pulseGauge">
-              <div class="gaugeMask" id="pulseGaugeMask"></div>
-              <div class="gaugeCenter">
-                <div class="num" id="pulseScore">—</div>
-                <div class="lbl">Sentiment</div>
+
+        <!-- Market Pulse -->
+        <section class="toolView is-active" data-tool-view="pulse">
+
+          <div class="toolViewHeader">
+            <span>Market Pulse</span>
+            <span class="toolViewMeta" id="pulseTag">LIVE</span>
+          </div>
+
+          <div class="toolViewBody">
+
+            <div class="gaugeWrap">
+
+              <div class="gauge" id="pulseGauge">
+                <div class="gaugeMask" id="pulseGaugeMask"></div>
+
+                <div class="gaugeCenter">
+                  <div class="num" id="pulseScore">—</div>
+                  <div class="lbl">Sentiment</div>
+                </div>
               </div>
-            </div>
-            <div style="flex:1">
+
               <div class="kv">
-                <span>Bullish</span><b id="bullPct">—</b>
-                <span>Bearish</span><b id="bearPct" style="color:var(--danger)">—</b>
-                <span>Neutral</span><b id="neuPct">—</b>
-                <span>Net Inflow</span><b id="netInflow" style="color:var(--brand1)">—</b>
+                <span>Bullish</span>
+                <b id="bullPct">—</b>
+
+                <span>Bearish</span>
+                <b id="bearPct" style="color:var(--danger)">—</b>
+
+                <span>Neutral</span>
+                <b id="neuPct">—</b>
+
+                <span>Net Inflow</span>
+                <b id="netInflow" style="color:var(--brand1)">—</b>
               </div>
-              <div class="small" style="margin-top:10px">
-                <b>Note:</b> Derived from the main chart only.<br/>
-              
-              </div>
+
             </div>
+
+            <div class="toolViewFooter">
+              Derived from the main chart only.
+            </div>
+
           </div>
-        </div>
 
-        <div class="card">
-          <div class="cardTitle"><b>Risk Copilot</b><span class="small" id="riskMode">Auto</span></div>
-          <div class="kv">
-            <span>Entry</span><b id="riskEntry">—</b>
-            <span>Stop</span><b id="riskStop" style="color:var(--danger)">—</b>
-            <span>Targets</span><b id="riskTargets">—</b>
-            <span>Confidence</span><b id="riskConf">—</b>
-            <span>Backtest Win Rate</span><b id="riskWR">—</b>
+        </section>
+
+        <!-- Risk Copilot -->
+        <section class="toolView" data-tool-view="risk">
+
+          <div class="toolViewHeader">
+            <span>Risk Copilot</span>
+            <span class="toolViewMeta" id="riskMode">Auto</span>
           </div>
-        </div>
 
-        <button
-          class="btn"
-          id="rankEngineBtn"
-          style="width:100%; margin-top:10px;"
-        >
-          Open Rank Engine
-        </button>
+          <div class="toolViewBody">
 
-        <!-- Affiliate -->
-        <div class="card" id="affiliateCard" style="margin-top:12px">
-          <div class="cardTitle"><b>Affiliate</b><span class="small">Program</span></div>
-          <button class="btnGhost" id="affiliateBtn">Affiliate</button>
-          <div class="note" style="margin-top:10px">
-            <b>Note:</b> Commission terms are disclosed only in the dashboard and agreement.<br/>
+            <div class="kv">
+              <span>Entry</span>
+              <b id="riskEntry">—</b>
+
+              <span>Stop</span>
+              <b id="riskStop" style="color:var(--danger)">—</b>
+
+              <span>Targets</span>
+              <b id="riskTargets">—</b>
+
+              <span>Confidence</span>
+              <b id="riskConf">—</b>
+
+              <span>Backtest Win Rate</span>
+              <b id="riskWR">—</b>
+            </div>
+
+            <div class="toolViewFooter">
+              Levels are model-derived estimates based on the active chart context.
+            </div>
+
           </div>
-        </div>
 
-        <div id="leftDisclaimer">
+        </section>
+
+        <!-- Rank Engine -->
+        <section class="toolView" data-tool-view="rank">
+
+          <div class="toolViewHeader">
+            <span>Rank Engine</span>
+            <span class="toolViewMeta">TOP 10</span>
+          </div>
+
+          <div class="toolViewBody">
+
+            <div class="small" style="margin-bottom:18px;">
+              AI-assisted ranking highlights stocks with the strongest combined
+              market pulse and model signals.
+            </div>
+
+            <button
+              class="btn"
+              id="rankEngineBtn"
+              style="width:100%;"
+            >
+              Open Rank Engine
+            </button>
+
+            <div class="toolViewFooter">
+              Ranking access depends on your current subscription.
+            </div>
+
+          </div>
+
+        </section>
+
+        <div id="leftDisclaimer" class="hidden">
           <div class="disclaimerBlock">
             <div class="disclaimerTitle">Disclaimer</div>
 
@@ -1045,165 +1475,249 @@
           </div>  <!-- panelBody -->
           </div>  <!-- leftPanel -->
 
-    <!-- CENTER -->
-    <div class="panel" id="chartPanel">
-      <div id="chartTop">
-        <div id="priceLine">
-          <span class="sym" id="symText">—</span>
-          <span id="priceText">—</span>
-        </div>
-        <div id="hintText">Loading…</div>
-        <div id="tfQuick">
-          <button class="tfBtn" data-tf="5m">5m</button>
-          <button class="tfBtn" data-tf="15m">15m</button>
-          <button class="tfBtn" data-tf="30m">30m</button>
-          <button class="tfBtn" data-tf="1h">1h</button>
-          <button class="tfBtn" data-tf="4h">4h</button>
-          <button class="tfBtn" data-tf="1d">1D</button>
-          <button class="tfBtn" data-tf="1w">1W</button>
-          <button class="tfBtn" data-tf="1M">1M</button>
-        </div>
-      </div>
-
-      <div class="panelBody">
-        <div id="chartWrap">
-          <div id="chart"></div>
-          <div id="sigOverlay"></div>
-        </div>
-
-        <div id="mutantPanel">
-          <div id="mutantTitle">Darrius Mutant</div>
-        </div>
-      </div>
-    </div>
-
     <!-- RIGHT -->
     <div class="panel" id="rightPanel">
-      <div class="panelHeader">
-        <div class="h">Control Center</div>
-      </div>
-
       <div class="panelBody">
-        <!-- Data Source -->
-        <div class="card">
-          <div class="cardTitle"><b>Data Source</b><span class="small">Licensed Data</span></div>
-          <div class="field">
-            <div class="label"><span>Source</span><span class="small">Third-Party Market Data</span></div>
 
-            <!-- ✅ 彻底移除 Demo(local)，强制 Twelve Pro -->
-            <select id="dataSource" disabled>
-              <option value="third" selected>Twelve Pro</option>
-            </select>
+        <!-- Chart Controls -->
+        <section class="toolView" data-tool-view="controls">
+
+          <div class="toolViewHeader">
+            <span>Chart Controls</span>
+            <span class="toolViewMeta">MARKET</span>
           </div>
 
-          <div class="note">
-            Licensed market data provided via Twelve Data Pro.<br/>
-          </div>
-        </div>
+          <div class="toolViewBody">
 
-        <!-- Market/TF -->
-        <div class="card">
-          <div class="cardTitle"><b>Market</b><span class="small">Chart</span></div>
+            <div class="field">
+              <div class="label">
+                <span>Data Source</span>
+                <span class="small">Licensed Data</span>
+             </div>
 
-          <div class="field">
-            <div class="label"><span>Symbol</span><span class="small">(e.g., TSLA / AAPL)</span></div>
-            <input id="symbol" value="TSLA"/>
-          </div>
+              <select id="dataSource" disabled>
+                <option value="third" selected>Twelve Pro</option>
+              </select>
+            </div>
 
-          <div class="field">
-            <div class="label"><span>Timeframe</span></div>
-            <select id="tf">
-              <option value="5m">5 Minutes</option>
-              <option value="15m">15 Minutes</option>
-              <option value="30m">30 Minutes</option>
-              <option value="1h">1 Hour</option>
-              <option value="4h">4 Hours</option>
-              <option value="1d">1 Day</option>
-              <option value="1w">1 Week</option>
-              <option value="1M">1 Month</option>
-            </select>
-          </div>
+            <div class="toolViewFooter" style="margin-top:12px; margin-bottom:18px;">
+              Licensed market data provided via Twelve Data Pro.
+            </div>
 
-          <button class="btn" id="loadBtn">Symbol Load</button>
+            <div class="field">
+              <div class="label">
+                <span>Symbol</span>
+                <span class="small">e.g. TSLA / AAPL</span>
+              </div>
 
-          <div class="row2">
-            <label class="btnGhost" style="display:flex;align-items:center;justify-content:center;gap:8px;">
-              <input type="checkbox" id="tgEMA" checked style="width:auto;margin:0;transform:translateY(1px)">
-              EMA
-            </label>
-            <label class="btnGhost" style="display:flex;align-items:center;justify-content:center;gap:8px;">
-              <input type="checkbox" id="tgAux" checked style="width:auto;margin:0;transform:translateY(1px)">
-              AUX
-            </label>
-          </div>
+              <input id="symbol" value="TSLA"/>
+            </div>
 
-          <div class="note" style="margin-top:8px">
-            <b>Note:</b> EMA/AUX parameters are internal.<br/>
-          </div>
-        </div>
+            <div class="field">
+              <div class="label">
+                <span>Timeframe</span>
+              </div>
 
-        <!-- Subscription -->
-        <div class="card">
-          <div class="cardTitle">
-            <b>Subscription</b>
-            <span class="small" id="planStatus">Loading plans...</span>
-          </div>
+              <select id="tf">
+                <option value="5m">5 Minutes</option>
+                <option value="15m">15 Minutes</option>
+                <option value="30m">30 Minutes</option>
+                <option value="1h">1 Hour</option>
+                <option value="4h">4 Hours</option>
+                <option value="1d">1 Day</option>
+                <option value="1w">1 Week</option>
+                <option value="1M">1 Month</option>
+              </select>
+            </div>
 
-          <div class="note" style="margin-top:-2px;margin-bottom:10px">
-            <b>Note:</b> Trial requires a valid card. If payment is not completed when the trial ends, access will be disabled automatically.<br/>
-          </div>
-
-          <div class="field">
-            <div class="label"><span><b>User ID</b></span><span class="small">Required</span></div>
-            <input id="userId" placeholder/>
-          </div>
-
-          <div class="field">
-            <div class="label"><span>Email</span><span class="small">Required</span></div>
-          <input id="email" placeholder/>
-          </div>
-
-          <div class="field">
-            <div class="label"><span>Plan</span><span class="small">—</span></div>
-            <select id="planSelect">
-              <option value="">Loading…</option>
-            </select>
-          </div>
-
-          <div class="row2" style="margin-top:0">
-            <button class="btn" id="subscribeBtn" disabled>Subscribe</button>
-            <button class="btnGhost" id="manageBtn" disabled>Manage Plan</button>
-          </div>
-
-          <div class="note" style="margin-top:10px;">
-            <b>Status:</b>
-            <span id="subStatusText">Unknown</span>
-
-            <span
-              id="accessBadge"
-              class="accessBadge UNKNOWN hidden"
-            >
-              UNKNOWN
-            </span>
-          </div>
-        </div>
-
-        <!-- Share & Export -->
-        <div class="card">
-          <div class="cardTitle">
-            <b>Share & Export</b>
-          </div>
-
-          <div class="row2">
-            <button class="btnGhost" id="copyLinkBtn">
-              Copy Link
+            <button class="btn" id="loadBtn">
+              Load Symbol
             </button>
 
-            <button class="btnGhost" id="exportBtn">
-              Export PNG
-            </button>
+            <div class="row2">
+              <label
+                class="btnGhost"
+                style="display:flex;align-items:center;justify-content:center;gap:8px;"
+              >
+                <input
+                  type="checkbox"
+                  id="tgEMA"
+                  checked
+                  style="width:auto;margin:0;transform:translateY(1px)"
+                >
+                EMA
+              </label>
+
+              <label
+                class="btnGhost"
+                style="display:flex;align-items:center;justify-content:center;gap:8px;"
+              >
+                <input
+                  type="checkbox"
+                  id="tgAux"
+                  checked
+                  style="width:auto;margin:0;transform:translateY(1px)"
+                >
+                AUX
+              </label>
+            </div>
+
+            <div class="toolViewFooter">
+              EMA and AUX parameters are managed internally.
+            </div>
+
           </div>
-        </div>
+
+        </section>
+
+
+        <!-- Account -->
+        <section class="toolView" data-tool-view="account">
+
+          <div class="toolViewHeader">
+            <span>Account</span>
+            <span class="toolViewMeta">ACCOUNT</span>
+          </div>
+
+          <div class="toolViewBody">
+
+            <!-- Subscription -->
+            <div class="accountSection">
+
+              <div class="accountSectionHeader">
+                <span class="accountSectionTitle">Subscription</span>
+                <span class="accountSectionMeta" id="planStatus">
+                  Loading plans...
+                </span>
+              </div>
+
+              <div class="field">
+                <div class="label">
+                  <span>User ID</span>
+                  <span class="small">Required</span>
+                </div>
+                <input id="userId" placeholder/>
+              </div>
+
+              <div id="authVerifyArea">
+
+                <button
+                  type="button"
+                  class="btnGhost"
+                  id="sendVerifyBtn"
+                >
+                  Send Verification Code
+                </button>
+
+                <div
+                  class="field"
+                  id="verificationCodeField"
+                  style="display:none; margin-top:10px;"
+                >
+                  <div class="label">
+                    <span>Verification Code</span>
+                    <span class="small">6 digits</span>
+                  </div>
+
+                  <div class="row2">
+                    <input
+                      id="verificationCode"
+                      inputmode="numeric"
+                      maxlength="6"
+                      autocomplete="one-time-code"
+                      placeholder="123456"
+                    />
+
+                    <button
+                      type="button"
+                      class="btnGhost"
+                      id="verifyCodeBtn"
+                    >
+                      Verify
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  id="authStatusText"
+                  class="toolViewFooter"
+                  style="margin-top:10px;"
+                >
+                  Not signed in
+                </div>
+
+              </div>
+
+              <div class="field">
+                <div class="label">
+                  <span>Email</span>
+                  <span class="small">Required</span>
+                </div>
+                <input id="email" placeholder/>
+              </div>
+
+              <div class="field">
+                <div class="label">
+                  <span>Plan</span>
+                </div>
+
+                <select id="planSelect">
+                  <option value="">Loading...</option>
+                </select>
+              </div>
+
+              <div class="row2" style="margin-top:0">
+                <button class="btn" id="subscribeBtn" disabled>
+                  Subscribe
+                </button>
+
+                <button class="btnGhost" id="manageBtn" disabled>
+                  Manage Plan
+                </button>
+              </div>
+
+              <div class="toolViewFooter">
+                <div>
+                  Status:
+                  <span id="subStatusText">Unknown</span>
+
+                  <span
+                    id="accessBadge"
+                    class="accessBadge UNKNOWN hidden"
+                  >
+                    UNKNOWN
+                  </span>
+                </div>
+
+                <div style="margin-top:8px;">
+                  Trial access requires a valid payment method. Access is disabled
+                  automatically if payment is not completed when the trial ends.
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Affiliate -->
+            <div class="accountSection" id="affiliateCard">
+
+              <div class="accountSectionHeader">
+                <span class="accountSectionTitle">Affiliate Program</span>
+                <span class="accountSectionMeta">PARTNERS</span>
+              </div>
+
+              <button class="btnGhost" id="affiliateBtn">
+                Open Affiliate Program
+              </button>
+
+              <div class="toolViewFooter">
+                Commission terms are available in the dashboard and affiliate agreement.
+              </div>
+
+            </div>
+
+          </div>
+
+        </section>
 
         <!-- TradingView Attribution slot -->
         <div id="tvAttribution" class="tvAttr hidden">
@@ -1212,7 +1726,75 @@
         </div>
       </div>
     </div>
+      </div>
+
+      <nav id="toolRail" aria-label="Dashboard tools">
+        <button
+          type="button"
+          class="toolRailBtn is-active"
+          data-tool="pulse"
+          aria-label="Market Pulse"
+          title="Market Pulse"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 12h4l2-6 4 12 2-6h6"/>
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          class="toolRailBtn"
+          data-tool="risk"
+          aria-label="Risk Copilot"
+          title="Risk Copilot"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/>
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          class="toolRailBtn"
+          data-tool="rank"
+          aria-label="Rank Engine"
+          title="Rank Engine"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 19V10M12 19V5M19 19v-6"/>
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          class="toolRailBtn"
+          data-tool="controls"
+          aria-label="Chart Controls"
+          title="Chart Controls"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M7 14v6"/>
+          </svg>
+        </button>
+
+        <div class="toolRailSpacer"></div>
+
+        <button
+          type="button"
+          class="toolRailBtn"
+          data-tool="account"
+          aria-label="Account"
+          title="Account"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 21c1-5 4-7 8-7s7 2 8 7"/>
+          </svg>
+        </button>
+      </nav>
+    </div>
   </div>
+
 
   <!-- =========================
        GLOBALS
@@ -1278,17 +1860,18 @@
   </script>
   <script src="js/upgrade.guard.js?v=20260818_dashboard_cleanup1"></script>
 
-  <script src="js/chart.core.js?v=20260818_dashboard_cleanup1"></script>
+  <script src="js/chart.core.js?v=20260820_export_png1"></script>
 
   <script src="js/market.pulse.js?v=20260203a"></script>
   <script src="js/darrius.mutant.js?v=20260212"></script>
 
-  <script src="js/subscription.js?v=20260816_ui_refresh2"></script>
+  <script src="js/subscription.js?v=20260820_manage_state1"></script>
+  <script src="js/account.auth.js?v=20260821_auth1"></script>
   <script src="js/referral.client.js?v=20260129"></script>
   <script src="js/referral.checkout.js?v=20260129"></script>
 
   <!-- ✅ boot MUST be last (只保留一次！) -->
-  <script src="js/boot.js?v=20260816_ui_refresh1"></script>
+  <script src="js/boot.js?v=20260820_affiliate_fix1"></script>
 
   <!-- ✅ TF Sync (UI only, stable) -->
   <script>
@@ -1383,11 +1966,6 @@
       card.style.cursor = 'pointer';
       if (card.__AFF_BOUND__) return;
       card.__AFF_BOUND__ = true;
-      card.addEventListener('click', function(e){
-        e.preventDefault();
-        e.stopPropagation();
-        window.location.href = '/affiliate.html';
-      }, true);
     });
   })();
   </script>
@@ -1556,6 +2134,51 @@
     }, 500);
   })();
   </script>
+
+<script>
+  function initToolDock() {
+    const railButtons = Array.from(
+      document.querySelectorAll('.toolRailBtn[data-tool]')
+    );
+
+    const views = Array.from(
+      document.querySelectorAll('.toolView[data-tool-view]')
+    );
+
+    function activateTool(name) {
+      const target = views.find(
+        view => view.dataset.toolView === name
+      );
+
+      if (!target) return;
+
+      views.forEach(view => {
+        view.classList.toggle('is-active', view === target);
+      });
+
+      railButtons.forEach(button => {
+        button.classList.toggle(
+          'is-active',
+          button.dataset.tool === name
+        );
+      });
+
+      const panel = document.getElementById('toolPanel');
+
+      if (panel) {
+        panel.scrollTop = 0;
+      }
+    }
+
+    railButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        activateTool(button.dataset.tool);
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', initToolDock);
+</script>
 
 </body>
 </html>

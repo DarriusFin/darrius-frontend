@@ -399,26 +399,50 @@
 
   function applyPolicyToStatusText(policy, user_id, email) {
     const bucket = String(policy?.bucket || "DEMO").toUpperCase();
-    const plan = String(policy?.plan_key || "unknown").toUpperCase();
-    const stripeStatus = String(policy?.stripe_status || "unknown");
+    const plan = String(policy?.plan_key || "").trim();
     const cpe = policy?.current_period_end ? String(policy.current_period_end) : "";
 
-    let endPart = "";
-    if (cpe) {
+    let text = "";
+
+    if (bucket === "ACTIVE") {
+      text =
+        plan && plan.toLowerCase() !== "unknown"
+          ? `Active Plan: ${plan}`
+          : "Active Subscription";
+    } else if (bucket === "TRIAL") {
+      text = "Trial Access";
+    } else if (bucket === "PENDING") {
+      text = "Subscription Pending";
+    } else if (bucket === "GRACE") {
+      text = "Payment Issue — Access Temporarily Available";
+    } else if (bucket === "EXPIRED") {
+      text = "Subscription Expired";
+    } else {
+      text = "No Active Subscription";
+    }
+
+    if (cpe && ["ACTIVE", "TRIAL", "GRACE"].includes(bucket)) {
       try {
         const d = new Date(cpe);
-        if (!isNaN(d.getTime())) endPart = ` · ends ${d.toISOString().slice(0,10)}`;
+        if (!isNaN(d.getTime())) {
+          text += ` · Ends ${d.toISOString().slice(0, 10)}`;
+        }
       } catch (_) {}
     }
 
-    const who = email ? `email=${email}` : `user_id=${user_id}`;
-    setSubStatusText(`${bucket} · ${plan} · ${stripeStatus}${endPart} · (${who})`);
+    setSubStatusText(text);
 
-    // If your page has a badge element "accessBadge", keep it short (bucket)
     const b = $(IDS.accessBadge);
     if (b) {
       b.textContent = bucket;
-      b.classList.remove("ACTIVE", "TRIAL", "PENDING", "GRACE", "EXPIRED", "UNKNOWN");
+      b.classList.remove(
+        "ACTIVE",
+        "TRIAL",
+        "PENDING",
+        "GRACE",
+        "EXPIRED",
+        "UNKNOWN"
+      );
       b.classList.add(bucket);
     }
 
@@ -430,10 +454,10 @@
     const email = normEmail((($(IDS.email) && $(IDS.email).value) || ""));
     const manageBtn = $(IDS.manageBtn);
 
-    // For this new policy: email is strongly recommended/required for full UX
-    if (!user_id && !email) {
+    // Require both User ID and Email before checking subscription status
+    if (!user_id || !email) {
       window.__ENTITLEMENT__ = null;
-      setSubStatusText("Demo access — enter User ID and Email");
+      setSubStatusText("Enter User ID and Email to check subscription");
       if (manageBtn) manageBtn.disabled = true;
       return;
     }
@@ -442,15 +466,19 @@
     setSubStatusText("CHECKING...");
 
     try {
-      // ✅ prefer email if present
-      const qs = email
-        ? `?email=${encodeURIComponent(email)}`
-        : `?user_id=${encodeURIComponent(user_id)}`;
+      const qs =
+        `?email=${encodeURIComponent(email)}` +
+        `&user_id=${encodeURIComponent(user_id)}`;
 
       const policy = await apiGet(`/api/subscription/status${qs}`);
 
       // Make backend subscription policy the shared source of truth
       window.__ENTITLEMENT__ = policy;
+
+      // Only allow Billing Portal when the account has an active subscription
+      if (manageBtn) {
+        manageBtn.disabled = !policy?.has_access;
+      }
 
       applyPolicyToStatusText(policy, user_id, email);
 
@@ -496,13 +524,19 @@
       if (!data || !data.url) throw new Error("No portal url");
       window.location.href = data.url;
     } catch (e) {
-      alert(
-        "Subscription management is currently unavailable or the Billing Portal endpoint has not been deployed.\n\n" +
-        "The backend must provide: POST /api/billing/portal and return {url}.\n\n" +
-        "Error:\n" +
-        e.message
-      );
-      if (isAdmin()) log(`❌ open portal: ${e.message}`);
+      const msg = String(e?.message || "");
+
+      if (msg.includes('"subscription_not_found"')) {
+        alert("No active subscription was found for this account.");
+      } else if (msg.includes('"no_stripe_customer_for_user"')) {
+        alert("Billing management is not available for this account yet.");
+      } else if (msg.includes('"email_mismatch"')) {
+        alert("The User ID and Email do not match.");
+      } else {
+        alert("Subscription management is temporarily unavailable. Please try again later.");
+      }
+
+      if (isAdmin()) log(`❌ open portal: ${msg}`);
     }
   }
 

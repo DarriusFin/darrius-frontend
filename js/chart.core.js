@@ -870,8 +870,58 @@
   }
 
   function exportPNG() {
-    alert("导出 PNG：建议用浏览器截图或后续加入 html2canvas。");
-  }
+    try {
+      if (!S.chart || typeof S.chart.takeScreenshot !== "function") {
+        throw new Error("Chart screenshot API is unavailable.");
+      }
+
+      const chartCanvas = S.chart.takeScreenshot();
+
+      if (!chartCanvas) {
+        throw new Error("Unable to capture chart.");
+      }
+
+      // The chart background is transparent, so place it on a dark canvas
+      // before exporting.
+      const out = document.createElement("canvas");
+      out.width = chartCanvas.width;
+      out.height = chartCanvas.height;
+
+      const ctx = out.getContext("2d");
+
+      if (!ctx) {
+        throw new Error("Unable to create export canvas.");
+      }
+
+      ctx.fillStyle = "#080d14";
+      ctx.fillRect(0, 0, out.width, out.height);
+      ctx.drawImage(chartCanvas, 0, 0);
+
+      const symbol = String(readSymbolFromUI() || "chart")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9._-]/g, "_");
+
+      const tf = String(getTF(S.opts.tfElId) || "")
+        .trim()
+        .replace(/[^A-Za-z0-9._-]/g, "_");
+
+      const filename =
+        `DarriusAI_${symbol}${tf ? "_" + tf : ""}.png`;
+
+      const link = document.createElement("a");
+      link.download = filename;
+      link.href = out.toDataURL("image/png");
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+    } catch (e) {
+      console.error("[ChartCore] EXPORT_FAIL", e);
+      alert("Unable to export the chart. Please try again.");
+    }
+}
 
   function init(opts) {
     S.opts = Object.assign({}, S.opts, (opts || {}));

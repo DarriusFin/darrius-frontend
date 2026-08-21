@@ -105,15 +105,14 @@
 
   // ---------- optional: affiliate entry ----------
   function openAffiliate() {
-    alert(
-      "Affiliate Program:\n\n" +
-        "Next steps:\n" +
-        "1) Complete affiliate registration and select US or non-US status.\n" +
-        "2) Complete electronic tax and partnership documents.\n" +
-        "3) Access the affiliate dashboard for referrals, settlements, and invoices.\n\n" +
-        "Commission rates and settlement terms are disclosed only in the dashboard and agreement."
-    );
-  }
+  const userId = $("userId")?.value?.trim() || "";
+
+  const qs = new URLSearchParams();
+  if (userId) qs.set("user_id", userId);
+
+  window.location.href =
+    "/affiliate.html" + (qs.toString() ? "?" + qs.toString() : "");
+}
 
   // ---------- admin blocks ----------
   function enableAdminBlocksIfNeeded() {
@@ -124,31 +123,6 @@
     $("priceOverrideRow")?.classList.remove("hidden");
 
     log("Admin mode enabled (?admin=1)");
-  }
-
-  // ---------- Route Manage -> account.html ----------
-  function wireManageToAccount() {
-    const manageBtn = $("manageBtn");
-    if (!manageBtn) return;
-
-    manageBtn.onclick = function () {
-      const userId = $("userId")?.value?.trim() || "";
-      const email = $("email")?.value?.trim() || "";
-
-      if (!userId) {
-        alert("Enter your User ID before opening account management.");
-        $("userId")?.focus?.();
-        return;
-      }
-
-      const qs = new URLSearchParams({ from: "home", user_id: userId });
-      if (email) qs.set("email", email);
-
-      window.location.href = "/account.html?" + qs.toString();
-    };
-
-    manageBtn.disabled = false;
-    if (isAdmin()) console.log("[BOOT] Order Manage routed to /account.html");
   }
 
   // ---------- main boot ----------
@@ -284,8 +258,6 @@
         log("❌ Subscription wiring error: " + e.message);
       }
     }
-
-    wireManageToAccount();
 
     $("copyLinkBtn")?.addEventListener("click", copyShareLink);
     $("exportBtn")?.addEventListener("click", exportPNG);
