@@ -48,6 +48,13 @@
     };
   }
 
+  function setAccountMeta(text) {
+    const el = $("accountMeta");
+    if (el) {
+      el.textContent = text;
+    }
+  }
+
   async function refreshSession() {
     try {
       const response = await fetch(
@@ -74,6 +81,7 @@
         const userId = String(data.user_id).trim();
 
         setStatus(`Signed in: ${userId}`);
+        setAccountMeta("SIGNED IN");
 
         const userIdInput = $("userId");
 
@@ -99,8 +107,8 @@
       }
 
       window.__AUTH_USER_ID__ = null;
-
       setStatus("Not signed in");
+      setAccountMeta("GUEST");
 
       return {
         authenticated: false,
@@ -114,6 +122,7 @@
       window.__AUTH_USER_ID__ = null;
 
       setStatus("Unable to check sign-in status");
+      setAccountMeta("GUEST");
 
       return {
         authenticated: false,
