@@ -5,7 +5,7 @@
  * Updated v2026.01.31 (Email required + DataLabel UX + Portal by email)
  * - Status: GET /api/subscription/me (session authenticated)
  * - Portal: POST /api/billing/portal (session authenticated)
- * - Checkout: POST /billing/create-checkout-session  (keep your existing flow)
+ * - Checkout: POST /api/billing/checkout (hybrid guest/session auth)
  *
  * Guarantees:
  *  - NO secrets on frontend
@@ -293,10 +293,13 @@
     if (body.plan) body.plan = String(body.plan).trim().slice(0, 24);
 
     setStatusBadge("Creating checkout…", true);
-    if (isAdmin()) log(`➡️ [${nowISOTime()}] POST /billing/create-checkout-session ${JSON.stringify(body)}`);
+    if (isAdmin()) log(
+      `➡️ [${nowISOTime()}] POST /api/billing/checkout ${JSON.stringify(body)}`
+    );
 
-    const resp = await fetch(`${API_BASE}/billing/create-checkout-session`, {
+    const resp = await fetch(`${API_BASE}/api/billing/checkout`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -317,25 +320,45 @@
 
   // -----------------------------
   // Subscribe (Unified Entry)
-  // ✅ Email REQUIRED
+  // Hybrid checkout: guest identity or authenticated session
   // -----------------------------
   async function subscribe() {
-    const user_id = (($(IDS.userId) && $(IDS.userId).value) || "").trim();
-    const email = normEmail((($(IDS.email) && $(IDS.email).value) || ""));
-    const planKey = (($(IDS.planSelect) && $(IDS.planSelect).value) || "").trim();
-    const override = (($(IDS.priceOverride) && $(IDS.priceOverride).value) || "").trim();
+    const signedIn = !!window.__AUTH_USER_ID__;
 
-    if (!user_id) {
-      alert("User ID is required to link your subscription to your account.");
-      $(IDS.userId)?.focus?.();
-      return;
-    }
+    const user_id = (
+      (($(IDS.userId) && $(IDS.userId).value) || "")
+    ).trim();
 
-    // ✅ Email required (your new policy)
-    if (!email) {
-      alert("Email is required to match your Stripe customer and enable the Billing Portal.");
-      $(IDS.email)?.focus?.();
-      return;
+    const email = normEmail(
+      (($(IDS.email) && $(IDS.email).value) || "")
+    );
+
+    const planKey = (
+      (($(IDS.planSelect) && $(IDS.planSelect).value) || "")
+    ).trim();
+
+    const override = (
+      (($(IDS.priceOverride) && $(IDS.priceOverride).value) || "")
+    ).trim();
+
+    // Guest checkout requires a new User ID + Email.
+    // Signed-in checkout gets identity from the server session.
+    if (!signedIn) {
+      if (!user_id) {
+        alert(
+          "User ID is required to create your account."
+        );
+        $(IDS.userId)?.focus?.();
+        return;
+      }
+
+      if (!email) {
+        alert(
+          "Email is required to create your account."
+        );
+        $(IDS.email)?.focus?.();
+        return;
+      }
     }
 
     // Determine price_id
@@ -361,11 +384,15 @@
 
     const payload = {
       price_id,
-      user_id,
-      email,
       ref_landing,
       plan: pickedPlanKey || "",
     };
+
+    if (!signedIn) {
+      payload.user_id = user_id;
+      payload.email = email;
+    }
+
     if (dref_code) payload.dref_code = dref_code;
 
     try {

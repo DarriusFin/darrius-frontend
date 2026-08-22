@@ -89,7 +89,8 @@
     const showCheckout = !hasAccess;
 
     if (emailField) {
-      emailField.style.display = showCheckout ? "" : "none";
+      emailField.style.display =
+        !signedIn && showCheckout ? "" : "none";
     }
 
     if (planField) {
