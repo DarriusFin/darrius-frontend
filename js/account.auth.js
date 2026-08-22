@@ -57,6 +57,7 @@
     const loginFields = $("accountLoginFields");
     const signedInSummary = $("accountSignedInSummary");
     const signedInUser = $("accountSignedInUser");
+    const accountPageAction = $("accountPageAction");
 
     const emailField = $("accountEmailField");
     const planField = $("accountPlanField");
@@ -71,6 +72,10 @@
 
     if (signedInSummary) {
       signedInSummary.style.display = signedIn ? "" : "none";
+    }
+
+    if (accountPageAction) {
+      accountPageAction.style.display = signedIn ? "" : "none";
     }
 
     if (signedInUser) {
@@ -408,6 +413,7 @@
     const verifyButton = $("verifyCodeBtn");
     const codeInput = $("verificationCode");
     const signOutButton = $("signOutBtn");
+    const accountPageButton = $("accountPageBtn");
 
     if (sendButton) {
       sendButton.addEventListener(
@@ -438,6 +444,15 @@
       signOutButton.addEventListener(
         "click",
         signOut
+      );
+    }
+
+    if (accountPageButton) {
+      accountPageButton.addEventListener(
+        "click",
+        () => {
+          window.location.href = "account.html";
+        }
       );
     }
 
