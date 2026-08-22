@@ -79,9 +79,9 @@
         : "—";
     }
 
-    // Checkout is available only after sign-in and only
-    // when the account does not already have access.
-    const showCheckout = signedIn && !hasAccess;
+    // Show checkout whenever the account does not have active access.
+    // Guests can still start a new subscription.
+    const showCheckout = !hasAccess;
 
     if (emailField) {
       emailField.style.display = showCheckout ? "" : "none";
