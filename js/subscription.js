@@ -3,7 +3,7 @@
  * File: js/subscription.js
  *
  * Updated v2026.01.31 (Email required + DataLabel UX + Portal by email)
- * - Status: GET /api/subscription/status?user_id= OR ?email=
+ * - Status: GET /api/subscription/me (session authenticated)
  * - Portal: POST /api/billing/portal (session authenticated)
  * - Checkout: POST /billing/create-checkout-session  (keep your existing flow)
  *
@@ -475,29 +475,18 @@
 
         policy = await apiGet("/api/subscription/me");
       } else {
-        // Legacy / not-yet-signed-in flow.
-        if (!user_id || !email) {
-          window.__ENTITLEMENT__ = null;
+        // No authenticated session: never resolve access from form fields.
+        window.__ENTITLEMENT__ = null;
 
-          setSubStatusText(
-            "Sign in to check your subscription"
-          );
+        setSubStatusText(
+          "Sign in to check your subscription"
+        );
 
-          if (manageBtn) {
-            manageBtn.disabled = true;
-          }
-
-          return;
+        if (manageBtn) {
+          manageBtn.disabled = true;
         }
 
-        setSubStatusText("CHECKING...");
-
-        const qs =
-          `?email=${encodeURIComponent(email)}` +
-          `&user_id=${encodeURIComponent(user_id)}`;
-
-        policy =
-          await apiGet(`/api/subscription/status${qs}`);
+        return;
       }
 
       window.__ENTITLEMENT__ = policy;

@@ -48,11 +48,80 @@
     };
   }
 
+  function updateAccountView(authenticated, userId) {
+    const signedIn = authenticated === true;
+    const hasAccess =
+      signedIn &&
+      window.__ENTITLEMENT__?.has_access === true;
+
+    const loginFields = $("accountLoginFields");
+    const signedInSummary = $("accountSignedInSummary");
+    const signedInUser = $("accountSignedInUser");
+
+    const emailField = $("accountEmailField");
+    const planField = $("accountPlanField");
+    const checkoutActions = $("accountCheckoutActions");
+    const sessionActions = $("accountSessionActions");
+
+    const manageBtn = $("manageBtn");
+
+    if (loginFields) {
+      loginFields.style.display = signedIn ? "none" : "";
+    }
+
+    if (signedInSummary) {
+      signedInSummary.style.display = signedIn ? "" : "none";
+    }
+
+    if (signedInUser) {
+      signedInUser.textContent = signedIn
+        ? String(userId || "—")
+        : "—";
+    }
+
+    // Checkout is available only after sign-in and only
+    // when the account does not already have access.
+    const showCheckout = signedIn && !hasAccess;
+
+    if (emailField) {
+      emailField.style.display = showCheckout ? "" : "none";
+    }
+
+    if (planField) {
+      planField.style.display = showCheckout ? "" : "none";
+    }
+
+    if (checkoutActions) {
+      checkoutActions.style.display = showCheckout ? "" : "none";
+    }
+
+    if (sessionActions) {
+      sessionActions.style.display = signedIn ? "" : "none";
+      sessionActions.style.gridTemplateColumns =
+        hasAccess ? "1fr 1fr" : "1fr";
+    }
+
+    if (manageBtn) {
+      manageBtn.style.display = hasAccess ? "" : "none";
+    }
+  }
+
   function setAccountMeta(text) {
     const el = $("accountMeta");
     if (el) {
       el.textContent = text;
     }
+  }
+
+  function emitAuthChanged(authenticated, userId = null) {
+    window.dispatchEvent(
+      new CustomEvent("darrius:auth-changed", {
+        detail: {
+          authenticated: authenticated === true,
+          user_id: userId,
+        },
+      })
+    );
   }
 
   async function refreshSession() {
@@ -82,6 +151,7 @@
 
         setStatus(`Signed in: ${userId}`);
         setAccountMeta("SIGNED IN");
+        updateAccountView(true, userId);
 
         const userIdInput = $("userId");
 
@@ -91,14 +161,7 @@
 
         window.__AUTH_USER_ID__ = userId;
 
-        window.dispatchEvent(
-          new CustomEvent("darrius:auth-changed", {
-            detail: {
-              authenticated: true,
-              user_id: userId,
-            },
-          })
-        );
+        emitAuthChanged(true, userId);
 
         return {
           authenticated: true,
@@ -109,6 +172,8 @@
       window.__AUTH_USER_ID__ = null;
       setStatus("Not signed in");
       setAccountMeta("GUEST");
+      updateAccountView(false, null);
+      emitAuthChanged(false, null);
 
       return {
         authenticated: false,
@@ -123,10 +188,71 @@
 
       setStatus("Unable to check sign-in status");
       setAccountMeta("GUEST");
+      updateAccountView(false, null);
+      emitAuthChanged(false, null);
 
       return {
         authenticated: false,
       };
+    }
+  }
+
+  async function signOut() {
+    const button = $("signOutBtn");
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Signing Out...";
+    }
+
+    try {
+      const { response } = await fetchJSON(
+        "/api/auth/logout",
+        {
+          method: "POST",
+          body: JSON.stringify({}),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Logout failed: ${response.status}`);
+      }
+
+      window.__AUTH_USER_ID__ = null;
+      window.__ENTITLEMENT__ = null;
+
+      const userIdInput = $("userId");
+      const emailInput = $("email");
+
+      if (userIdInput) {
+        userIdInput.value = "";
+      }
+
+      if (emailInput) {
+        emailInput.value = "";
+      }
+
+      showCodeField(false);
+
+      setStatus("Not signed in");
+      setAccountMeta("GUEST");
+      updateAccountView(false, null);
+
+      emitAuthChanged(false, null);
+    } catch (error) {
+      console.error(
+        "[AccountAuth] logout failed",
+        error
+      );
+
+      setStatus(
+        "Unable to sign out. Please try again."
+      );
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Sign Out";
+      }
     }
   }
 
@@ -281,6 +407,7 @@
     const sendButton = $("sendVerifyBtn");
     const verifyButton = $("verifyCodeBtn");
     const codeInput = $("verificationCode");
+    const signOutButton = $("signOutBtn");
 
     if (sendButton) {
       sendButton.addEventListener(
@@ -307,6 +434,30 @@
       );
     }
 
+    if (signOutButton) {
+      signOutButton.addEventListener(
+        "click",
+        signOut
+      );
+    }
+
+    window.addEventListener(
+      "darrius:subscription-status",
+      (event) => {
+        const policy = event?.detail || null;
+
+        if (
+          window.__AUTH_USER_ID__ &&
+          policy
+        ) {
+          updateAccountView(
+            true,
+            window.__AUTH_USER_ID__
+          );
+        }
+      }
+    );
+
     refreshSession();
   }
 
@@ -323,5 +474,6 @@
     refreshSession,
     sendVerificationCode,
     verifyCode,
+    signOut,
   };
 })();

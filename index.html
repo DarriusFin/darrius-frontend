@@ -935,12 +935,9 @@
     }
 
     #manageBtn{
-      border: 0 !important;
-      color:#081119 !important;
-      font-weight:950 !important;
-      letter-spacing:.3px !important;
-      background: var(--gradBrand) !important;
-      box-shadow: var(--shadow2) !important;
+      border-color:rgba(76,194,255,.35);
+      background:rgba(76,194,255,.07);
+      color:rgba(234,240,247,.95);
     }
 
     .accessBadge {
@@ -1559,6 +1556,17 @@
                 </span>
               </div>
 
+              <div
+                id="accountSignedInSummary"
+                class="toolViewFooter"
+                style="display:none; margin-bottom:12px;"
+              >
+                Signed in as
+                <strong id="accountSignedInUser">—</strong>
+              </div>
+
+              <div id="accountLoginFields">
+
               <div class="field">
                 <div class="label">
                   <span>User ID</span>
@@ -1616,7 +1624,9 @@
 
               </div>
 
-              <div class="field">
+              </div>
+
+              <div class="field" id="accountEmailField">
                 <div class="label">
                   <span>Email</span>
                   <span class="small">Required</span>
@@ -1624,7 +1634,7 @@
                 <input id="email" placeholder/>
               </div>
 
-              <div class="field">
+              <div class="field" id="accountPlanField">
                 <div class="label">
                   <span>Plan</span>
                 </div>
@@ -1634,13 +1644,31 @@
                 </select>
               </div>
 
-              <div class="row2" style="margin-top:0">
+              <div
+                class="row2"
+                id="accountCheckoutActions"
+                style="margin-top:0; grid-template-columns:1fr;"
+              >
                 <button class="btn" id="subscribeBtn" disabled>
                   Subscribe
                 </button>
+              </div>
 
+              <div
+                class="row2"
+                id="accountSessionActions"
+                style="display:none; margin-top:10px;"
+              >
                 <button class="btnGhost" id="manageBtn" disabled>
                   Manage Plan
+                </button>
+
+                <button
+                  type="button"
+                  class="btnGhost"
+                  id="signOutBtn"
+                >
+                  Sign Out
                 </button>
               </div>
 
@@ -1880,8 +1908,8 @@
   <script src="js/market.pulse.js?v=20260203a"></script>
   <script src="js/darrius.mutant.js?v=20260212"></script>
 
-  <script src="js/subscription.js?v=20260821_portal_session1"></script>
-  <script src="js/account.auth.js?v=20260821_auth2"></script>
+  <script src="js/subscription.js?v=20260822_session_only1"></script>
+  <script src="js/account.auth.js?v=20260822_signout1"></script>
   <script src="js/referral.client.js?v=20260129"></script>
   <script src="js/referral.checkout.js?v=20260129"></script>
 
