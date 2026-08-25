@@ -488,34 +488,6 @@
 
         <div class="panelBody">
           <div class="card">
-            <div class="cardTitle"><b>Identity · 身份信息</b><span class="note" id="backendHint">Backend: —</span></div>
-
-            <div class="row2">
-              <div class="field">
-                <div class="label"><span><b>User ID</b>（用户ID）</span><span>必填</span></div>
-                <input id="userId" placeholder="例如：darrius888"/>
-              </div>
-
-              <div class="field">
-                <div class="label"><span>Email（邮箱，可选）</div>
-                <input id="email" placeholder="（可选）用于 Stripe 匹配/收据"/>
-              </div>
-            </div>
-
-            <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
-              <input id="useEmailMatch" type="checkbox" style="width:auto;transform:translateY(1px)"/>
-              <label for="useEmailMatch" class="note" style="cursor:pointer">
-                <b>Use email for Stripe match</b>
-              </label>
-            </div>
-
-            <div class="btnRow">
-              <button class="btn" id="saveBtn">Save（保存/刷新）</button>
-              <button class="btnGhost" id="refreshBtn">Refresh Status（刷新状态）</button>
-            </div>
-          </div>
-
-          <div class="card">
             <div class="cardTitle">
               <b>Status · 状态信息</b>
               <span class="note" id="updatedAt">Updated: —</span>
@@ -604,10 +576,9 @@
     window.API_BASE = "https://darrius-api.onrender.com";
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
 
-    window.DARRIUS_BILLING_PRICES_PATH = window.DARRIUS_BILLING_PRICES_PATH || "/billing/prices";
-    window.DARRIUS_BILLING_CHECKOUT_NEW_PATH = window.DARRIUS_BILLING_CHECKOUT_NEW_PATH || "/billing/create-checkout-session";
-    window.DARRIUS_BILLING_CHECKOUT_OLD_PATH = window.DARRIUS_BILLING_CHECKOUT_OLD_PATH || "/billing/checkout";
-    window.DARRIUS_BILLING_PORTAL_PATH  = window.DARRIUS_BILLING_PORTAL_PATH  || "/billing/portal";
+    window.DARRIUS_BILLING_PRICES_PATH =
+    window.DARRIUS_BILLING_PRICES_PATH ||
+    "/billing/prices";
 
     document.getElementById("yearNow").textContent = String(new Date().getFullYear());
 
@@ -684,10 +655,6 @@
       const base = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,'');
       const $ = (id) => document.getElementById(id);
 
-      const userIdEl = $('userId');
-      const emailEl  = $('email');
-      const useEmailEl = $('useEmailMatch');
-
       // ✅ 你的真实 price_id
       const PRICE_ID_BY_KEY = {
         weekly:    "price_1SpJMmR84UMUVSTg0T7xfm6r",
@@ -695,16 +662,6 @@
         quarterly: "price_1SpbwYR84UMUVSTgMQpUrE42",
         yearly:    "price_1SpbpxR84UMUVSTgapaJDjMX"
       };
-
-      // Restore previous input
-      try{
-        const uid = localStorage.getItem('darrius_user_id') || '';
-        const em  = localStorage.getItem('darrius_email') || '';
-        const useEm = localStorage.getItem('darrius_use_email_match') || '0';
-        if (uid && userIdEl) userIdEl.value = uid;
-        if (em && emailEl) emailEl.value = em;
-        if (useEmailEl) useEmailEl.checked = (useEm === '1');
-      }catch(e){}
 
       async function fetchJSON(url, opts = {}) {
         const r = await fetch(url, {
@@ -832,87 +789,177 @@
         return { resp, checkoutUrl, url };
       }
 
-      async function startCheckout(plan){
-        const uid = (userIdEl && userIdEl.value || '').trim();
-        const em  = (emailEl && emailEl.value || '').trim();
+      async function startCheckout(plan) {
+        const signedIn = !!window.__AUTH_USER_ID__;
 
-        if (!uid){
-          alert("Please enter User ID first.");
+        if (!signedIn) {
+          alert(
+            "Please sign in from the Dashboard before subscribing."
+          );
           return;
         }
 
-        const priceId = (plan && plan.price_id) ? String(plan.price_id).trim()
-                      : (plan && plan.key && PRICE_ID_BY_KEY[plan.key]) ? PRICE_ID_BY_KEY[plan.key]
-                      : "";
+        if (window.__ENTITLEMENT__?.has_access === true) {
+          alert(
+            "This account already has an active subscription."
+          );
+          return;
+        }
 
-        if (!priceId){
-          alert("Missing price_id for this plan.\nPlease ensure backend /billing/prices returns price ids, or fallback has correct ids.");
+        const planKey =
+          plan && plan.key
+            ? String(plan.key).trim()
+            : "";
+
+        const priceId =
+          plan && plan.price_id
+            ? String(plan.price_id).trim()
+            : (
+                planKey &&
+                PRICE_ID_BY_KEY[planKey]
+                  ? PRICE_ID_BY_KEY[planKey]
+                  : ""
+              );
+
+        if (!priceId) {
+          alert(
+            "Missing price_id for this plan."
+          );
           return;
         }
 
         const payload = {
-          user_id: uid,
-          email: em || "",
           price_id: priceId,
-          success_url: window.location.origin + "/account.html?checkout=success",
-          cancel_url: window.location.origin + "/account.html?checkout=cancel"
+          plan: planKey,
         };
 
-        const tried = [];
-        try{
-          tried.push(base + window.DARRIUS_BILLING_CHECKOUT_NEW_PATH);
-          const r1 = await postCheckout(window.DARRIUS_BILLING_CHECKOUT_NEW_PATH, payload);
-          if (r1.checkoutUrl) { window.location.href = r1.checkoutUrl; return; }
+        try {
+          const result = await postCheckout(
+            "/api/billing/checkout",
+            payload
+          );
 
-          const detail = r1.resp.detail || r1.resp.error || r1.resp.raw || ("HTTP " + (r1.resp.__http && r1.resp.__http.status));
-          throw new Error(detail || "no url");
-        }catch(e1){
-          try{
-            tried.push(base + window.DARRIUS_BILLING_CHECKOUT_OLD_PATH);
-            const r2 = await postCheckout(window.DARRIUS_BILLING_CHECKOUT_OLD_PATH, payload);
-            if (r2.checkoutUrl) { window.location.href = r2.checkoutUrl; return; }
-
-            const detail2 = r2.resp.detail || r2.resp.error || r2.resp.raw || ("HTTP " + (r2.resp.__http && r2.resp.__http.status));
-            throw new Error(detail2 || "no url");
-          }catch(e2){
-            alert(
-              "Checkout not ready: backend did not return [url].\n\n" +
-              "Tried endpoints:\n" + tried.join("\n") + "\n\n" +
-              "price_id: " + priceId + "\n" +
-              "Error: " + String(e2 && e2.message ? e2.message : e2)
-            );
+          if (result.checkoutUrl) {
+            window.location.href = result.checkoutUrl;
+            return;
           }
+
+          const resp = result.resp || {};
+          const error =
+            resp.error ||
+            resp.detail ||
+            resp.raw ||
+            "checkout_failed";
+
+          if (error === "active_subscription_exists") {
+            alert(
+              "This account already has an active subscription."
+            );
+            return;
+          }
+
+          if (error === "authentication_required") {
+            alert(
+              "Your session has expired. Please sign in again."
+            );
+            return;
+          }
+
+          if (error === "account_email_missing") {
+            alert(
+              "Your account does not have a billing email. Please contact support."
+            );
+            return;
+          }
+
+          alert(
+            "Unable to start checkout.\n\n" +
+            "Error: " +
+            String(error)
+          );
+        } catch (error) {
+          alert(
+            "Unable to start checkout.\n\n" +
+            "Error: " +
+            String(
+              error && error.message
+                ? error.message
+                : error
+            )
+          );
         }
       }
 
-      async function openPortal(){
-        const uid = (userIdEl && userIdEl.value || '').trim();
-        const em  = (emailEl && emailEl.value || '').trim();
-        const useEmail = !!(useEmailEl && useEmailEl.checked);
+async function openPortal() {
+  if (!window.__AUTH_USER_ID__) {
+    alert(
+      "Please sign in before opening Billing Portal."
+    );
+    return;
+  }
 
-        if (!uid){
-          alert("Please enter User ID first.");
-          return;
-        }
+  if (window.__ENTITLEMENT__?.has_access !== true) {
+    alert(
+      "No active subscription is available to manage."
+    );
+    return;
+  }
 
-        const payload = {
-          user_id: uid,
-          email: (useEmail ? (em || "") : ""),
-          return_url: window.location.origin + "/account.html"
-        };
+  const url =
+    base + "/api/billing/portal";
 
-        const url = base + window.DARRIUS_BILLING_PORTAL_PATH;
-        const resp = await fetchJSON(url, { method:'POST', body: JSON.stringify(payload) });
-
-        const portalUrl = resp.url || resp.portal_url || (resp.data && resp.data.url);
-        if (portalUrl) { window.location.href = portalUrl; return; }
-
-        alert(
-          "Billing Portal not available.\nEndpoint: " + url + "\n\n" +
-          "HTTP: " + (resp.__http ? resp.__http.status : "?") + "\n" +
-          "Detail: " + (resp.detail || resp.error || resp.raw || "unknown")
-        );
+  try {
+    const resp = await fetchJSON(
+      url,
+      {
+        method: 'POST',
+        body: JSON.stringify({}),
       }
+    );
+
+    const portalUrl =
+      resp.url ||
+      resp.portal_url ||
+      (
+        resp.data &&
+        resp.data.url
+      );
+
+    if (portalUrl) {
+      window.location.href = portalUrl;
+      return;
+    }
+
+    const error =
+      resp.error ||
+      resp.detail ||
+      resp.raw ||
+      "portal_unavailable";
+
+    if (error === "authentication_required") {
+      alert(
+        "Your session has expired. Please sign in again."
+      );
+      return;
+    }
+
+    alert(
+      "Billing Portal is not available.\n\n" +
+      "Error: " +
+      String(error)
+    );
+  } catch (error) {
+    alert(
+      "Billing Portal is not available.\n\n" +
+      "Error: " +
+      String(
+        error && error.message
+          ? error.message
+          : error
+      )
+    );
+  }
+}
 
       // ===== Wire UI events =====
       $('openPortalBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); openPortal(); });
@@ -927,10 +974,6 @@
 
       $('openDashBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
       $('backBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.location.href = '/index.html'; });
-
-      // ✅ Save / Refresh：由 account.manage.fix.js 实现
-      $('saveBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.DARRIUS_ACCOUNT_REFRESH_STATUS && window.DARRIUS_ACCOUNT_REFRESH_STATUS(); });
-      $('refreshBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); window.DARRIUS_ACCOUNT_REFRESH_STATUS && window.DARRIUS_ACCOUNT_REFRESH_STATUS(); });
 
       // ===== init =====
       (async function init(){

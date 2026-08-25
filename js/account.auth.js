@@ -155,8 +155,19 @@
       ) {
         const userId = String(data.user_id).trim();
 
-        setStatus(`Signed in: ${userId}`);
-        setAccountMeta("SIGNED IN");
+        const signedInTemplate =
+          window.DARRIUS_T?.("signedInStatus") ||
+          "Signed in: {user}";
+
+        setStatus(
+          signedInTemplate.replace(
+            "{user}",
+            userId
+          )
+        );
+        setAccountMeta(
+          window.DARRIUS_T?.("signedIn") || "SIGNED IN"
+        );
         updateAccountView(true, userId);
 
         const userIdInput = $("userId");
@@ -176,8 +187,12 @@
       }
 
       window.__AUTH_USER_ID__ = null;
-      setStatus("Not signed in");
-      setAccountMeta("GUEST");
+      setStatus(
+        window.DARRIUS_T?.("notSignedIn") || "Not signed in"
+      );
+      setAccountMeta(
+        window.DARRIUS_T?.("guest") || "GUEST"
+      );
       updateAccountView(false, null);
       emitAuthChanged(false, null);
 
@@ -192,8 +207,13 @@
 
       window.__AUTH_USER_ID__ = null;
 
-      setStatus("Unable to check sign-in status");
-      setAccountMeta("GUEST");
+      setStatus(
+        window.DARRIUS_T?.("unableCheckSignIn") ||
+        "Unable to check sign-in status"
+      );
+      setAccountMeta(
+        window.DARRIUS_T?.("guest") || "GUEST"
+      );
       updateAccountView(false, null);
       emitAuthChanged(false, null);
 
@@ -208,7 +228,9 @@
 
     if (button) {
       button.disabled = true;
-      button.textContent = "Signing Out...";
+      button.textContent =
+        window.DARRIUS_T?.("signingOut") ||
+        "Signing Out...";
     }
 
     try {
@@ -240,8 +262,12 @@
 
       showCodeField(false);
 
-      setStatus("Not signed in");
-      setAccountMeta("GUEST");
+      setStatus(
+        window.DARRIUS_T?.("notSignedIn") || "Not signed in"
+      );
+      setAccountMeta(
+        window.DARRIUS_T?.("guest") || "GUEST"
+      );
       updateAccountView(false, null);
 
       emitAuthChanged(false, null);
@@ -252,12 +278,15 @@
       );
 
       setStatus(
+        window.DARRIUS_T?.("unableSignOut") ||
         "Unable to sign out. Please try again."
       );
     } finally {
       if (button) {
         button.disabled = false;
-        button.textContent = "Sign Out";
+        button.textContent =
+          window.DARRIUS_T?.("signOut") ||
+          "Sign Out";
       }
     }
   }
@@ -268,7 +297,10 @@
     ).trim();
 
     if (!userId) {
-      setStatus("Enter your User ID first.");
+      setStatus(
+        window.DARRIUS_T?.("enterUserIdFirst") ||
+        "Enter your User ID first."
+      );
       $("userId")?.focus();
       return;
     }
@@ -277,10 +309,15 @@
 
     if (button) {
       button.disabled = true;
-      button.textContent = "Sending...";
+      button.textContent =
+        window.DARRIUS_T?.("sending") ||
+        "Sending...";
     }
 
-    setStatus("Requesting verification code...");
+    setStatus(
+      window.DARRIUS_T?.("requestingVerificationCode") ||
+      "Requesting verification code..."
+    );
 
     try {
       const { response } = await fetchJSON(
@@ -297,12 +334,14 @@
         showCodeField(true);
 
         setStatus(
+          window.DARRIUS_T?.("verificationCodeSent") ||
           "If this account is eligible, a verification code has been sent to the email on file."
         );
 
         $("verificationCode")?.focus();
       } else {
         setStatus(
+          window.DARRIUS_T?.("unableSendVerificationCode") ||
           "Unable to send a verification code. Please try again later."
         );
       }
@@ -313,12 +352,14 @@
       );
 
       setStatus(
+        window.DARRIUS_T?.("unableSendVerificationCode") ||
         "Unable to send a verification code. Please try again later."
       );
     } finally {
       if (button) {
         button.disabled = false;
         button.textContent =
+          window.DARRIUS_T?.("sendVerificationCode") ||
           "Send Verification Code";
       }
     }
@@ -334,12 +375,16 @@
     ).trim();
 
     if (!userId) {
-      setStatus("Enter your User ID first.");
+      setStatus(
+        window.DARRIUS_T?.("enterUserIdFirst") ||
+        "Enter your User ID first."
+      );
       return;
     }
 
     if (!/^\d{6}$/.test(code)) {
       setStatus(
+        window.DARRIUS_T?.("enterVerificationCode") ||
         "Enter the 6-digit verification code."
       );
       $("verificationCode")?.focus();
@@ -350,10 +395,15 @@
 
     if (button) {
       button.disabled = true;
-      button.textContent = "Verifying...";
+      button.textContent =
+        window.DARRIUS_T?.("verifying") ||
+        "Verifying...";
     }
 
-    setStatus("Verifying...");
+    setStatus(
+      window.DARRIUS_T?.("verifying") ||
+      "Verifying..."
+    );
 
     try {
       const { response, data } = await fetchJSON(
@@ -372,6 +422,7 @@
         data?.authenticated !== true
       ) {
         setStatus(
+          window.DARRIUS_T?.("verificationFailedCheckCode") ||
           "Verification failed. Check the code and try again."
         );
         return;
@@ -389,6 +440,9 @@
         }
       } else {
         setStatus(
+          window.DARRIUS_T?.(
+            "verificationSucceededSessionUnconfirmed"
+          ) ||
           "Verification succeeded, but the session could not be confirmed."
         );
       }
@@ -399,12 +453,15 @@
       );
 
       setStatus(
+        window.DARRIUS_T?.("verificationFailed") ||
         "Verification failed. Please try again."
       );
     } finally {
       if (button) {
         button.disabled = false;
-        button.textContent = "Verify";
+        button.textContent =
+          window.DARRIUS_T?.("verify") ||
+          "Verify";
       }
     }
   }
@@ -471,6 +528,13 @@
             window.__AUTH_USER_ID__
           );
         }
+      }
+    );
+
+    document.addEventListener(
+      "darrius:language-changed",
+      () => {
+        refreshSession();
       }
     );
 

@@ -12,6 +12,19 @@
 
   // ---------- Toast ----------
   const toast = document.createElement('div');
+  const referralTemplate =
+    window.DARRIUS_T?.("referralDetected") ||
+    "Referral detected: {code}";
+
+  const referralDetected = referralTemplate.replace(
+    "{code}",
+    String(ref)
+  );
+
+  const referralCheckout =
+    window.DARRIUS_T?.("referralAppliedCheckout") ||
+    "Will be applied at checkout";
+
   toast.innerHTML = `
     <div style="
       position: fixed;
@@ -28,8 +41,8 @@
       backdrop-filter: blur(6px);
       animation: darriusFadeIn .25s ease-out;
     ">
-      ✅ Referral detected: <b>${ref}</b><br/>
-      <span style="opacity:.75;font-size:12px;">Will be applied at checkout</span>
+      ✓ ${referralDetected}<br/>
+      <span style="opacity:.75;font-size:12px;">${referralCheckout}</span>
     </div>
   `;
 

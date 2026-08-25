@@ -94,7 +94,11 @@
     safeRun("topText", () => {
       if ($("symText")) $("symText").textContent = sym;
       if ($("priceText") && lastClose != null) $("priceText").textContent = Number(lastClose).toFixed(2);
-      setHint("Market snapshot loaded");
+      setHint(
+        window.DARRIUS_T?.(
+          "marketSnapshotLoaded"
+        ) || "Market snapshot loaded"
+      );
     });
   }
 
@@ -105,8 +109,22 @@
     try {
       const meta = (snap && snap.meta) || {};
       const p = String(meta.provider || meta.effective_source || snap.source || "").toLowerCase();
-      if (p === "demo") window.__DATA_SOURCE_BADGE__ = "DEMO";
-      else if (p === "twelve") window.__DATA_SOURCE_BADGE__ = `DELAYED ${meta.delayed_minutes || 15}m`;
+      if (p === "demo") {
+        window.__DATA_SOURCE_BADGE__ =
+          window.DARRIUS_T?.("bucketDemo") ||
+          "DEMO";
+      }
+      else if (p === "twelve") {
+        const delayedTemplate =
+          window.DARRIUS_T?.("dataDelayed") ||
+          "DELAYED {minutes}m";
+
+        window.__DATA_SOURCE_BADGE__ =
+          delayedTemplate.replace(
+            "{minutes}",
+            String(meta.delayed_minutes || 15)
+          );
+      }
       const el = document.getElementById("dataSourceBadge");
       if (el && window.__DATA_SOURCE_BADGE__) el.textContent = window.__DATA_SOURCE_BADGE__;
     } catch (e) {}
@@ -479,6 +497,15 @@
     pollInFlight: false,
   };
 
+  document.addEventListener(
+    "darrius:language-changed",
+    () => {
+      if (S.lastSnapshot) {
+        updateMetaBadge(S.lastSnapshot);
+      }
+    }
+  );
+
   // -----------------------------
   // Time display helpers
   // - Intraday TFs: convert to New York time
@@ -841,7 +868,10 @@
       const limit = DEFAULTS.limit;
 
       const ds = readSourceFromUI();
-      setHint("Loading market snapshot...");
+      setHint(
+        window.DARRIUS_T?.("loadingMarketSnapshot") ||
+        "Loading market snapshot..."
+      );
 
       const raw = await fetchSnapshot(symbol, tf, limit);
       renderSnapshot(symbol, tf, raw);
@@ -850,7 +880,16 @@
     } catch (e) {
       const msg = (e && e.message) ? e.message : String(e);
       console.error("[ChartCore] LOAD_FAIL", msg, e);
-      setHint(`Snapshot failed · ${msg}`);
+      const snapshotFailedTemplate =
+        window.DARRIUS_T?.("snapshotFailed") ||
+        "Snapshot failed · {message}";
+
+      setHint(
+        snapshotFailedTemplate.replace(
+          "{message}",
+          msg
+        )
+      );
       return false;
     } finally {
       S.pollInFlight = false;
@@ -919,9 +958,12 @@
 
     } catch (e) {
       console.error("[ChartCore] EXPORT_FAIL", e);
-      alert("Unable to export the chart. Please try again.");
+      alert(
+        window.DARRIUS_T?.("unableExportChart") ||
+        "Unable to export the chart. Please try again."
+      );
     }
-}
+  }
 
   function init(opts) {
     S.opts = Object.assign({}, S.opts, (opts || {}));

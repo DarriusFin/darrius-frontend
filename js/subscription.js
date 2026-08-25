@@ -200,11 +200,34 @@
     for (const p of PLANS) {
       const opt = document.createElement("option");
       opt.value = p.key;
-      opt.textContent = p.label || p.key;
+      const planKey =
+        String(p.key || "").toLowerCase();
+
+      const planTranslationKey = {
+        weekly: "planWeekly",
+        monthly: "planMonthly",
+        quarterly: "planQuarterly",
+        yearly: "planYearly",
+      }[planKey];
+
+      opt.textContent =
+        (planTranslationKey &&
+          window.DARRIUS_T?.(planTranslationKey)) ||
+        p.label ||
+        p.key;
       sel.appendChild(opt);
     }
 
-    setPlanStatusText(`${PLANS.length} Plans Available`);
+    const plansAvailableTemplate =
+      window.DARRIUS_T?.("plansAvailable") ||
+      "{count} Plans Available";
+
+    setPlanStatusText(
+      plansAvailableTemplate.replace(
+        "{count}",
+        String(PLANS.length)
+      )
+    );
     const subBtn = $(IDS.subscribeBtn);
     if (subBtn) subBtn.disabled = PLANS.length === 0;
   }
@@ -256,24 +279,47 @@
 
   async function initPlans() {
     try {
-      setPlanStatusText("Loading plans...");
+      setPlanStatusText(
+        window.DARRIUS_T?.("loadingPlans") ||
+        "Loading plans..."
+      );
       const plans = await loadPlansPreferred();
       populatePlans(plans);
-      setStatusBadge("API OK", true);
+      setStatusBadge(
+        window.DARRIUS_T?.("apiOk") ||
+        "API OK",
+        true
+      );
       log(`✅ plans: loaded from /api/plans (${plans.length})`);
       return;
     } catch (e1) {
       try {
         const plans = await loadPlansLegacy();
         populatePlans(plans);
-        setPlanStatusText(`${plans.length} Plans Available`);
+        const plansAvailableTemplate =
+          window.DARRIUS_T?.("plansAvailable") ||
+          "{count} Plans Available";
+
+        setPlanStatusText(
+          plansAvailableTemplate.replace(
+            "{count}",
+            String(plans.length)
+          )
+        );
         log(`⚠️ plans: loaded from /billing/prices fallback (${plans.length})`);
         return;
       } catch (e2) {
         const fallback = getLocalFallbackPlans();
         populatePlans(fallback);
-        setPlanStatusText("Plans Available");
-        setStatusBadge("API Degraded", false);
+        setPlanStatusText(
+          window.DARRIUS_T?.("plansAvailableGeneric") ||
+          "Plans Available"
+        );
+        setStatusBadge(
+          window.DARRIUS_T?.("apiDegraded") ||
+          "API Degraded",
+          false
+        );
         if (isAdmin()) log(`❌ initPlans failed: ${e1.message} / ${e2.message} -> local fallback`);
       }
     }
@@ -292,7 +338,11 @@
     if (body.ref_landing) body.ref_landing = String(body.ref_landing).trim().slice(0, 256);
     if (body.plan) body.plan = String(body.plan).trim().slice(0, 24);
 
-    setStatusBadge("Creating checkout…", true);
+    setStatusBadge(
+      window.DARRIUS_T?.("creatingCheckout") ||
+      "Creating checkout…",
+      true
+    );
     if (isAdmin()) log(
       `➡️ [${nowISOTime()}] POST /api/billing/checkout ${JSON.stringify(body)}`
     );
@@ -314,7 +364,11 @@
       throw new Error(msg);
     }
 
-    setStatusBadge("Redirecting to Stripe…", true);
+    setStatusBadge(
+      window.DARRIUS_T?.("redirectingToStripe") ||
+      "Redirecting to Stripe…",
+      true
+    );
     window.location.href = checkoutUrl;
   }
 
@@ -346,6 +400,7 @@
     if (!signedIn) {
       if (!user_id) {
         alert(
+          window.DARRIUS_T?.("userIdRequiredToCreateAccount") ||
           "User ID is required to create your account."
         );
         $(IDS.userId)?.focus?.();
@@ -354,6 +409,7 @@
 
       if (!email) {
         alert(
+          window.DARRIUS_T?.("emailRequiredToCreateAccount") ||
           "Email is required to create your account."
         );
         $(IDS.email)?.focus?.();
@@ -375,7 +431,10 @@
     }
 
     if (!price_id) {
-      alert("Price ID was not found. Please refresh the page or contact support.");
+      alert(
+        window.DARRIUS_T?.("priceIdNotFound") ||
+        "Price ID was not found. Please refresh the page or contact support."
+      );
       return;
     }
 
@@ -398,11 +457,19 @@
     try {
       await createCheckoutSession(payload);
     } catch (e) {
-      setStatusBadge("Network/API error", false);
+      setStatusBadge(
+        window.DARRIUS_T?.("networkApiError") ||
+        "Network/API error",
+        false
+      );
       if (isAdmin()) log(`❌ subscribe failed: ${e.message}`);
       alert(
-        "Subscription failed due to a network or server error.\n\n" +
-        "Error:\n" +
+        (window.DARRIUS_T?.("subscriptionNetworkError") ||
+          "Subscription failed due to a network or server error.") +
+        "\n\n" +
+        (window.DARRIUS_T?.("errorLabel") ||
+          "Error:") +
+        "\n" +
         e.message
       );
     }
@@ -420,7 +487,48 @@
     const bucket = String(policy?.bucket || "").toUpperCase().trim();
     const has = !!policy?.has_access;
 
-    const txt = en || zh ? `${en}${zh ? " / " + zh : ""}` : `Access: ${bucket || (has ? "ACTIVE" : "DEMO")}`;
+    const lang =
+      window.__DARRIUS_LANGUAGE__ ||
+      "en";
+
+    let txt = "";
+
+    if (lang === "zh-CN") {
+      txt = zh || en;
+    } else {
+      txt = en || zh;
+    }
+
+    if (!txt) {
+      const fallbackBucket =
+        bucket ||
+        (has ? "ACTIVE" : "DEMO");
+
+      const fallbackKey = {
+        ACTIVE: "bucketActive",
+        TRIAL: "bucketTrial",
+        PENDING: "bucketPending",
+        GRACE: "bucketGrace",
+        EXPIRED: "bucketExpired",
+        UNKNOWN: "unknown",
+        DEMO: "bucketDemo",
+      }[fallbackBucket];
+
+      const statusLabel =
+        (fallbackKey &&
+          window.DARRIUS_T?.(fallbackKey)) ||
+        fallbackBucket;
+
+      const accessTemplate =
+        window.DARRIUS_T?.("accessStatus") ||
+        "Access: {status}";
+
+      txt =
+        accessTemplate.replace(
+          "{status}",
+          statusLabel
+        );
+    }
     const pill = $(IDS.accessPillText);
     if (pill) pill.textContent = txt;
 
@@ -442,25 +550,103 @@
     if (bucket === "ACTIVE") {
       text =
         plan && plan.toLowerCase() !== "unknown"
-          ? `Active Plan: ${plan}`
-          : "Active Subscription";
+          ? (() => {
+            const planKey =
+              String(plan).toLowerCase();
+
+            const planTranslationKey = {
+              weekly: "planWeekly",
+              monthly: "planMonthly",
+              quarterly: "planQuarterly",
+              yearly: "planYearly",
+            }[planKey];
+
+            const planLabel =
+              (
+                planTranslationKey &&
+                window.DARRIUS_T?.(
+                  planTranslationKey
+                )
+              ) || plan;
+
+            const template =
+              window.DARRIUS_T?.("activePlan") ||
+              "Active Plan: {plan}";
+
+            return template.replace(
+              "{plan}",
+              planLabel
+            );
+          })()
+          : (
+            window.DARRIUS_T?.("activeSubscription") ||
+            "Active Subscription"
+          );
     } else if (bucket === "TRIAL") {
-      text = "Trial Access";
+      text =
+        window.DARRIUS_T?.("trialAccess") ||
+        "Trial Access";
     } else if (bucket === "PENDING") {
-      text = "Subscription Pending";
+      text =
+        window.DARRIUS_T?.("subscriptionPending") ||
+        "Subscription Pending";
     } else if (bucket === "GRACE") {
-      text = "Payment Issue — Access Temporarily Available";
+      text =
+        window.DARRIUS_T?.("paymentIssueGrace") ||
+        "Payment Issue — Access Temporarily Available";
     } else if (bucket === "EXPIRED") {
-      text = "Subscription Expired";
+      text =
+        window.DARRIUS_T?.("subscriptionExpired") ||
+        "Subscription Expired";
     } else {
-      text = "No Active Subscription";
+      text =
+        window.DARRIUS_T?.("noActiveSubscription") ||
+        "No Active Subscription";
     }
 
-    if (cpe && ["ACTIVE", "TRIAL", "GRACE"].includes(bucket)) {
+    if (
+      cpe &&
+      ["ACTIVE", "TRIAL", "GRACE"].includes(bucket)
+    ) {
       try {
         const d = new Date(cpe);
+
         if (!isNaN(d.getTime())) {
-          text += ` · Ends ${d.toISOString().slice(0, 10)}`;
+          const lang =
+            window.__DARRIUS_LANGUAGE__ ||
+            "en";
+
+          const locale =
+            lang === "zh-CN"
+              ? "zh-CN"
+              : "en-US";
+
+          const dateText =
+            d.toLocaleDateString(
+              locale,
+              lang === "zh-CN"
+                ? {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  }
+                : {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  }
+            );
+
+          const endsTemplate =
+            window.DARRIUS_T?.("endsOn") ||
+            "Ends {date}";
+
+          text +=
+            " · " +
+            endsTemplate.replace(
+              "{date}",
+              dateText
+            );
         }
       } catch (_) {}
     }
@@ -469,7 +655,19 @@
 
     const b = $(IDS.accessBadge);
     if (b) {
-      b.textContent = bucket;
+      const bucketTranslationKey = {
+        ACTIVE: "bucketActive",
+        TRIAL: "bucketTrial",
+        PENDING: "bucketPending",
+        GRACE: "bucketGrace",
+        EXPIRED: "bucketExpired",
+        UNKNOWN: "unknown",
+      }[bucket];
+
+      b.textContent =
+        (bucketTranslationKey &&
+          window.DARRIUS_T?.(bucketTranslationKey)) ||
+        bucket;
       b.classList.remove(
         "ACTIVE",
         "TRIAL",
@@ -498,7 +696,10 @@
 
       // Signed-in users: subscription identity comes from server session.
       if (window.__AUTH_USER_ID__) {
-        setSubStatusText("CHECKING...");
+        setSubStatusText(
+          window.DARRIUS_T?.("checking") ||
+          "CHECKING..."
+        );
 
         policy = await apiGet("/api/subscription/me");
       } else {
@@ -506,6 +707,9 @@
         window.__ENTITLEMENT__ = null;
 
         setSubStatusText(
+          window.DARRIUS_T?.(
+            "signInToCheckSubscription"
+          ) ||
           "Sign in to check your subscription"
         );
 
@@ -552,6 +756,7 @@
       window.__ENTITLEMENT__ = null;
 
       setSubStatusText(
+        window.DARRIUS_T?.("unableLoadSubscriptionStatus") ||
         "Unable to load subscription status"
       );
 
@@ -589,13 +794,23 @@
       const msg = String(e?.message || "");
 
       if (msg.includes('"authentication_required"')) {
-        alert("Please sign in before managing your subscription.");
+        alert(
+          window.DARRIUS_T?.("signInBeforeManagingSubscription") ||
+          "Please sign in before managing your subscription."
+        );
       } else if (msg.includes('"subscription_not_found"')) {
-        alert("No active subscription was found for this account.");
+        alert(
+          window.DARRIUS_T?.("noActiveSubscriptionFound") ||
+          "No active subscription was found for this account."
+        );
       } else if (msg.includes('"no_stripe_customer_for_user"')) {
-        alert("Billing management is not available for this account yet.");
+        alert(
+          window.DARRIUS_T?.("billingManagementUnavailable") ||
+          "Billing management is not available for this account yet."
+        );
       } else {
         alert(
+          window.DARRIUS_T?.("subscriptionManagementUnavailable") ||
           "Subscription management is temporarily unavailable. Please try again later."
         );
       }
@@ -631,6 +846,31 @@
     window.addEventListener(
       "darrius:auth-changed",
       () => {
+        refreshSubscriptionStatus();
+      }
+    );
+
+    document.addEventListener(
+      "darrius:language-changed",
+      () => {
+        const sel = $(IDS.planSelect);
+        const selectedPlan =
+          sel ? sel.value : "";
+
+        if (PLANS.length) {
+          populatePlans(PLANS);
+
+          if (
+            sel &&
+            selectedPlan &&
+            PLANS.some(
+              (p) => p.key === selectedPlan
+            )
+          ) {
+            sel.value = selectedPlan;
+          }
+        }
+
         refreshSubscriptionStatus();
       }
     );

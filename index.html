@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en" dir="ltr">
 <head>
 
   <!-- ✅ Referral ref capture (must be earliest) -->
@@ -18,7 +18,9 @@
 
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DarriusAI · Inflection Hunter | AI Decision System</title>
+  <title data-i18n="pageTitle">
+    DarriusAI · Inflection Hunter | AI Decision System
+  </title>
 
   <!-- Lightweight Charts (required by chart.core.js) -->
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
@@ -1189,6 +1191,89 @@
     .footerLinks a:hover{
       color:var(--brand1);
     }
+
+    .languageMenu{
+      position:relative;
+    }
+
+    .languageTrigger{
+      display:flex;
+      align-items:center;
+      gap:7px;
+      min-height:32px;
+      padding:6px 10px;
+
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:999px;
+
+      background:rgba(255,255,255,.04);
+      color:var(--text);
+
+      font:inherit;
+      font-size:12px;
+      font-weight:700;
+
+      cursor:pointer;
+    }
+
+    .languageTrigger:hover{
+      border-color:rgba(255,255,255,.18);
+      background:rgba(255,255,255,.07);
+    }
+
+    .languageIcon{
+      font-size:13px;
+    }
+
+    .languageChevron{
+      color:var(--muted);
+      font-size:10px;
+    }
+
+    .languageDropdown{
+      position:absolute;
+      top:calc(100% + 8px);
+      right:0;
+      z-index:1000;
+
+      min-width:150px;
+      padding:6px;
+
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+
+      background:rgba(16,20,30,.98);
+      box-shadow:0 14px 36px rgba(0,0,0,.35);
+    }
+
+    .languageOption{
+      display:block;
+      width:100%;
+
+      padding:9px 10px;
+      border:0;
+      border-radius:8px;
+
+      background:transparent;
+      color:var(--muted);
+
+      text-align:left;
+      font:inherit;
+      font-size:12px;
+      font-weight:700;
+
+      cursor:pointer;
+    }
+
+    .languageOption:hover{
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+    }
+
+    .languageOption.active{
+      color:var(--brand1);
+      background:rgba(255,255,255,.05);
+    }
   </style>
 </head>
 
@@ -1200,16 +1285,60 @@
       </div>
       <div id="brandText">
         <div id="brandLine1">
-          <span class="accent">DarriusAI</span> · Inflection Hunter
+          <span class="accent">DarriusAI</span> ·
+          <span data-i18n="inflectionHunter">Inflection Hunter</span>
         </div>
         <div id="brandLine2">
-          <span class="chip brand">AI Decision System</span>
-          <span class="chip">Inflection Hunter</span>
+          <span class="chip brand" data-i18n="aiDecisionSystem">
+            AI Decision System
+          </span>
+          <span class="chip" data-i18n="inflectionHunter">
+            Inflection Hunter
+          </span>
         </div>
       </div>
     </div>
 
     <div id="topRight">
+
+      <div class="languageMenu" id="languageMenu">
+        <button
+          type="button"
+          class="languageTrigger"
+          id="languageTrigger"
+          aria-haspopup="true"
+          aria-expanded="false"
+        >
+          <span class="languageIcon" aria-hidden="true">🌐</span>
+          <span id="currentLanguageLabel">English</span>
+          <span class="languageChevron" aria-hidden="true">▾</span>
+        </button>
+
+        <div
+          class="languageDropdown"
+          id="languageDropdown"
+          role="menu"
+          hidden
+        >
+          <button
+            type="button"
+            class="languageOption active"
+            data-lang="en"
+            role="menuitem"
+          >
+            English
+          </button>
+
+          <button
+            type="button"
+            class="languageOption"
+            data-lang="zh-CN"
+            role="menuitem"
+          >
+            中文
+          </button>
+        </div>
+      </div>
 
       <a
         href="docs/DarriusAI_User_Manual_V4.0.pdf"
@@ -1217,30 +1346,52 @@
         rel="noopener noreferrer"
         class="pill"
         style="text-decoration:none; cursor:pointer;"
+        data-i18n="userManual"
       >
         User Manual
       </a>
 
       <div id="statusBadge" class="pill">
         <span class="dot"></span>
-        <span id="statusText">Dashboard Ready</span>
+        <span
+          id="statusText"
+          data-i18n="dashboardReady"
+        >
+          Dashboard Ready
+        </span>
       </div>
-      <div id="copyright">© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
+      <div id="copyright">
+        © <span id="yearNow"></span> Darrius FinTech Inc.
+        <span data-i18n="allRightsReserved">All Rights Reserved.</span>
+      </div>
     </div>
   </div>
 
   <!-- UPDATE ANNOUNCEMENT -->
   <div id="updateAnnouncement" class="updateAnnouncement">
-    <div class="updateAnnouncementBadge">NEW</div>
+    <div
+      class="updateAnnouncementBadge"
+      data-i18n="announcementNew"
+    >
+      NEW
+    </div>
 
     <div class="updateAnnouncementContent">
-      <div class="updateAnnouncementTitle">
+
+      <div
+        class="updateAnnouncementTitle"
+        data-i18n="announcementTitle"
+      >
         Rank Engine · Top 10 is now available
       </div>
 
-      <div class="updateAnnouncementDesc">
+      <div
+        class="updateAnnouncementDesc"
+        data-i18n="announcementDesc"
+      >
         AI-assisted stock ranking is now available for eligible accounts.
       </div>
+
     </div>
 
     <button
@@ -1248,7 +1399,7 @@
       id="announcementRankBtn"
       class="updateAnnouncementAction"
     >
-      Explore
+      <span data-i18n="explore">Explore</span>
     </button>
 
     <button
@@ -1256,6 +1407,7 @@
       id="announcementCloseBtn"
       class="updateAnnouncementClose"
       aria-label="Close update announcement"
+      data-i18n-aria-label="closeUpdateAnnouncement"
     >
       ×
     </button>
@@ -1273,7 +1425,7 @@
           <span id="priceText">—</span>
         </div>
 
-        <div id="hintText">Loading…</div>
+        <div id="hintText" data-i18n="loading">Loading…</div>
 
         <div id="tfQuick">
           <button class="tfBtn" data-tf="5m">5m</button>
@@ -1292,6 +1444,8 @@
             class="chartActionBtn"
             id="copyLinkBtn"
             title="Copy chart link"
+            data-i18n="share"
+            data-i18n-title="copyChartLink"
           >
             Share
           </button>
@@ -1301,6 +1455,8 @@
             class="chartActionBtn"
             id="exportBtn"
             title="Export chart as PNG"
+            data-i18n="export"
+            data-i18n-title="exportChartPng"
           >
             Export
           </button>
@@ -1315,7 +1471,9 @@
         </div>
 
         <div id="mutantPanel">
-          <div id="mutantTitle">Darrius Mutant</div>
+          <div id="mutantTitle" data-i18n="darriusMutant">
+            Darrius Mutant
+          </div>
         </div>
       </div>
     </div>
@@ -1330,7 +1488,7 @@
         <section class="toolView is-active" data-tool-view="pulse">
 
           <div class="toolViewHeader">
-            <span>Market Pulse</span>
+            <span data-i18n="marketPulse">Market Pulse</span>
             <span class="toolViewMeta" id="pulseTag">LIVE</span>
           </div>
 
@@ -1343,27 +1501,30 @@
 
                 <div class="gaugeCenter">
                   <div class="num" id="pulseScore">—</div>
-                  <div class="lbl">Sentiment</div>
+                  <div class="lbl" data-i18n="sentiment">Sentiment</div>
                 </div>
               </div>
 
               <div class="kv">
-                <span>Bullish</span>
+                <span data-i18n="bullish">Bullish</span>
                 <b id="bullPct">—</b>
 
-                <span>Bearish</span>
+                <span data-i18n="bearish">Bearish</span>
                 <b id="bearPct" style="color:var(--danger)">—</b>
 
-                <span>Neutral</span>
+                <span data-i18n="neutral">Neutral</span>
                 <b id="neuPct">—</b>
 
-                <span>Net Inflow</span>
+                <span data-i18n="netInflow">Net Inflow</span>
                 <b id="netInflow" style="color:var(--brand1)">—</b>
               </div>
 
             </div>
 
-            <div class="toolViewFooter">
+            <div
+              class="toolViewFooter"
+              data-i18n="derivedFromMainChart"
+            >
               Derived from the main chart only.
             </div>
 
@@ -1375,30 +1536,30 @@
         <section class="toolView" data-tool-view="risk">
 
           <div class="toolViewHeader">
-            <span>Risk Copilot</span>
+            <span data-i18n="riskCopilot">Risk Copilot</span>
             <span class="toolViewMeta" id="riskMode">AUTO</span>
           </div>
 
           <div class="toolViewBody">
 
             <div class="kv">
-              <span>Entry</span>
+              <span data-i18n="riskEntryLabel">Entry</span>
               <b id="riskEntry">—</b>
 
-              <span>Stop</span>
+              <span data-i18n="riskStopLabel">Stop</span>
               <b id="riskStop" style="color:var(--danger)">—</b>
 
-              <span>Targets</span>
+              <span data-i18n="riskTargetsLabel">Targets</span>
               <b id="riskTargets">—</b>
 
-              <span>Confidence</span>
+              <span data-i18n="riskConfidenceLabel">Confidence</span>
               <b id="riskConf">—</b>
 
-              <span>Backtest Win Rate</span>
+              <span data-i18n="riskBacktestWinRateLabel">Backtest Win Rate</span>
               <b id="riskWR">—</b>
             </div>
 
-            <div class="toolViewFooter">
+            <div class="toolViewFooter" data-i18n="riskLevelsDisclaimer">
               Levels are model-derived estimates based on the active chart context.
             </div>
 
@@ -1410,13 +1571,17 @@
         <section class="toolView" data-tool-view="rank">
 
           <div class="toolViewHeader">
-            <span>Rank Engine</span>
-            <span class="toolViewMeta">TOP 10</span>
+            <span data-i18n="rankEngine">Rank Engine</span>
+            <span class="toolViewMeta" data-i18n="top10">TOP 10</span>
           </div>
 
           <div class="toolViewBody">
 
-            <div class="small" style="margin-bottom:18px;">
+            <div
+              class="small"
+              style="margin-bottom:18px;"
+              data-i18n="rankEngineDescription"
+            >
               AI-assisted ranking highlights stocks with the strongest combined
               market pulse and model signals.
             </div>
@@ -1425,11 +1590,15 @@
               class="btn"
               id="rankEngineBtn"
               style="width:100%;"
+              data-i18n="openRankEngine"
             >
               Open Rank Engine
             </button>
 
-            <div class="toolViewFooter">
+            <div
+              class="toolViewFooter"
+              data-i18n="rankingAccess"
+            >
               Ranking access depends on your current subscription.
             </div>
 
@@ -1448,16 +1617,16 @@
         <section class="toolView" data-tool-view="controls">
 
           <div class="toolViewHeader">
-            <span>Chart Controls</span>
-            <span class="toolViewMeta">MARKET</span>
+            <span data-i18n="chartControls">Chart Controls</span>
+            <span class="toolViewMeta" data-i18n="marketMeta">MARKET</span>
           </div>
 
           <div class="toolViewBody">
 
             <div class="field">
               <div class="label">
-                <span>Data Source</span>
-                <span class="small">Licensed Data</span>
+                <span data-i18n="dataSource">Data Source</span>
+                <span class="small" data-i18n="licensedData">Licensed Data</span>
              </div>
 
               <select id="dataSource" disabled>
@@ -1465,14 +1634,18 @@
               </select>
             </div>
 
-            <div class="toolViewFooter" style="margin-top:12px; margin-bottom:18px;">
+            <div
+              class="toolViewFooter"
+              style="margin-top:12px; margin-bottom:18px;"
+              data-i18n="licensedMarketDataProvided"
+            >
               Licensed market data provided via Twelve Data Pro.
             </div>
 
             <div class="field">
               <div class="label">
-                <span>Symbol</span>
-                <span class="small">e.g. TSLA / AAPL</span>
+                <span data-i18n="symbol">Symbol</span>
+                <span class="small" data-i18n="symbolExample">e.g. TSLA / AAPL</span>
               </div>
 
               <input id="symbol" value="TSLA"/>
@@ -1480,22 +1653,26 @@
 
             <div class="field">
               <div class="label">
-                <span>Timeframe</span>
+                <span data-i18n="timeframe">Timeframe</span>
               </div>
 
               <select id="tf">
-                <option value="5m">5 Minutes</option>
-                <option value="15m">15 Minutes</option>
-                <option value="30m">30 Minutes</option>
-                <option value="1h">1 Hour</option>
-                <option value="4h">4 Hours</option>
-                <option value="1d">1 Day</option>
-                <option value="1w">1 Week</option>
-                <option value="1M">1 Month</option>
+                <option value="5m" data-i18n="timeframe5m">5 Minutes</option>
+                <option value="15m" data-i18n="timeframe15m">15 Minutes</option>
+                <option value="30m" data-i18n="timeframe30m">30 Minutes</option>
+                <option value="1h" data-i18n="timeframe1h">1 Hour</option>
+                <option value="4h" data-i18n="timeframe4h">4 Hours</option>
+                <option value="1d" data-i18n="timeframe1d">1 Day</option>
+                <option value="1w" data-i18n="timeframe1w">1 Week</option>
+                <option value="1M" data-i18n="timeframe1M">1 Month</option>
               </select>
             </div>
 
-            <button class="btn" id="loadBtn">
+            <button
+              class="btn"
+              id="loadBtn"
+              data-i18n="loadSymbol"
+            >
               Load Symbol
             </button>
 
@@ -1527,7 +1704,7 @@
               </label>
             </div>
 
-            <div class="toolViewFooter">
+            <div class="toolViewFooter" data-i18n="emaAuxManagedInternally">
               EMA and AUX parameters are managed internally.
             </div>
 
@@ -1540,8 +1717,14 @@
         <section class="toolView" data-tool-view="account">
 
           <div class="toolViewHeader">
-            <span>Account</span>
-            <span class="toolViewMeta" id="accountMeta">GUEST</span>
+            <span data-i18n="account">Account</span>
+            <span
+              class="toolViewMeta"
+              id="accountMeta"
+              data-i18n="guest"
+            >
+              GUEST
+            </span>
           </div>
 
           <div class="toolViewBody">
@@ -1550,8 +1733,17 @@
             <div class="accountSection">
 
               <div class="accountSectionHeader">
-                <span class="accountSectionTitle">Subscription</span>
-                <span class="accountSectionMeta" id="planStatus">
+                <span
+                  class="accountSectionTitle"
+                  data-i18n="subscription"
+                >
+                  Subscription
+                </span>
+                <span
+                  class="accountSectionMeta"
+                  id="planStatus"
+                  data-i18n="loadingPlans"
+                >
                   Loading plans...
                 </span>
               </div>
@@ -1561,7 +1753,7 @@
                 class="toolViewFooter"
                 style="display:none; margin-bottom:12px;"
               >
-                Signed in as
+                <span data-i18n="signedInAs">Signed in as</span>
                 <strong id="accountSignedInUser">—</strong>
               </div>
 
@@ -1574,6 +1766,7 @@
                   class="btnGhost"
                   id="accountPageBtn"
                   style="width:100%;"
+                  data-i18n="accountSubscription"
                 >
                   Account & Subscription
                 </button>
@@ -1583,8 +1776,8 @@
 
               <div class="field">
                 <div class="label">
-                  <span>User ID</span>
-                  <span class="small">Required</span>
+                  <span data-i18n="userId">User ID</span>
+                  <span class="small" data-i18n="required">Required</span>
                 </div>
                 <input id="userId" placeholder/>
               </div>
@@ -1595,6 +1788,7 @@
                   type="button"
                   class="btnGhost"
                   id="sendVerifyBtn"
+                  data-i18n="sendVerificationCode"
                 >
                   Send Verification Code
                 </button>
@@ -1605,8 +1799,8 @@
                   style="display:none; margin-top:10px;"
                 >
                   <div class="label">
-                    <span>Verification Code</span>
-                    <span class="small">6 digits</span>
+                    <span data-i18n="verificationCode">Verification Code</span>
+                    <span class="small" data-i18n="sixDigits">6 digits</span>
                   </div>
 
                   <div class="row2">
@@ -1622,6 +1816,7 @@
                       type="button"
                       class="btnGhost"
                       id="verifyCodeBtn"
+                      data-i18n="verify"
                     >
                       Verify
                     </button>
@@ -1632,6 +1827,7 @@
                   id="authStatusText"
                   class="toolViewFooter"
                   style="margin-top:10px;"
+                  data-i18n="notSignedIn"
                 >
                   Not signed in
                 </div>
@@ -1642,19 +1838,19 @@
 
               <div class="field" id="accountEmailField">
                 <div class="label">
-                  <span>Email</span>
-                  <span class="small">Required</span>
+                  <span data-i18n="email">Email</span>
+                  <span class="small" data-i18n="required">Required</span>
                 </div>
                 <input id="email" placeholder/>
               </div>
 
               <div class="field" id="accountPlanField">
                 <div class="label">
-                  <span>Plan</span>
+                  <span data-i18n="plan">Plan</span>
                 </div>
 
                 <select id="planSelect">
-                  <option value="">Loading...</option>
+                  <option value="" data-i18n="loadingOption">Loading...</option>
                 </select>
               </div>
 
@@ -1663,7 +1859,12 @@
                 id="accountCheckoutActions"
                 style="margin-top:0; grid-template-columns:1fr;"
               >
-                <button class="btn" id="subscribeBtn" disabled>
+                <button
+                  class="btn"
+                  id="subscribeBtn"
+                  disabled
+                  data-i18n="subscribe"
+                >
                   Subscribe
                 </button>
               </div>
@@ -1673,7 +1874,12 @@
                 id="accountSessionActions"
                 style="display:none; margin-top:10px;"
               >
-                <button class="btnGhost" id="manageBtn" disabled>
+                <button
+                  class="btnGhost"
+                  id="manageBtn"
+                  disabled
+                  data-i18n="managePlan"
+                >
                   Manage Plan
                 </button>
 
@@ -1681,6 +1887,7 @@
                   type="button"
                   class="btnGhost"
                   id="signOutBtn"
+                  data-i18n="signOut"
                 >
                   Sign Out
                 </button>
@@ -1688,8 +1895,8 @@
 
               <div class="toolViewFooter">
                 <div>
-                  Status:
-                  <span id="subStatusText">Unknown</span>
+                  <span data-i18n="statusLabel">Status:</span>
+                  <span id="subStatusText" data-i18n="unknown">Unknown</span>
 
                   <span
                     id="accessBadge"
@@ -1699,7 +1906,10 @@
                   </span>
                 </div>
 
-                <div style="margin-top:8px;">
+                <div
+                  style="margin-top:8px;"
+                  data-i18n="trialPaymentNotice"
+                >
                   Trial access requires a valid payment method. Access is disabled
                   automatically if payment is not completed when the trial ends.
                 </div>
@@ -1711,15 +1921,24 @@
             <div class="accountSection" id="affiliateCard">
 
               <div class="accountSectionHeader">
-                <span class="accountSectionTitle">Affiliate Program</span>
-                <span class="accountSectionMeta">PARTNERS</span>
+                <span
+                  class="accountSectionTitle"
+                  data-i18n="affiliateProgram"
+                >
+                  Affiliate Program
+                </span>
+                <span class="accountSectionMeta" data-i18n="partners">PARTNERS</span>
               </div>
 
-              <button class="btnGhost" id="affiliateBtn">
+              <button
+                class="btnGhost"
+                id="affiliateBtn"
+                data-i18n="openAffiliateProgram"
+              >
                 Open Affiliate Program
               </button>
 
-              <div class="toolViewFooter">
+              <div class="toolViewFooter" data-i18n="affiliateCommissionTerms">
                 Commission terms are available in the dashboard and affiliate agreement.
               </div>
 
@@ -1727,22 +1946,22 @@
 
             <div id="leftDisclaimer">
               <div class="disclaimerBlock">
-                <div class="disclaimerTitle">Disclaimer</div>
+                <div class="disclaimerTitle" data-i18n="disclaimer">Disclaimer</div>
 
-                <div class="disclaimerText">
+                <div class="disclaimerText" data-i18n="disclaimerInformational">
                   For informational purposes only. Nothing on this platform constitutes
                   investment advice, a recommendation, or an offer or solicitation to buy
                   or sell any security or financial instrument.
                 </div>
 
-                <div class="disclaimerText">
+                <div class="disclaimerText" data-i18n="disclaimerRisk">
                   Signals and analytics are algorithmic estimates and may be inaccurate,
                   delayed, or incomplete. Past performance is not indicative of future
                   results. You are solely responsible for your investment decisions and risk.
                 </div>
 
                 <div class="disclaimerSupport">
-                  Support:
+                  <span data-i18n="supportLabel">Support:</span>
                   <a href="mailto:support@darrius.ai">support@darrius.ai</a>
                 </div>
               </div>
@@ -1754,19 +1973,30 @@
 
                 <span>·</span>
 
-                <a href="#" onclick="alert('Terms page coming soon'); return false;">
+                <a
+                  href="#"
+                  onclick="alert(window.DARRIUS_T?.('termsComingSoon') || 'Terms page coming soon'); return false;"
+                  data-i18n="terms"
+                >
                   Terms
                 </a>
 
                 <span>·</span>
 
-                <a href="#" onclick="alert('Privacy Policy page coming soon'); return false;">
+                <a
+                  href="#"
+                  onclick="alert(window.DARRIUS_T?.('privacyComingSoon') || 'Privacy Policy page coming soon'); return false;"
+                  data-i18n="privacy"
+                >
                   Privacy
                 </a>
 
                 <span>·</span>
 
-                <a href="mailto:support@darrius.ai">
+                <a
+                  href="mailto:support@darrius.ai"
+                  data-i18n="support"
+                >
                   Support
                 </a>
               </div>
@@ -1778,20 +2008,34 @@
 
         <!-- TradingView Attribution slot -->
         <div id="tvAttribution" class="tvAttr hidden">
-          <span class="tvAttrLabel">Chart:</span>
-          <a id="tvAttrLink" href="https://www.tradingview.com/" target="_blank" rel="noreferrer">Charting by TradingView</a>
+          <span class="tvAttrLabel" data-i18n="chartLabel">Chart:</span>
+          <a
+            id="tvAttrLink"
+            href="https://www.tradingview.com/"
+            target="_blank"
+            rel="noreferrer"
+            data-i18n="chartingByTradingView"
+          >
+            Charting by TradingView
+          </a>
         </div>
       </div>
     </div>
       </div>
 
-      <nav id="toolRail" aria-label="Dashboard tools">
+      <nav
+        id="toolRail"
+        aria-label="Dashboard tools"
+        data-i18n-aria-label="dashboardTools"
+      >
         <button
           type="button"
           class="toolRailBtn is-active"
           data-tool="pulse"
           aria-label="Market Pulse"
           title="Market Pulse"
+          data-i18n-aria-label="marketPulse"
+          data-i18n-title="marketPulse"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M3 12h4l2-6 4 12 2-6h6"/>
@@ -1804,6 +2048,8 @@
           data-tool="risk"
           aria-label="Risk Copilot"
           title="Risk Copilot"
+          data-i18n-aria-label="riskCopilot"
+          data-i18n-title="riskCopilot"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/>
@@ -1816,6 +2062,8 @@
           data-tool="rank"
           aria-label="Rank Engine"
           title="Rank Engine"
+          data-i18n-aria-label="rankEngine"
+          data-i18n-title="rankEngine"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M5 19V10M12 19V5M19 19v-6"/>
@@ -1828,6 +2076,8 @@
           data-tool="controls"
           aria-label="Chart Controls"
           title="Chart Controls"
+          data-i18n-aria-label="chartControls"
+          data-i18n-title="chartControls"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M7 14v6"/>
@@ -1840,6 +2090,8 @@
           data-tool="account"
           aria-label="Account"
           title="Account"
+          data-i18n-aria-label="account"
+          data-i18n-title="account"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="8" r="4"/>
@@ -1857,8 +2109,15 @@
        GLOBALS
        ========================= -->
   <script>
-    window.API_BASE = "https://darrius-api.onrender.com";
-    window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
+    const isLocal =
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "localhost";
+
+    window.API_BASE = isLocal
+      ? "http://127.0.0.1:5000"
+      : "https://darrius-api.onrender.com";
+
+    window.__API_BASE__ = window.API_BASE;
 
     window.__DEFAULT_SYMBOL__ = "TSLA";
     window.__DEFAULT_TF__ = "1d";
@@ -1915,14 +2174,14 @@
   <script>
     window.__UPGRADE_URL__ = "account.html#plans";
   </script>
-  <script src="js/upgrade.guard.js?v=20260818_dashboard_cleanup1"></script>
+  <script src="js/upgrade.guard.js?v=20260825_entitlement_fix1"></script>
 
   <script src="js/chart.core.js?v=20260820_export_png1"></script>
 
   <script src="js/market.pulse.js?v=20260203a"></script>
   <script src="js/darrius.mutant.js?v=20260212"></script>
 
-  <script src="js/subscription.js?v=20260822_secure_checkout1"></script>
+  <script src="js/subscription.js?v=20260825_i18n_access1"></script>
   <script src="js/account.auth.js?v=20260822_session_checkout1"></script>
   <script src="js/referral.client.js?v=20260129"></script>
   <script src="js/referral.checkout.js?v=20260129"></script>
@@ -2110,7 +2369,10 @@
 
       const label = document.createElement('span');
       label.className = 'tvAttrLabel';
-      label.textContent = 'Chart:';
+      label.setAttribute('data-i18n', 'chartLabel');
+      label.textContent =
+        window.DARRIUS_T?.('chartLabel') ||
+        'Chart:';
       slot.textContent = '';
       slot.appendChild(label);
       slot.appendChild(attr);
@@ -2236,6 +2498,8 @@
 
   document.addEventListener('DOMContentLoaded', initToolDock);
 </script>
+
+<script src="js/i18n.js?v=20260822_i18n2"></script>
 
 </body>
 </html>

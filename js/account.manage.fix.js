@@ -1,134 +1,222 @@
-// js/account.manage.fix.js  (FINAL - tolerant mapping)
+// js/account.manage.fix.js
 (() => {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
 
-  const pick = (v, fallback = '—') => {
-    if (v === null || v === undefined) return fallback;
-    const s = String(v).trim();
-    return s ? s : fallback;
+  const API_BASE = (
+    window.__API_BASE__ ||
+    window.API_BASE ||
+    ''
+  ).replace(/\/+$/, '');
+
+  const pick = (value, fallback = '—') => {
+    if (value === null || value === undefined) {
+      return fallback;
+    }
+
+    const text = String(value).trim();
+    return text || fallback;
   };
 
-  const setText = (id, text) => {
+  const setText = (id, value) => {
     const el = $(id);
     if (!el) return;
-    el.textContent = pick(text, '—');
+
+    el.textContent = pick(value);
   };
 
-  const setBadge = (ok) => {
-    const b = $('statusBadge');
-    if (!b) return;
-    b.textContent = ok ? 'STATUS: OK' : 'STATUS: UNKNOWN';
-    b.classList.toggle('bad', !ok);
+  const setBadge = (state) => {
+    const badge = $('statusBadge');
+    if (!badge) return;
+
+    if (state === 'signed-in') {
+      badge.textContent =
+        window.DARRIUS_T?.("signedIn") ||
+        "SIGNED IN";
+      badge.classList.remove('bad');
+      return;
+    }
+
+    if (state === 'error') {
+      badge.textContent =
+        window.DARRIUS_T?.("statusUnknown") ||
+        "STATUS: UNKNOWN";
+      badge.classList.add('bad');
+      return;
+    }
+
+    badge.textContent =
+      window.DARRIUS_T?.("signInRequired") ||
+      "SIGN IN REQUIRED";
+    badge.classList.add('bad');
   };
 
-  const setUpdated = (ts) => {
+  const setUpdated = (timestamp) => {
     const el = $('updatedAt');
     if (!el) return;
-    el.textContent = 'Updated: ' + pick(ts, new Date().toISOString().replace('T',' ').replace('Z','Z'));
+
+    const value =
+      timestamp ||
+      new Date().toISOString();
+
+    const updatedTemplate =
+      window.DARRIUS_T?.("updatedStatus") ||
+      "Updated: {value}";
+
+    el.textContent = updatedTemplate.replace(
+      "{value}",
+      String(value)
+    );
   };
 
-  function normalizeStatus(j, uidInput) {
-    // 兼容不同后端字段名
-    const currentPlan =
-      j.current_plan ?? j.plan ?? j.plan_name ?? j.product ?? j.tier ?? '—';
+  async function fetchJSON(path) {
+    const response = await fetch(
+      `${API_BASE}${path}`,
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+        },
+      }
+    );
 
-    const subStatus =
-      j.subscription_status ?? j.status ?? j.sub_status ?? '—';
+    const text = await response.text();
 
-    const renewsOrEnds =
-      j.renews_or_ends ?? j.renew_end ?? j.period ?? j.current_period_end ?? j.ends_at ?? '—';
+    let data = {};
 
-    const dataMode =
-      j.data_source_mode ?? j.data_mode ?? j.mode ?? 'DELAYED';
-
-    const updatedAt =
-      j.updated_at ?? j.updated ?? j.ts ?? null;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (_) {
+      data = {
+        ok: false,
+        raw: text,
+      };
+    }
 
     return {
-      ok: j.ok === true,
-      user_id: j.user_id ?? uidInput ?? '',
-      current_plan: currentPlan,
-      subscription_status: subStatus,
-      renews_or_ends: renewsOrEnds,
-      data_source_mode: dataMode,
-      updated_at: updatedAt,
+      response,
+      data,
     };
   }
 
-  async function fetchStatus() {
-    const base = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,'');
-    const uid = (($('userId') && $('userId').value) || '').trim();
-    const em  = (($('email') && $('email').value) || '').trim();
-    const useEmail = !!($('useEmailMatch') && $('useEmailMatch').checked);
+  function renderSignedOut() {
+    setText('kvUser', '—');
+    setText('kvPlan', '—');
+    setText('kvSubStatus', 'Not signed in');
+    setText('kvEnds', '—');
+    setText('kvDataMode', '—');
 
-    if (!uid) return { ok:false, reason:'missing_user_id' };
+    setBadge('signed-out');
+    setUpdated();
 
-    try {
-      localStorage.setItem('darrius_user_id', uid);
-      if (em) localStorage.setItem('darrius_email', em);
-      localStorage.setItem('darrius_use_email_match', useEmail ? '1' : '0');
-    } catch {}
-
-    const qs = new URLSearchParams();
-    qs.set('user_id', uid);
-    if (em) qs.set('email', em);
-    qs.set('use_email_match', useEmail ? '1' : '0');
-
-    const url = `${base}/billing/status?${qs.toString()}`;
-    const r = await fetch(url, { method:'GET', credentials:'include' });
-    const text = await r.text();
-
-    let j = null;
-    try { j = JSON.parse(text); } catch { j = { ok:false, raw:text }; }
-
-    if (!r.ok) return { ok:false, http:r.status, detail:(j && (j.detail || j.error || j.raw)) };
-
-    // ok:true or has meaningful fields
-    if (j && j.ok === true) return j;
-
-    const maybe = j && (j.subscription_status || j.status || j.current_plan || j.plan || j.current_period_end);
-    if (maybe) return { ok:true, ...j };
-
-    return { ok:false, detail:(j && (j.detail || j.error || j.raw)) || 'unknown' };
   }
 
-  function render(norm) {
-    setText('kvUser', norm.user_id);
-    setText('kvPlan', norm.current_plan);
-    setText('kvSubStatus', norm.subscription_status);
-    setText('kvEnds', norm.renews_or_ends);
-    setText('kvDataMode', norm.data_source_mode || 'DELAYED');
-    setUpdated(norm.updated_at);
-    setBadge(norm.ok);
+  function renderSubscription(policy, userId) {
+    const plan =
+      policy?.plan_key &&
+      String(policy.plan_key).toLowerCase() !== 'unknown'
+        ? policy.plan_key
+        : '—';
+
+    const status =
+      String(policy?.bucket || 'DEMO')
+        .toUpperCase();
+
+    const ends =
+      policy?.current_period_end ||
+      '—';
+
+    const dataMode =
+      policy?.data_mode ||
+      '—';
+
+    setText('kvUser', userId);
+    setText('kvPlan', plan);
+    setText('kvSubStatus', status);
+    setText('kvEnds', ends);
+    setText('kvDataMode', dataMode);
+
+    setBadge('signed-in');
+    setUpdated(policy?.updated_at);
+
   }
 
   async function refreshStatus() {
-    const uid = (($('userId') && $('userId').value) || '').trim();
-    render({ ok:false, user_id: uid, current_plan:'—', subscription_status:'—', renews_or_ends:'—', data_source_mode:'DELAYED' });
-
     try {
-      const raw = await fetchStatus();
-      const norm = normalizeStatus(raw || {}, uid);
-      // 如果后端 ok=false 或字段空，仍然保持 UNKNOWN
-      if (!norm.ok && pick(norm.current_plan) === '—' && pick(norm.subscription_status) === '—') {
-        setBadge(false);
+      const sessionResult = await fetchJSON(
+        '/api/auth/session'
+      );
+
+      if (
+        !sessionResult.response.ok ||
+        sessionResult.data?.authenticated !== true ||
+        !sessionResult.data?.user_id
+      ) {
+        renderSignedOut();
         return;
       }
-      // 若后端没显式 ok:true 但有字段，则当作 ok
-      if (!norm.ok && (pick(norm.current_plan) !== '—' || pick(norm.subscription_status) !== '—')) {
-        norm.ok = true;
+
+      const userId = String(
+        sessionResult.data.user_id
+      ).trim();
+
+      const subscriptionResult = await fetchJSON(
+        '/api/subscription/me'
+      );
+
+      if (!subscriptionResult.response.ok) {
+        setText('kvUser', userId);
+        setText('kvPlan', '—');
+        setText(
+          'kvSubStatus',
+          window.DARRIUS_T?.("unableToLoad") ||
+          "Unable to load"
+        );
+        setText('kvEnds', '—');
+        setText('kvDataMode', '—');
+
+        setBadge('error');
+        setUpdated();
+
+        return;
       }
-      render(norm);
-    } catch {
-      setBadge(false);
+
+      renderSubscription(
+        subscriptionResult.data || {},
+        userId
+      );
+    } catch (error) {
+      console.error(
+        '[Account] status refresh failed',
+        error
+      );
+
+      setBadge('error');
+      setUpdated();
     }
   }
 
-  window.DARRIUS_ACCOUNT_REFRESH_STATUS = refreshStatus;
+  window.DARRIUS_ACCOUNT_REFRESH_STATUS =
+    refreshStatus;
 
-  document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(refreshStatus, 120);
-  });
+  if (document.readyState === 'loading') {
+    document.addEventListener(
+      'DOMContentLoaded',
+      () => {
+        refreshStatus();
+      }
+    );
+  } else {
+    refreshStatus();
+  }
+
+  document.addEventListener(
+    'darrius:language-changed',
+    () => {
+      refreshStatus();
+    }
+  );
+
 })();

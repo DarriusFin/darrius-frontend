@@ -20,9 +20,37 @@
   }
 
   function domSaysEntitled(){
-    const t = (txt('subStatusText') + ' ' + txt('planStatus'));
-    // 支持各种显示文案
-    return t.includes('active') || t.includes('trial');
+    const policy = window.__ENTITLEMENT__;
+
+    // Primary source: actual entitlement state
+    if (
+      policy &&
+      typeof policy.has_access === 'boolean'
+    ) {
+      return policy.has_access;
+    }
+
+    // Backward-compatible fallback
+    const bucket = String(
+      policy?.bucket || ''
+    ).toUpperCase();
+
+    if (
+      ['ACTIVE', 'TRIAL', 'GRACE'].includes(bucket)
+    ) {
+      return true;
+    }
+
+    // Legacy DOM fallback only
+    const t =
+      txt('subStatusText') +
+      ' ' +
+      txt('planStatus');
+
+    return (
+      t.includes('active') ||
+      t.includes('trial')
+    );
   }
 
   function setDisabled(id, disabled){
@@ -66,7 +94,9 @@
     safe(() => {
       const hint = $('hintText');
       if (hint && !domSaysEntitled()){
-        hint.textContent = 'Locked: subscribe to unlock Symbol/Timeframe.';
+        hint.textContent =
+          window.DARRIUS_T?.("lockedSubscribeToUnlock") ||
+          "Locked: subscribe to unlock Symbol/Timeframe.";
       }
     });
   }
@@ -89,7 +119,12 @@
 
     safe(() => {
       const hint = $('hintText');
-      if (hint) hint.textContent = "Market snapshot loaded";
+      if (hint) {
+        hint.textContent =
+          window.DARRIUS_T?.(
+            "marketSnapshotLoaded"
+          ) || "Market snapshot loaded";
+      }
     });
   }
 
@@ -99,6 +134,20 @@
     else lockUI();
     return ok;
   }
+
+  document.addEventListener(
+    "darrius:language-changed",
+    () => {
+      evaluate();
+    }
+  );
+
+  document.addEventListener(
+    "darrius:subscription-status",
+    () => {
+      evaluate();
+    }
+  );
 
   // 立即执行一次（页面加载时先锁/先解锁）
   safe(evaluate);

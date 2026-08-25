@@ -84,22 +84,33 @@
     const url = `${location.origin}${location.pathname}?symbol=${encodeURIComponent(sym)}&tf=${encodeURIComponent(tf)}`;
     try {
       await navigator.clipboard.writeText(url);
-      alert("Share link copied:\n" + url);
+      alert(
+        (window.DARRIUS_T?.("shareLinkCopied") ||
+          "Share link copied:") +
+        "\n" +
+        url
+      );
     } catch (_) {
-      prompt("Copy failed. Please copy the link manually:", url);
+      prompt(
+        window.DARRIUS_T?.("copyFailedManual") ||
+        "Copy failed. Please copy the link manually:",
+        url
+      );
     }
   }
 
-  // ---------- optional: export png ----------
+  // ---------- export png ----------
   function exportPNG() {
     try {
-      if (window.ChartCore && typeof window.ChartCore.exportPNG === "function") {
+      if (
+        window.ChartCore &&
+        typeof window.ChartCore.exportPNG === "function"
+      ) {
         window.ChartCore.exportPNG();
         return;
       }
-      alert("Export will be available in the final ChartCore release.");
     } catch (e) {
-      alert("Export failed: " + e.message);
+      console.error("Export failed:", e);
     }
   }
 
@@ -143,7 +154,11 @@
 
     // ---- ChartCore wiring ----
     if (!window.ChartCore) {
-      setStatus("ChartCore missing (js not loaded)", false);
+      setStatus(
+        window.DARRIUS_T?.("chartCoreMissing") ||
+        "ChartCore missing (js not loaded)",
+        false
+      );
       log("❌ ChartCore not found on window. Did you include /js/chart.core.js ?");
     } else {
       bindTfQuick(() => {
@@ -165,7 +180,10 @@
         const userId = $("userId")?.value?.trim() || "";
 
         if (!userId) {
-          alert("Enter your User ID before opening Rank Engine.");
+          alert(
+            window.DARRIUS_T?.("enterUserIdBeforeRank") ||
+            "Enter your User ID before opening Rank Engine."
+          );
           $("userId")?.focus?.();
           return;
         }
@@ -173,12 +191,18 @@
         const policy = window.__ENTITLEMENT__;
 
         if (!policy) {
-          alert("Account access status is still loading. Please try again shortly.");
+          alert(
+            window.DARRIUS_T?.("accountAccessLoading") ||
+            "Account access status is still loading. Please try again shortly."
+          );
           return;
         }
 
         if (!policy.has_access) {
-          alert("Rank Engine is not unlocked for this account. Please activate a subscription or trial first.");
+          alert(
+            window.DARRIUS_T?.("rankEngineLocked") ||
+            "Rank Engine is not unlocked for this account. Please activate a subscription or trial first."
+          );
           return;
         }
 
@@ -235,7 +259,11 @@
           log("⚠️ ChartCore.init missing; please ensure chart.core.js exposes init()");
         }
       } catch (e) {
-        setStatus("Chart init failed", false);
+        setStatus(
+          window.DARRIUS_T?.("chartInitFailed") ||
+          "Chart init failed",
+          false
+        );
         log("❌ ChartCore.init error: " + e.message);
       }
     }
@@ -263,7 +291,11 @@
     $("exportBtn")?.addEventListener("click", exportPNG);
     $("affiliateBtn")?.addEventListener("click", openAffiliate);
 
-    setStatus("Dashboard Ready", true);
+    setStatus(
+      window.DARRIUS_T?.("dashboardReady") ||
+      "Dashboard Ready",
+      true
+    );
   }
 
   if (document.readyState === "loading") {

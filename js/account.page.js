@@ -39,7 +39,15 @@
   }
 
   function alert2(en, zh) {
-    alert(`${en}\n${zh}`);
+    const lang =
+      window.__DARRIUS_LANGUAGE__ ||
+      "en";
+
+    alert(
+      lang === "zh-CN"
+        ? zh
+        : en
+    );
   }
 
   async function getJSON(path) {
@@ -92,7 +100,14 @@
     else if (b === 'EXPIRED') el.classList.add('bad');
     else el.classList.add('warn'); // DEMO/UNKNOWN 走 warn
 
-    el.textContent = `STATUS: ${b}`;
+    const statusTemplate =
+      window.DARRIUS_T?.("accountStatusValue") ||
+      "STATUS: {value}";
+
+    el.textContent = statusTemplate.replace(
+      "{value}",
+      String(b)
+    );
   }
 
   function fmtLocal(v) {
@@ -182,7 +197,9 @@
         // 保持你原意：无 customer 不开放 Portal
         btnPortal.disabled = true;
         btnPortal.style.opacity = '0.55';
-        btnPortal.title = 'Complete subscription first / 先完成订阅';
+        btnPortal.title =
+          window.DARRIUS_T?.("completeSubscriptionFirst") ||
+          "Complete subscription first";
       }
     }
 
@@ -373,7 +390,9 @@
 
     // System panel
     if ($('vBackend')) {
-      $('vBackend').textContent = 'Connected';
+      $('vBackend').textContent =
+        window.DARRIUS_T?.("connected") ||
+        "Connected";
       $('vBackend').title = API_BASE;
     }
 
@@ -392,4 +411,18 @@
   } else {
     init();
   }
+
+  document.addEventListener(
+    'darrius:language-changed',
+    () => {
+      if ($('vBackend')) {
+        $('vBackend').textContent =
+          window.DARRIUS_T?.("connected") ||
+          "Connected";
+      }
+
+      refreshStatus();
+    }
+  );
+
 })();

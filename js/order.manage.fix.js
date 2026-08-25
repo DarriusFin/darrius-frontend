@@ -114,29 +114,90 @@
     // ---- entitlements ----
     const ent = entResp.entitlement || entResp.data || entResp || {};
     const plan = pick(ent, ['plan', 'tier', 'product'], '-');
+    const planKey = String(plan || '').trim().toLowerCase();
+
+    const planTranslationKey = {
+      weekly: 'planWeekly',
+      monthly: 'planMonthly',
+      quarterly: 'planQuarterly',
+      yearly: 'planYearly'
+    }[planKey];
+
+    const planText =
+      (planTranslationKey && window.DARRIUS_T?.(planTranslationKey)) ||
+      plan;
     const active = !!pick(ent, ['active', 'is_active', 'entitled'], null);
     const customerId = pick(ent, ['stripe_customer_id', 'customer_id'], '-');
     const subscriptionId = pick(ent, ['stripe_subscription_id', 'subscription_id'], '-');
 
     // 兼容两套 DOM id
-    setTextAny(['om_plan', 'subLocalPlan', 'currentPlan'], plan);
+    setTextAny(
+      ['om_plan', 'subLocalPlan', 'currentPlan'],
+      planText
+    );
     setTextAny(['om_customerId', 'subStripeCustomer'], customerId);
     setTextAny(['om_subscriptionId', 'subStripeSub'], subscriptionId);
-    if (active !== null) setTextAny(['subLocalActive'], active ? 'ACTIVE' : 'DEMO');
+    if (active !== null) {
+      const activeText = active
+        ? (window.DARRIUS_T?.("bucketActive") || "ACTIVE")
+        : (window.DARRIUS_T?.("bucketDemo") || "DEMO");
+
+      setTextAny(['subLocalActive'], activeText);
+    }
 
     // ---- subscription status ----
     const s = subResp.subscription || subResp.data || subResp || {};
+    function translateSubscriptionStatus(status) {
+      const raw = String(status || 'UNKNOWN').trim();
+      const key = raw.toLowerCase();
+
+      const translationKey = {
+        active: 'subscriptionStatusActive',
+        trialing: 'subscriptionStatusTrialing',
+        past_due: 'subscriptionStatusPastDue',
+        canceled: 'subscriptionStatusCanceled',
+        unpaid: 'subscriptionStatusUnpaid',
+        incomplete: 'subscriptionStatusIncomplete',
+        incomplete_expired: 'subscriptionStatusIncompleteExpired',
+        paused: 'subscriptionStatusPaused',
+        unknown: 'unknown'
+      }[key];
+
+      return (
+        (translationKey && window.DARRIUS_T?.(translationKey)) ||
+        raw
+      );
+    }
     const status = pick(s, ['status', 'subscription_status'], 'UNKNOWN');
     const cpe = pick(s, ['current_period_end', 'period_end'], null);
     const trialEnd = pick(s, ['trial_end'], null);
     const cancelAtPeriodEnd = !!pick(s, ['cancel_at_period_end'], false);
 
-    const tsToLocal = (ts) => (typeof ts === 'number') ? new Date(ts * 1000).toLocaleString() : (ts || '-');
+    const tsToLocal = (ts) => {
+      if (typeof ts !== 'number') {
+        return ts || '-';
+      }
 
-    setTextAny(['om_subStatus', 'subStripeStatus', 'subscriptionStatus'], status);
+      const lang =
+        window.__DARRIUS_LANGUAGE__ === 'zh-CN'
+          ? 'zh-CN'
+          : 'en-US';
+
+      return new Date(ts * 1000).toLocaleString(lang);
+    };
+
+    setTextAny(
+      ['om_subStatus', 'subStripeStatus', 'subscriptionStatus'],
+      translateSubscriptionStatus(status)
+    );
     setTextAny(['om_periodEnd', 'subCurrentPeriodEnd', 'currentPeriodEnd'], tsToLocal(cpe));
     setTextAny(['om_trialEnd', 'subTrialEnd', 'trialEnd'], tsToLocal(trialEnd));
-    setTextAny(['subCancelAtPeriodEnd'], cancelAtPeriodEnd ? 'YES' : 'NO');
+    setTextAny(
+      ['subCancelAtPeriodEnd'],
+      cancelAtPeriodEnd
+        ? (window.DARRIUS_T?.("yesLabel") || "YES")
+        : (window.DARRIUS_T?.("noLabel") || "NO")
+    );
 
     // ---- buttons enable ----
     // Portal：宁可先放开（后端会 401/403），避免“看起来死了”
@@ -170,12 +231,28 @@
 
           const st = res.resp && res.resp.__http ? res.resp.__http.status : null;
           if (st === 401 || st === 403) {
-            alert('Please sign in again, then retry Billing Portal.');
+            alert(
+              window.DARRIUS_T?.("signInAgainBillingPortal") ||
+              "Please sign in again, then retry Billing Portal."
+            );
             return;
           }
 
-          const detail = (res.resp && (res.resp.error || res.resp.detail || res.resp.raw)) || 'unknown';
-          alert('Billing portal error: ' + detail);
+          const detail =
+            (res.resp &&
+              (res.resp.error || res.resp.detail || res.resp.raw)) ||
+            (window.DARRIUS_T?.("unknown") || "Unknown");
+
+          const billingErrorTemplate =
+            window.DARRIUS_T?.("billingPortalError") ||
+            "Billing portal error: {detail}";
+
+          alert(
+            billingErrorTemplate.replace(
+              "{detail}",
+              String(detail)
+            )
+          );
         } finally {
           enableBtnAny(['btnBillingPortal'], true);
         }
@@ -208,7 +285,10 @@
           const url2 = resp2.url || (resp2.data && resp2.data.url);
           if (url2) { window.location.href = url2; return; }
 
-          alert('Checkout not ready: backend did not return {url}. Please check /billing/create-checkout-session or /billing/checkout response.');
+          alert(
+            window.DARRIUS_T?.("checkoutNotReady") ||
+            "Checkout not ready: backend did not return {url}. Please check /billing/create-checkout-session or /billing/checkout response."
+          );
         } finally {
           enableBtnAny(['btnSubscribe'], true);
         }
@@ -238,4 +318,12 @@
     bindActions();        // ✅ 再绑定
     loadAllAndRender().catch(() => {});
   });
+
+  document.addEventListener(
+    'darrius:language-changed',
+    () => {
+      loadAllAndRender().catch(() => {});
+    }
+  );
+
 })();

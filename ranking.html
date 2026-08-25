@@ -516,8 +516,19 @@ setTimeframe("1h");
         );
 
       try {
+        const isLocal =
+          window.location.hostname === "127.0.0.1" ||
+          window.location.hostname === "localhost";
+
+        const apiBase = isLocal
+          ? "http://127.0.0.1:5000"
+          : "https://darrius-api.onrender.com";
+
         const response = await fetch(
-          `https://darrius-api.onrender.com/api/ranking/top?limit=10&timeframe=${encodeURIComponent(currentTimeframe)}`
+          `${apiBase}/api/ranking/top?limit=10&timeframe=${encodeURIComponent(currentTimeframe)}`,
+          {
+            credentials: "include",
+          }
         );
 
         const data =
