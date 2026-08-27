@@ -163,9 +163,15 @@
       (p.data_label_en && p.data_label_zh ? `${p.data_label_en} / ${p.data_label_zh}` : '') ||
       (p.data_label_en ? p.data_label_en : '') ||
       (p.data_label_zh ? p.data_label_zh : '') ||
-      (String(p.data_mode || 'DEMO').toUpperCase() === 'DELAYED'
-        ? 'Market (Delayed) / 市场数据（延时）'
-        : 'Demo / 演示');
+      (
+        ['REAL-TIME', 'REALTIME', 'REAL_TIME'].includes(
+          String(p.data_mode || 'DEMO').toUpperCase()
+        )
+          ? 'Real-Time / 实时市场数据'
+          : String(p.data_mode || 'DEMO').toUpperCase() === 'DELAYED'
+            ? 'Market (Delayed) / 市场数据（延时）'
+            : 'Demo / 演示'
+      );
 
     setBadge(bucket);
     setText('vPlan', planLabel);

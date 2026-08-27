@@ -242,6 +242,8 @@
       redirectingToStripe: 'Redirecting to Stripe…',
       dataDelayed:
         'DELAYED {minutes}m',
+      dataRealTime:
+        'REAL-TIME',
       referralDetected: 'Referral detected: {code}',
       referralAppliedCheckout: 'Will be applied at checkout',
       apiOk: 'API OK',
@@ -467,6 +469,8 @@
       redirectingToStripe: '正在跳转至 Stripe…',
       dataDelayed:
         '延迟 {minutes} 分钟',
+      dataRealTime:
+        '实时',
       referralDetected: '已检测到推荐码：{code}',
       referralAppliedCheckout: '将在结账时自动应用',
       apiOk: 'API 正常',

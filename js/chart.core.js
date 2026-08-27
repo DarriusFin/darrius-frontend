@@ -115,15 +115,12 @@
           "DEMO";
       }
       else if (p === "twelve") {
-        const delayedTemplate =
-          window.DARRIUS_T?.("dataDelayed") ||
-          "DELAYED {minutes}m";
+        const realTimeLabel =
+          window.DARRIUS_T?.("dataRealTime") ||
+          "REAL-TIME";
 
         window.__DATA_SOURCE_BADGE__ =
-          delayedTemplate.replace(
-            "{minutes}",
-            String(meta.delayed_minutes || 15)
-          );
+          realTimeLabel;
       }
       const el = document.getElementById("dataSourceBadge");
       if (el && window.__DATA_SOURCE_BADGE__) el.textContent = window.__DATA_SOURCE_BADGE__;
