@@ -652,7 +652,15 @@
       'use strict';
 
       // ---------------- Config ----------------
-      const API_BASE = 'https://darrius-api.onrender.com';
+      const isLocal =
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname === "localhost";
+
+      window.API_BASE = isLocal
+        ? "http://127.0.0.1:5000"
+        : "https://darrius-api.onrender.com";
+
+      const API_BASE = window.API_BASE;
 
       // Logo asset path (change if needed)
       const LOGO_SRC = 'assets/logo.png';

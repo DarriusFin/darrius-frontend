@@ -573,7 +573,14 @@
 
   <script>
     // ===== Globals =====
-    window.API_BASE = "https://darrius-api.onrender.com";
+    const isLocal =
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "localhost";
+
+    window.API_BASE = isLocal
+      ? "http://127.0.0.1:5000"
+      : "https://darrius-api.onrender.com";
+
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
 
     window.DARRIUS_BILLING_PRICES_PATH =
