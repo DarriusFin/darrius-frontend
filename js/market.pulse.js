@@ -5,7 +5,7 @@
  * - NO DEBUG text injection (removes getSnapshot hints)
  * - NO BIG B/S/eB/eS overlay (keeps chart clean; does not touch your old B/S logic)
  * - Fix gauge coloring: Neutral not all-red; color follows regime
- * - Fill Bull/Bear/Neutral/Net Inflow values
+ * - Fill Bull/Bear/Neutral values
  *
  * Safety:
  * - Never throws
@@ -27,7 +27,6 @@
     bullPct: null,
     bearPct: null,
     neuPct: null,
-    netInflow: null,
     pulseGaugeMask: null,
 
     // Waiting/status line (optional, if you have it)
@@ -39,7 +38,6 @@
     DOM.bullPct = $('bullPct');
     DOM.bearPct = $('bearPct');
     DOM.neuPct = $('neuPct');
-    DOM.netInflow = $('netInflow');
     DOM.pulseGaugeMask = $('pulseGaugeMask');
 
     // OPTIONAL: if you have a small "Waiting..." sub line, bind it by id.
@@ -147,22 +145,6 @@
     return { bull, bear, neu };
   }
 
-  // 4) Net inflow (simple volume up - volume down over last 20 bars)
-  function deriveNetInflow(candles) {
-    if (!candles || candles.length < 5) return null;
-    const seg = candles.slice(-20);
-    let upV = 0, dnV = 0;
-
-    for (const b of seg) {
-      const o = Number(b?.open ?? b?.o);
-      const c = Number(b?.close ?? b?.c);
-      const v = Number(b?.volume ?? b?.v ?? 0);
-      if (!Number.isFinite(o) || !Number.isFinite(c) || !Number.isFinite(v)) continue;
-      if (c >= o) upV += v; else dnV += v;
-    }
-    return upV - dnV;
-  }
-
   // -------- UI update --------
   function setGaugeVisual(score, label) {
     if (!DOM.pulseGaugeMask) return;
@@ -192,7 +174,6 @@
 
       const label = scoreToLabel(score);
       const split = scoreToSplit(score);
-      const inflow = deriveNetInflow(candles);
 
       // CENTER NUMBER: keep % like your screenshot (48%)
       DOM.pulseScore.textContent = String(score);
@@ -201,8 +182,6 @@
       if (DOM.bullPct) DOM.bullPct.textContent = pct(split.bull, 0);
       if (DOM.bearPct) DOM.bearPct.textContent = pct(split.bear, 0);
       if (DOM.neuPct)  DOM.neuPct.textContent  = pct(split.neu, 0);
-      if (DOM.netInflow) DOM.netInflow.textContent =
-        Number.isFinite(inflow) ? Math.round(inflow).toLocaleString() : '—';
 
       setGaugeVisual(score, label);
 
