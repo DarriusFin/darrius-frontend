@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta
@@ -131,11 +131,9 @@
           60px
           240px
           160px
-          160px
           120px
           140px
-          160px
-          1fr;
+          minmax(160px, 1fr);
 
       column-gap:24px;
       align-items:center;
@@ -345,7 +343,7 @@
       </div>
 
       <div class="brandLine2">
-        Top 10 Rankings
+        Model Technical Rankings
       </div>
     </div>
 
@@ -374,6 +372,13 @@
 
       <button
         class="btnTop"
+        id="tf1wBtn"
+      >
+        1W
+      </button>
+
+      <button
+        class="btnTop"
         id="backBtn"
       >
         ← Back to Dashboard
@@ -389,7 +394,7 @@
 
       <div class="panelHeader">
         <span>
-          DarriusAI Top 10
+          Model Technical Rankings
         </span>
 
         <span
@@ -455,6 +460,8 @@
         "tf1dBtn"
       );
 
+const tf1wBtn = document.getElementById("tf1wBtn");
+
 function setTimeframe(timeframe) {
   currentTimeframe = timeframe;
 
@@ -467,6 +474,8 @@ function setTimeframe(timeframe) {
     "activeTimeframe",
     timeframe === "1d"
   );
+
+  tf1wBtn.classList.toggle("activeTimeframe", timeframe === "1w");
 
   timeframePill.textContent =
     `US_CORE_500 · ${timeframe.toUpperCase()}`;
@@ -507,9 +516,13 @@ tf1dBtn.addEventListener(
   }
 );
 
-setTimeframe("1h");
+tf1wBtn.addEventListener("click", () => setTimeframe("1w"));
+
+const initialTimeframe = new URLSearchParams(window.location.search).get("timeframe");
+setTimeframe(["1h", "1d", "1w"].includes(initialTimeframe) ? initialTimeframe : "1h");
 
     async function loadRanking() {
+      const requestedTimeframe = currentTimeframe;
       const rankingList =
         document.getElementById(
           "rankingList"
@@ -525,7 +538,7 @@ setTimeframe("1h");
           : "https://darrius-api.onrender.com";
 
         const response = await fetch(
-          `${apiBase}/api/ranking/top?limit=10&timeframe=${encodeURIComponent(currentTimeframe)}`,
+          `${apiBase}/api/ranking/top?limit=10&timeframe=${encodeURIComponent(requestedTimeframe)}`,
           {
             credentials: "include",
           }
@@ -533,6 +546,8 @@ setTimeframe("1h");
 
         const data =
           await response.json();
+
+        if (requestedTimeframe !== currentTimeframe) return;
 
         const snapshotTime =
           document.getElementById(
@@ -611,7 +626,7 @@ setTimeframe("1h");
                           ? "top3"
                           : ""
                   }"
-                  onclick="openRankingDetail('${item.symbol}', '${data.timeframe || currentTimeframe}')"
+                  onclick="openRankingDetail('${item.symbol}', '${data.timeframe || requestedTimeframe}')"
                 >
 
                   <div class="rankNumber">
@@ -629,16 +644,6 @@ setTimeframe("1h");
 
                     <div class="metricValue">
                       ${item.rank_score}
-                    </div>
-                  </div>
-
-                  <div class="rankMetric">
-                    <div class="metricLabel">
-                      Confidence
-                    </div>
-
-                    <div class="metricValue">
-                      ${item.confidence}
                     </div>
                   </div>
 
@@ -705,6 +710,7 @@ setTimeframe("1h");
             .join("");
 
       } catch (error) {
+        if (requestedTimeframe !== currentTimeframe) return;
         rankingList.textContent =
           "Ranking unavailable: "
           + error.message;

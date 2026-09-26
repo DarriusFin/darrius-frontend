@@ -49,10 +49,9 @@
       userManual: 'User Manual',
       dashboardReady: 'Dashboard Ready',
       announcementNew: 'NEW',
-      announcementTitle: 'Rank Engine · Top 10 is now available',
+      announcementTitle: 'Model Technical Rankings are now available',
       announcementDesc:
         'AI-assisted stock ranking is now available for eligible accounts.',
-      riskCopilot: 'Risk Copilot',
       rankEngine: 'Rank Engine',
       openRankEngine: 'Open Rank Engine',
       rankingAccess:
@@ -126,13 +125,6 @@
         'Verification succeeded, but the session could not be confirmed.',
       verificationFailed:
         'Verification failed. Please try again.',
-      riskEntryLabel: 'Entry',
-      riskStopLabel: 'Stop',
-      riskTargetsLabel: 'Targets',
-      riskConfidenceLabel: 'Confidence',
-      riskBacktestWinRateLabel: 'Backtest Win Rate',
-      riskLevelsDisclaimer:
-        'Levels are model-derived estimates based on the active chart context.',
       rankEngineDescription:
         'AI-assisted ranking highlights stocks with the strongest combined market pulse and model signals.',
       symbol: 'Symbol',
@@ -263,7 +255,7 @@
       subscriptionStatusIncomplete: 'Incomplete',
       subscriptionStatusIncompleteExpired: 'Incomplete — Expired',
       subscriptionStatusPaused: 'Paused',
-      top10: 'TOP 10',
+      modelTechnicalRankings: 'Model Technical Rankings',
       marketMeta: 'MARKET',
       partners: 'PARTNERS',
       allRightsReserved: 'All Rights Reserved.',
@@ -276,10 +268,9 @@
       userManual: '用户手册',
       dashboardReady: '控制面板已就绪',
       announcementNew: '新功能',
-      announcementTitle: '排名引擎 · Top 10 现已上线',
+      announcementTitle: '模型技术排名现已上线',
       announcementDesc:
         'AI 辅助股票排名现已向符合条件的账户开放。',
-      riskCopilot: '风险辅助',
       rankEngine: '排名引擎',
       openRankEngine: '打开排名引擎',
       rankingAccess:
@@ -353,13 +344,6 @@
         '验证成功，但无法确认登录会话。',
       verificationFailed:
         '验证失败，请重试。',
-      riskEntryLabel: '参考入场水平',
-      riskStopLabel: '参考止损水平',
-      riskTargetsLabel: '参考目标水平',
-      riskConfidenceLabel: '模型置信度',
-      riskBacktestWinRateLabel: '历史模型回测参考',
-      riskLevelsDisclaimer:
-        '各水平为模型根据当前图表环境生成的估计值。',
       rankEngineDescription:
         'AI 辅助排名会突出显示市场情绪与模型信号综合表现最强的股票。',
       symbol: '股票代码',
@@ -490,7 +474,7 @@
       subscriptionStatusIncomplete: '未完成',
       subscriptionStatusIncompleteExpired: '未完成并已过期',
       subscriptionStatusPaused: '已暂停',
-      top10: '前 10 名',
+      modelTechnicalRankings: '模型技术排名',
       marketMeta: '市场',
       partners: '合作伙伴',
       allRightsReserved: '保留所有权利。',
@@ -721,6 +705,8 @@ window.DARRIUS_T = t;
   }
 
   function init() {
+    setLanguage(getInitialLanguage());
+
     const trigger =
       $('languageTrigger');
 
@@ -779,9 +765,6 @@ window.DARRIUS_T = t;
       }
     );
 
-    setLanguage(
-      getInitialLanguage()
-    );
   }
 
   if (

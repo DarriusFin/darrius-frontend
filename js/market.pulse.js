@@ -6,7 +6,6 @@
  * - NO BIG B/S/eB/eS overlay (keeps chart clean; does not touch your old B/S logic)
  * - Fix gauge coloring: Neutral not all-red; color follows regime
  * - Fill Bull/Bear/Neutral/Net Inflow values
- * - Fill Risk Copilot values (Entry/Stop/Targets/Confidence/WinRate)
  *
  * Safety:
  * - Never throws
@@ -31,14 +30,6 @@
     netInflow: null,
     pulseGaugeMask: null,
 
-
-    // Risk Copilot
-    riskEntry: null,
-    riskStop: null,
-    riskTargets: null,
-    riskConf: null,
-    riskWR: null,
-
     // Waiting/status line (optional, if you have it)
     waitingLine: null,
   };
@@ -50,13 +41,6 @@
     DOM.neuPct = $('neuPct');
     DOM.netInflow = $('netInflow');
     DOM.pulseGaugeMask = $('pulseGaugeMask');
-
-
-    DOM.riskEntry = $('riskEntry');
-    DOM.riskStop = $('riskStop');
-    DOM.riskTargets = $('riskTargets');
-    DOM.riskConf = $('riskConf');
-    DOM.riskWR = $('riskWR');
 
     // OPTIONAL: if you have a small "Waiting..." sub line, bind it by id.
     // If not present, we simply do nothing.
@@ -179,59 +163,6 @@
     return upV - dnV;
   }
 
-  // 5) Risk Copilot: ATR-like volatility and confidence
-  function deriveRisk(candles) {
-    if (!candles || candles.length < 20) return null;
-
-    const L = candles.length;
-    const lastB = candles[L - 1];
-    const entry = Number(lastB?.close ?? lastB?.c);
-    if (!Number.isFinite(entry)) return null;
-
-    // ATR(14) with OHLC if available; fallback to abs(close diff)
-    const len = 14;
-    let sumTR = 0, cnt = 0;
-    for (let i = L - len; i < L; i++) {
-      const b = candles[i], p = candles[i - 1];
-      if (!b || !p) continue;
-
-      const h = Number(b?.high ?? b?.h);
-      const l = Number(b?.low  ?? b?.l);
-      const pc = Number(p?.close ?? p?.c);
-      if (Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(pc)) {
-        const tr = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
-        sumTR += tr; cnt++;
-      } else {
-        const c0 = Number(p?.close ?? p?.c);
-        const c1 = Number(b?.close ?? b?.c);
-        if (Number.isFinite(c0) && Number.isFinite(c1)) { sumTR += Math.abs(c1 - c0); cnt++; }
-      }
-    }
-    const atr = cnt ? (sumTR / cnt) : NaN;
-
-    const stop = Number.isFinite(atr) ? (entry - 1.5 * atr) : NaN;
-    const r = Number.isFinite(stop) ? (entry - stop) : NaN;
-    const t1 = Number.isFinite(r) ? (entry + 1.0 * r) : NaN;
-    const t2 = Number.isFinite(r) ? (entry + 2.0 * r) : NaN;
-
-    // confidence: ratio of up bars in last 20
-    const seg = candles.slice(-20);
-    let up = 0, tot = 0;
-    for (const b of seg) {
-      const o = Number(b?.open ?? b?.o);
-      const c = Number(b?.close ?? b?.c);
-      if (!Number.isFinite(o) || !Number.isFinite(c)) continue;
-      tot++;
-      if (c >= o) up++;
-    }
-    const confidence = tot ? up / tot : NaN;
-
-    // win rate (display only; derived, not “truth”)
-    const winRate = Number.isFinite(confidence) ? clamp(0.42 + confidence * 0.25, 0.35, 0.75) : NaN;
-
-    return { entry, stop, t1, t2, confidence, winRate };
-  }
-
   // -------- UI update --------
   function setGaugeVisual(score, label) {
     if (!DOM.pulseGaugeMask) return;
@@ -278,20 +209,6 @@
     });
   }
 
-  function updateRiskCopilotUI(snap) {
-    return safe(() => {
-      const candles = pickCandles(snap);
-      const r = deriveRisk(candles);
-      if (!r) return;
-
-      if (DOM.riskEntry) DOM.riskEntry.textContent = fmt(r.entry, 2);
-      if (DOM.riskStop) DOM.riskStop.textContent = fmt(r.stop, 2);
-      if (DOM.riskTargets) DOM.riskTargets.textContent = `${fmt(r.t1, 2)} / ${fmt(r.t2, 2)}`;
-      if (DOM.riskConf) DOM.riskConf.textContent = Number.isFinite(r.confidence) ? pct(r.confidence, 0) : '—';
-      if (DOM.riskWR) DOM.riskWR.textContent = Number.isFinite(r.winRate) ? pct(r.winRate, 0) : '—';
-    });
-  }
-
   // Waiting line: keep TSLA/1d/price small & subtle if you have a node for it
   function updateWaitingSmall(snap) {
     if (!DOM.waitingLine) return;
@@ -309,7 +226,6 @@
       const snap = getSnapshot();
       if (!snap) return;
       updateMarketPulseUI(snap);
-      updateRiskCopilotUI(snap);
       updateWaitingSmall(snap);
     });
   }

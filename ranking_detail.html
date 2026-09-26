@@ -345,7 +345,14 @@
 
         <button
           class="backButton"
-          onclick="history.back()"
+          id="tf1wBtn"
+        >
+          1W
+        </button>
+
+        <button
+          class="backButton"
+          id="backToRankingBtn"
         >
           Back to Ranking
         </button>
@@ -389,6 +396,18 @@
         "activeTimeframe",
         timeframe === "1d"
       );
+
+    document.getElementById("tf1wBtn").classList.toggle(
+      "activeTimeframe", timeframe === "1w"
+    );
+    document.getElementById("tf1wBtn").addEventListener(
+      "click", () => switchTimeframe("1w")
+    );
+    document.getElementById("backToRankingBtn").addEventListener(
+      "click", () => {
+        window.location.href = `ranking.html?timeframe=${encodeURIComponent(timeframe)}`;
+      }
+    );
 
     function switchTimeframe(
       nextTimeframe
@@ -447,11 +466,14 @@
     }
 
 
+    const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+    const apiBase = isLocal ? "http://127.0.0.1:5000" : "https://darrius-api.onrender.com";
+
     async function loadDetail() {
       try {
         const response =
           await fetch(
-            `https://darrius-api.onrender.com/api/ranking/detail`
+            `${apiBase}/api/ranking/detail`
             + `?symbol=${encodeURIComponent(symbol)}`
             + `&timeframe=${encodeURIComponent(timeframe)}`
           );
