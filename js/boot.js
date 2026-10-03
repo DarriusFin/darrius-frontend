@@ -141,7 +141,7 @@
     safeText($("yearNow"), String(new Date().getFullYear()));
 
     // ✅ 全站 API base（不在这里暴露算法）
-    if (!window.API_BASE) window.API_BASE = "https://darrius-api.onrender.com";
+    if (!window.API_BASE) window.API_BASE = "https://api.darrius.ai";
 
     enableAdminBlocksIfNeeded();
     applyQueryParamsToUI();

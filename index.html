@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
+<script src="js/site.transport.js?v=20261003"></script>
 
   <!-- ✅ Referral ref capture (must be earliest) -->
   <script>
@@ -2063,7 +2064,7 @@
 
     window.API_BASE = isLocal
       ? "http://127.0.0.1:5000"
-      : "https://darrius-api.onrender.com";
+      : "https://api.darrius.ai";
 
     window.__API_BASE__ = window.API_BASE;
 
@@ -2124,18 +2125,18 @@
   </script>
   <script src="js/upgrade.guard.js?v=20260825_entitlement_fix1"></script>
 
-  <script src="js/chart.core.js?v=20260820_export_png1"></script>
+  <script src="js/chart.core.js?v=20261003_browser_login"></script>
 
   <script src="js/market.pulse.js?v=20260926_remove_inflow"></script>
   <script src="js/darrius.mutant.js?v=20260212"></script>
 
-  <script src="js/subscription.js?v=20260825_i18n_access1"></script>
-  <script src="js/account.auth.js?v=20260822_session_checkout1"></script>
+  <script src="js/subscription.js?v=20261003_browser_login"></script>
+  <script src="js/account.auth.js?v=20261003_browser_login"></script>
   <script src="js/referral.client.js?v=20260129"></script>
   <script src="js/referral.checkout.js?v=20260129"></script>
 
   <!-- ✅ boot MUST be last (只保留一次！) -->
-  <script src="js/boot.js?v=20260820_affiliate_fix1"></script>
+  <script src="js/boot.js?v=20261003_browser_login"></script>
 
   <!-- ✅ TF Sync (UI only, stable) -->
   <script>

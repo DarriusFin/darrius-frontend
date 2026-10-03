@@ -1,9 +1,11 @@
 (function () {
   "use strict";
 
-  const API_BASE =
-    (window.__API_BASE__ || window.API_BASE || "").trim() ||
-    "https://darrius-api.onrender.com";
+  const API_BASE = ((window.__API_BASE__ || window.API_BASE || "").trim() || "https://api.darrius.ai").replace(/\/+$/, '');
+
+  let sessionVersion = 0;
+  let authBusy = false;
+  let sendBusy = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -20,16 +22,16 @@
   }
 
   async function fetchJSON(path, options) {
-    const response = await fetch(`${API_BASE}${path}`, {
-      credentials: "include",
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options?.headers || {}),
-      },
-    });
-
-    const text = await response.text();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    let response, text;
+    try {
+      response = await fetch(API_BASE + path, {
+        ...options, credentials: 'include', cache: 'no-store', signal: controller.signal,
+        headers: { ...(options?.body ? {'Content-Type': 'application/json'} : {}), ...(options?.headers || {}) },
+      });
+      text = await response.text();
+    } finally { clearTimeout(timer); }
 
     let data = null;
 
@@ -130,23 +132,13 @@
     );
   }
 
-  async function refreshSession() {
+  async function refreshSession(force = false) {
+    if (authBusy && !force) return { authenticated: false, pending: true };
+    const version = ++sessionVersion;
     try {
-      const response = await fetch(
-        `${API_BASE}/api/auth/session`,
-        {
-          method: "GET",
-          credentials: "include",
-        }
-      );
-
-      const text = await response.text();
-
-      let data = {};
-
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch (_) {}
+      const {response, data} = await fetchJSON('/api/auth/session', {method:'GET'});
+      if (version !== sessionVersion) return {authenticated:false, stale:true};
+      if ((!response.ok && response.status !== 401) || (response.ok && (data?.authenticated !== true || !data?.user_id))) throw new Error('session_unavailable');
 
       if (
         response.ok &&
@@ -200,22 +192,13 @@
         authenticated: false,
       };
     } catch (error) {
+      if (version !== sessionVersion) return {authenticated:false, stale:true};
       console.error(
         "[AccountAuth] session check failed",
         error
       );
 
-      window.__AUTH_USER_ID__ = null;
-
-      setStatus(
-        window.DARRIUS_T?.("unableCheckSignIn") ||
-        "Unable to check sign-in status"
-      );
-      setAccountMeta(
-        window.DARRIUS_T?.("guest") || "GUEST"
-      );
-      updateAccountView(false, null);
-      emitAuthChanged(false, null);
+      setStatus(window.DARRIUS_T?.('unableCheckSignIn') || 'Unable to check sign-in status. Please retry.');
 
       return {
         authenticated: false,
@@ -224,6 +207,9 @@
   }
 
   async function signOut() {
+    if (authBusy) return;
+    authBusy = true;
+    ++sessionVersion;
     const button = $("signOutBtn");
 
     if (button) {
@@ -282,6 +268,7 @@
         "Unable to sign out. Please try again."
       );
     } finally {
+      authBusy = false;
       if (button) {
         button.disabled = false;
         button.textContent =
@@ -292,6 +279,7 @@
   }
 
   async function sendVerificationCode() {
+    if (sendBusy || authBusy) return;
     const userId = String(
       $("userId")?.value || ""
     ).trim();
@@ -305,6 +293,7 @@
       return;
     }
 
+    sendBusy = true;
     const button = $("sendVerifyBtn");
 
     if (button) {
@@ -356,6 +345,7 @@
         "Unable to send a verification code. Please try again later."
       );
     } finally {
+      sendBusy = false;
       if (button) {
         button.disabled = false;
         button.textContent =
@@ -366,13 +356,14 @@
   }
 
   async function verifyCode() {
+    if (authBusy || sendBusy) return;
     const userId = String(
       $("userId")?.value || ""
     ).trim();
 
     const code = String(
       $("verificationCode")?.value || ""
-    ).trim();
+    ).replace(/[０-９]/g, c => String(c.charCodeAt(0) - 0xFF10)).replace(/[\s-]/g, "");
 
     if (!userId) {
       setStatus(
@@ -391,6 +382,8 @@
       return;
     }
 
+    authBusy = true;
+    ++sessionVersion;
     const button = $("verifyCodeBtn");
 
     if (button) {
@@ -428,7 +421,7 @@
         return;
       }
 
-      const session = await refreshSession();
+      const session = await refreshSession(true);
 
       if (session.authenticated) {
         showCodeField(false);
@@ -457,6 +450,7 @@
         "Verification failed. Please try again."
       );
     } finally {
+      authBusy = false;
       if (button) {
         button.disabled = false;
         button.textContent =
@@ -471,6 +465,15 @@
     const verifyButton = $("verifyCodeBtn");
     const codeInput = $("verificationCode");
     const signOutButton = $("signOutBtn");
+    if (codeInput) {
+      codeInput.setAttribute('maxlength', '16');
+      codeInput.setAttribute('autocomplete', 'one-time-code');
+      codeInput.setAttribute('inputmode', 'numeric');
+      codeInput.setAttribute('autocapitalize', 'off');
+    }
+    $('userId')?.setAttribute('autocapitalize', 'none');
+    $('userId')?.setAttribute('spellcheck', 'false');
+    window.addEventListener('pageshow', event => { if(event.persisted) refreshSession(); });
     const accountPageButton = $("accountPageBtn");
 
     if (sendButton) {
@@ -492,6 +495,7 @@
         "keydown",
         (event) => {
           if (event.key === "Enter") {
+            event.preventDefault();
             verifyCode();
           }
         }

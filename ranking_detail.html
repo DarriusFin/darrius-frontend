@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="js/site.transport.js?v=20261003"></script>
   <meta charset="UTF-8" />
   <meta
     name="viewport"
@@ -467,7 +468,7 @@
 
 
     const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-    const apiBase = isLocal ? "http://127.0.0.1:5000" : "https://darrius-api.onrender.com";
+    const apiBase = isLocal ? "http://127.0.0.1:5000" : "https://api.darrius.ai";
 
     async function loadDetail() {
       try {

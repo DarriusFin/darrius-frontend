@@ -4,7 +4,7 @@
   // ===== Config =====
   const API_BASE =
     (window.__API_BASE__ && String(window.__API_BASE__).trim()) ||
-    'https://darrius-api.onrender.com';
+    'https://api.darrius.ai';
 
   const api = (path) => API_BASE.replace(/\/+$/, '') + path;
 
