@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="js/site.transport.js?v=20261003"></script>
   <meta charset="UTF-8" />
   <meta
     name="viewport"
@@ -535,7 +536,7 @@ setTimeframe(["1h", "1d", "1w"].includes(initialTimeframe) ? initialTimeframe : 
 
         const apiBase = isLocal
           ? "http://127.0.0.1:5000"
-          : "https://darrius-api.onrender.com";
+          : "https://api.darrius.ai";
 
         const response = await fetch(
           `${apiBase}/api/ranking/top?limit=10&timeframe=${encodeURIComponent(requestedTimeframe)}`,

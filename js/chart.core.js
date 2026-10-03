@@ -16,7 +16,7 @@
   // -----------------------------
   // Config
   // -----------------------------
-  const API_BASE = (window.API_BASE || "https://darrius-api.onrender.com").replace(/\/+$/, "");
+  const API_BASE = (window.API_BASE || "https://api.darrius.ai").replace(/\/+$/, "");
 
   const DEFAULTS = {
     symbol: "TSLA",

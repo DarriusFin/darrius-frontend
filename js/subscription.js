@@ -51,7 +51,7 @@
   // -----------------------------
   // Config
   // -----------------------------
-  const API_BASE = (window.__API_BASE__ || window.API_BASE || "").trim() || "https://darrius-api.onrender.com";
+  const API_BASE = (window.__API_BASE__ || window.API_BASE || "").trim() || "https://api.darrius.ai";
 
   // -----------------------------
   // DOM ids (match your current UI)
