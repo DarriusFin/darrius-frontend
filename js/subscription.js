@@ -121,31 +121,11 @@
   // Referral helper (dref_code)
   // -----------------------------
   function getDrefCode() {
-    try {
-      if (window.DarriusReferral && typeof window.DarriusReferral.get === "function") {
-        const v = String(window.DarriusReferral.get() || "").trim();
-        if (v) return v;
-      }
-    } catch (_) {}
-
-    try {
-      const v1 = String(localStorage.getItem("dref_code") || "").trim();
-      if (v1) return v1;
-    } catch (_) {}
-
-    try {
-      const v2 = String(localStorage.getItem("dref") || "").trim();
-      if (v2) return v2;
-    } catch (_) {}
-
-    try {
-      const v3 = String(localStorage.getItem("darrius_ref_code") || "").trim();
-      if (v3) return v3;
-    } catch (_) {}
-
-    return "";
+    // Only the visible registration field supplies a draft code. The backend
+    // validates eligibility; old browser storage is not binding evidence.
+    const input = document.getElementById('checkoutReferral');
+    return input ? String(input.value || '').trim() : '';
   }
-
   function getRefLanding() {
     try {
       return (window.location.pathname + window.location.search).slice(0, 256);

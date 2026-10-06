@@ -116,14 +116,9 @@
 
   // ---------- optional: affiliate entry ----------
   function openAffiliate() {
-  const userId = $("userId")?.value?.trim() || "";
-
-  const qs = new URLSearchParams();
-  if (userId) qs.set("user_id", userId);
-
-  window.location.href =
-    "/affiliate.html" + (qs.toString() ? "?" + qs.toString() : "");
-}
+    const lang = document.documentElement.lang.startsWith('zh') ? 'zh' : 'en';
+    window.location.href = '/referral-account.html?lang=' + lang;
+  }
 
   // ---------- admin blocks ----------
   function enableAdminBlocksIfNeeded() {
@@ -209,24 +204,9 @@
         window.location.href = "ranking.html";
       });
 
+      // CSS owns the available height, including wrapped headers and banners.
       const syncMainHeight = () => {
-        const banner = $("updateAnnouncement");
-        const main = $("main");
-
-        if (!main) return;
-
-        if (!banner || banner.style.display === "none") {
-          main.style.height = "calc(100vh - 78px)";
-          return;
-        }
-
-        const styles = window.getComputedStyle(banner);
-        const marginTop = parseFloat(styles.marginTop) || 0;
-        const marginBottom = parseFloat(styles.marginBottom) || 0;
-        const bannerSpace =
-          banner.getBoundingClientRect().height + marginTop + marginBottom;
-
-        main.style.height = `calc(100vh - ${78 + bannerSpace}px)`;
+        $("main")?.style.removeProperty("height");
       };
 
       syncMainHeight();
@@ -289,7 +269,7 @@
 
     $("copyLinkBtn")?.addEventListener("click", copyShareLink);
     $("exportBtn")?.addEventListener("click", exportPNG);
-    $("affiliateBtn")?.addEventListener("click", openAffiliate);
+    $("referralCenterBtn")?.addEventListener("click", openAffiliate);
 
     setStatus(
       window.DARRIUS_T?.("dashboardReady") ||

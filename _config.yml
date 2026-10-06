@@ -1,0 +1,7 @@
+# GitHub Pages publishes the repository root. Keep development-only files and
+# superseded manuals in Git history without publishing them as site assets.
+exclude:
+  - tests
+  - README.md
+  - docs/DarriusAI_User_Manual_V3.1.pdf
+  - docs/DarriusAI_User_Manual_V4.0.pdf

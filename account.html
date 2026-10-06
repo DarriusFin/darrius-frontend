@@ -454,7 +454,38 @@
     }
     .darr-plans-pulse { animation: darrPulse 1.05s ease-in-out 0s 2; }
   </style>
-</head>
+<style>
+#topbar{height:auto;min-height:90px;padding:16px 24px;flex-wrap:wrap;gap:16px}
+.logoBox{width:56px;height:56px;flex:0 0 56px}.brandLine1{font-size:22px}.topRight{flex-wrap:wrap;justify-content:flex-end}
+#wrap{max-width:1240px;padding:24px;margin:auto}#grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;align-items:start}
+#rightPanel{grid-column:1;grid-row:1}#grid>.panel:first-child{grid-column:2;grid-row:1}
+.panelHeader{padding:18px}.panelBody{padding:18px}.card{padding:18px;margin-bottom:16px}.plansGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.planCard{padding:18px;min-width:0}.planTop{flex-wrap:wrap;gap:12px}.planPrice{font-size:24px}.planActions{display:block}.planActions .btn{width:100%}
+.identityGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:block;font-size:13px;color:var(--muted)}
+#checkoutIdentity input,#checkoutReferral{display:block;width:100%;margin:8px 0 12px;padding:12px;border:1px solid #344655;border-radius:9px;background:#0b1520;color:var(--text);font:inherit}
+#rightPanel .panelBody>.card:has(#openDashBtn),#rightPanel .panelBody>.card:has(#buildText){display:none}
+#loginPill,#accessPill{display:none}.darr-plans-focus{outline:none!important;box-shadow:none!important}.darr-plans-pulse{animation:none!important}
+@media(max-width:850px){#grid{grid-template-columns:minmax(0,1fr)}#grid>.panel:first-child{grid-column:1;grid-row:2}#wrap{padding:14px}.topRight{min-width:0}#topbar{padding:14px}}
+@media(max-width:500px){.plansGrid,.identityGrid{grid-template-columns:1fr}.brandLine1{font-size:18px}.panelBody{padding:12px}}
+</style><script src="js/account.i18n.js?v=20260927"></script><style>
+/* Match Dashboard's compact header controls. */
+.topRight .btnTop,.accountLanguageControl {
+  display:inline-flex; align-items:center; gap:7px; min-height:32px;
+  padding:6px 10px; border:1px solid rgba(255,255,255,.10);
+  border-radius:999px; background:rgba(255,255,255,.04); color:var(--text);
+  font:inherit; font-size:12px; font-weight:700; white-space:nowrap;
+}
+.topRight .btnTop:hover,.accountLanguageControl:hover {
+  border-color:rgba(255,255,255,.18); background:rgba(255,255,255,.07);
+}
+.accountLanguageControl { position:relative; padding:0; }
+.accountLanguageControl .languageIcon { position:absolute; left:10px; font-size:13px; pointer-events:none; }
+.accountLanguageControl .languageChevron { position:absolute; right:10px; color:var(--muted); font-size:10px; pointer-events:none; }
+#accountLanguage { appearance:none; border:0; border-radius:999px; min-height:30px; margin:0;
+  padding:6px 27px 6px 32px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+#accountLanguage option { background:#121a28; color:#eaf0f7; }
+#accountLanguage:focus-visible,.topRight .btnTop:focus-visible { outline:2px solid #4cc2ff; outline-offset:3px; }
+</style></head>
 
 <body>
   <div id="topbar">
@@ -465,56 +496,60 @@
       <div class="brandText">
         <div class="brandLine1"><span class="accent">DarriusAI</span> · Inflection Hunter</div>
         <div class="brandLine2">
-          <span class="chip brand">Account & Subscription</span>
-          <span class="chip">账户与订阅管理</span>
+          <span class="chip brand"><span data-account-text="s0">Account & Subscription</span></span>
+
         </div>
       </div>
     </div>
 
-    <div class="topRight">
+    <div class="topRight"><div class="accountLanguageControl"><span class="languageIcon" aria-hidden="true">🌐</span><select id="accountLanguage" aria-label="Language / 语言"><option value="en">English</option><option value="zh-CN">中文</option></select><span class="languageChevron" aria-hidden="true">▾</span></div>
       <div class="pill" id="loginPill"><span class="dot" id="loginDot"></span><span id="loginText">Logged in · 已登录</span></div>
       <div class="pill" id="accessPill"><span class="dot"></span><span id="accessText">Access: REAL-TIME · 实时市场数据</span></div>
-      <button class="btnTop" id="backBtn">← Back to Dashboard（返回主界面）</button>
+      <button class="btnTop" id="backBtn"><span data-account-text="s17">← Back to Dashboard</span></button>
     </div>
   </div>
 
   <div id="wrap">
+    <section id="checkoutReturnNotice" class="card" hidden aria-label="Checkout / 付款返回">
+      <p id="checkoutReturnMessage" role="status" aria-live="polite"></p>
+      <div class="btnRow">
+        <button id="checkoutReturnLogin" class="btn" type="button" data-account-text="returnLogin">Sign in on Dashboard</button>
+        <button id="checkoutReturnRefresh" class="btn" type="button" data-account-text="returnRefresh">Refresh subscription status</button>
+      </div>
+    </section>
     <div id="grid">
       <!-- LEFT -->
       <div class="panel">
         <div class="panelHeader">
-          <div class="h">Subscription Overview · 订阅概览</div>
+          <div class="h"><span data-account-text="s1">Subscription Overview</span></div>
           <div class="badge bad" id="statusBadge">STATUS: UNKNOWN</div>
         </div>
 
         <div class="panelBody">
           <div class="card">
             <div class="cardTitle">
-              <b>Status · 状态信息</b>
+              <b><span data-account-text="s2">Status</span></b>
               <span class="note" id="updatedAt">Updated: —</span>
             </div>
 
             <div class="kv">
-              <span>User（用户）</span><b id="kvUser" class="kvVal">—</b>
+              <span><span data-account-text="s3">User</span></span><b id="kvUser" class="kvVal">—</b>
 
-              <span>Current Plan（当前套餐）</span><b id="kvPlan" class="kvVal">—</b>
-              <span>Subscription Status（订阅状态）</span><b id="kvSubStatus" class="kvVal">—</b>
-              <span>Renews / Ends（续订/到期）</span><b id="kvEnds" class="kvVal">—</b>
+              <span><span data-account-text="s4">Current Plan</span></span><b id="kvPlan" class="kvVal">—</b>
+              <span><span data-account-text="s5">Subscription Status</span></span><b id="kvSubStatus" class="kvVal">—</b>
+              <span><span data-account-text="s6">Renews</span></span><b id="kvEnds" class="kvVal">—</b>
 
-              <span>Data Source Mode（数据模式）</span><b id="kvDataMode" class="kvVal">—</b>
+              <span><span data-account-text="s7">Data Source Mode</span></span><b id="kvDataMode" class="kvVal">—</b>
             </div>
 
-            <div class="note" style="margin-top:10px">
-              Note: Cancellation usually keeps access active until period end (policy-dependent).<br/>
-              说明：取消订阅后，通常会在当前计费周期结束前继续可用（以策略为准）。
-            </div>
+            <p class="note" data-account-text="cancelHelp">Cancellation usually keeps access active until the current billing period ends.</p>
           </div>
 
           <div class="card">
-            <div class="cardTitle"><b>Actions · 操作</b><span class="note">Route-only</span></div>
+            <div class="cardTitle"><b><span data-account-text="s8">Actions</span></b></div>
             <div class="btnRow">
-              <button class="btn" id="openPortalBtn">Open Billing Portal（账单管理）</button>
-              <button class="btn" id="scrollPlansBtn">Go to Plans（查看套餐）</button>
+              <button class="btn" id="openPortalBtn"><span data-account-text="s9">Open Billing Portal</span></button>
+              <button class="btn" id="scrollPlansBtn"><span data-account-text="s10">Go to Plans</span></button>
             </div>
           </div>
         </div>
@@ -523,15 +558,30 @@
       <!-- RIGHT -->
       <div class="panel" id="rightPanel">
         <div class="panelHeader">
-          <div class="h">Plans & Control · 套餐与订阅</div>
-          <div class="badge" style="border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.06);" id="sysBadge">SYSTEM</div>
+          <div class="h"><span data-account-text="s11">Plans & Control</span></div>
+          <div id="sysBadge" hidden></div>
         </div>
 
         <div class="panelBody">
           <!-- ✅ Step2: anchor target lives here -->
+          <div class="card" id="checkoutIdentity">
+            <div class="cardTitle"><b><span data-account-text="s12">01 · Account details</span></b></div>
+            <p class="note" data-account-text="identityHelp">Create your account with a User ID and email address. Already registered? Sign in from the Dashboard.</p>
+            <div class="identityGrid">
+              <label><span data-account-text="checkoutUserIdLabel">User ID</span><input id="checkoutUserId" autocomplete="username" maxlength="64" required></label>
+              <label><span data-account-text="checkoutEmailLabel">Email</span><input id="checkoutEmail" type="email" autocomplete="email" required></label>
+            </div>
+          </div>
+          <div class="card" id="referralEntry">
+            <div class="cardTitle"><b><span data-account-text="s13">02 · Referral code</span></b><span class="note"><span data-account-text="s15">Optional</span></span></div>
+            <label for="checkoutReferral"><span data-account-text="s16">Verified referrer's code</span></label>
+            <input id="checkoutReferral" maxlength="64" placeholder="Enter referral code" autocomplete="off">
+            <p class="note" data-account-text="rewardHelp">Use a verified referral code to receive 1 bonus subscription day after your first successful payment. Available once per eligible new account.</p>
+            <p id="referralDraftStatus" class="note" role="status">Optional. Leave blank if you do not have a code.</p>
+          </div>
           <div class="card darr-plans-anchor" id="plans">
             <div class="cardTitle">
-              <b>Plans（4 plans / 4个产品订购）</b>
+              <b><span data-account-text="s14">03 · Choose a plan</span></b>
               <span class="note" id="plansSource">plans: —</span>
             </div>
 
@@ -539,28 +589,24 @@
           </div>
 
           <div class="card">
-            <div class="cardTitle"><b>Quick Actions（快捷操作）</b></div>
+            <div class="cardTitle"><b><span data-account-text="s18">Quick Actions</span></b></div>
             <div class="btnRow">
-              <button class="btnGhost" id="openDashBtn">Open Dashboard（打开主界面）</button>
+              <button class="btnGhost" id="openDashBtn"><span data-account-text="s19">Open Dashboard</span></button>
             </div>
           </div>
 
           <div class="card">
-            <div class="cardTitle"><b>System（系统信息）</b></div>
+            <div class="cardTitle"><b><span data-account-text="s20">System</span></b></div>
             <div class="kv">
-              <span>Build（版本）</span><b id="buildText">—</b>
-              <span>Backend（后端）</span><b id="backendText">—</b>
-              <span>Plans Source（计划来源）</span><b id="plansSource2">—</b>
+              <span><span data-account-text="s21">Build</span></span><b id="buildText">—</b>
+              <span><span data-account-text="s22">Backend</span></span><b id="backendText">—</b>
+              <span><span data-account-text="s23">Plans Source</span></span><b id="plansSource2">—</b>
             </div>
           </div>
 
           <div class="card">
-            <div class="cardTitle"><b>Support（支持）</b></div>
-            <div class="note">
-              Billing: use Billing Portal first (invoices, payment methods, cancellations).<br/>
-              账单相关请优先使用账单管理（发票、付款方式、取消订阅）。<br/>
-              Technical: support@darrius.ai
-            </div>
+            <div class="cardTitle"><b><span data-account-text="s24">Support</span></b></div>
+            <p class="note" data-account-text="supportHelp">Use Billing Portal for invoices, payment methods and cancellations. Technical support: support@darrius.ai</p>
           </div>
         </div>
       </div>
@@ -568,7 +614,7 @@
 
     <footer>
       <div>© <span id="yearNow"></span> Darrius FinTech Inc. All Rights Reserved.</div>
-      <div><a href="#" onclick="alert('Terms / Privacy later');return false;">Terms</a> · <a href="#" onclick="alert('Privacy later');return false;">Privacy</a></div>
+      <div><a href="terms.html" target="_blank" rel="noopener"><span data-account-text="s25">Terms</span></a> · <a href="privacy.html" target="_blank" rel="noopener"><span data-account-text="s26">Privacy</span></a></div>
     </footer>
   </div>
 
@@ -578,9 +624,8 @@
       window.location.hostname === "127.0.0.1" ||
       window.location.hostname === "localhost";
 
-    window.API_BASE = isLocal
-      ? "http://127.0.0.1:5000"
-      : "https://api.darrius.ai";
+    // UI preview uses the existing account API; referral/finance previews are isolated.
+    window.API_BASE = "https://api.darrius.ai";
 
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE;
 
@@ -662,6 +707,7 @@
 
       const base = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,'');
       const $ = (id) => document.getElementById(id);
+      const alert = message => window.alert(window.AccountI18n.message(message));
 
       // ✅ 你的真实 price_id
       const PRICE_ID_BY_KEY = {
@@ -689,7 +735,7 @@
 
       function setBackendState(connected){
         $('backendText').textContent = connected ? "Connected" : "Disconnected";
-        $('backendHint').textContent = "Backend: " + (connected ? "connected" : "disconnected");
+        if ($('backendHint')) $('backendHint').textContent = "Backend: " + (connected ? "connected" : "disconnected");
         const dot = $('loginDot');
         if (dot) dot.classList.toggle('bad', !connected);
       }
@@ -711,7 +757,9 @@
           .replaceAll("'","&#039;");
       }
 
+      let currentPlans = [];
       function renderPlans(plans, sourceLabel){
+        currentPlans = plans;
         $('plansSource').textContent = "plans: " + sourceLabel;
         $('plansSource2').textContent = sourceLabel;
 
@@ -723,23 +771,23 @@
           card.className = "planCard";
 
           const trialHtml = (p.trial && p.trial !== "—")
-            ? `<div class="pillMini">● ${escapeHtml(p.trial)}</div>`
+            ? `<div class="pillMini">● ${escapeHtml(window.AccountI18n.trial(p.trial))}</div>`
             : "";
 
           card.innerHTML = `
             <div>
               <div class="planTop">
                 <div>
-                  <div class="planName">${escapeHtml(p.name || p.nickname || "Plan")}</div>
-                  <div class="planDesc">${escapeHtml(p.desc || "")}</div>
+                  <div class="planName">${escapeHtml(window.AccountI18n.plan(p.key, p.name || p.nickname || "Plan"))}</div>
+                  <div class="planDesc">${escapeHtml(window.AccountI18n.description(p.key))}</div>
                   ${trialHtml}
                 </div>
                 <div class="planPrice">${escapeHtml(p.price || "")}</div>
               </div>
             </div>
             <div class="planActions">
-              <button class="btn" data-act="subscribe">Subscribe（订阅）</button>
-              <button class="btnGhost" data-act="details">Details（详情）</button>
+              <button class="btn" data-act="subscribe">${window.AccountI18n.text("subscribe")}</button>
+
             </div>
           `;
 
@@ -747,10 +795,7 @@
             ev.preventDefault(); ev.stopPropagation();
             await startCheckout(p);
           });
-          card.querySelector('[data-act="details"]').addEventListener('click', (ev) => {
-            ev.preventDefault(); ev.stopPropagation();
-            alert((p.name || "Plan") + "\n" + (p.desc || "") + (p.trial ? ("\n" + p.trial) : ""));
-          });
+
 
           grid.appendChild(card);
         });
@@ -786,7 +831,7 @@
           setBackendState(true);
         }catch(e){
           renderPlans(FALLBACK_PLANS, "fallback (backend unavailable)");
-          setBackendState(true);
+          setBackendState(false);
         }
       }
 
@@ -800,10 +845,10 @@
       async function startCheckout(plan) {
         const signedIn = !!window.__AUTH_USER_ID__;
 
-        if (!signedIn) {
-          alert(
-            "Please sign in from the Dashboard before subscribing."
-          );
+        const guestUser = $('checkoutUserId');
+        const guestEmail = $('checkoutEmail');
+        if (!signedIn && (!guestUser.reportValidity() || !guestEmail.reportValidity())) {
+          $('checkoutIdentity').scrollIntoView({behavior:'smooth',block:'center'});
           return;
         }
 
@@ -841,6 +886,12 @@
           plan: planKey,
         };
 
+        if (!signedIn) {
+          payload.user_id = guestUser.value.trim();
+          payload.email = guestEmail.value.trim();
+        }
+        const referral = $('checkoutReferral').value.trim();
+        if (referral) payload.dref_code = referral;
         try {
           const result = await postCheckout(
             "/api/billing/checkout",
@@ -969,6 +1020,31 @@ async function openPortal() {
   }
 }
 
+      // Referral input is a draft, never a client-side eligibility assertion.
+      const inviteParams = new URLSearchParams(location.search);
+      const invitedCode = inviteParams.get('ref');
+      // URL input is only a draft; never execute it or treat it as verified.
+      if (invitedCode !== null) {
+        const code = invitedCode.trim();
+        $('checkoutReferral').value = /^[A-Za-z0-9_-]{1,64}$/.test(code) ? code : '';
+        try {
+          if ($('checkoutReferral').value) localStorage.setItem('darrius_ref_code', $('checkoutReferral').value);
+          else localStorage.removeItem('darrius_ref_code');
+        } catch (_) {}
+      } else {
+        try { $('checkoutReferral').value = localStorage.getItem('darrius_ref_code') || ''; } catch (_) {}
+      }
+      $('checkoutReferral').addEventListener('input', () => {
+        const code = $('checkoutReferral').value.trim();
+        try { if (code) localStorage.setItem('darrius_ref_code',code); else localStorage.removeItem('darrius_ref_code'); } catch (_) {}
+        $('referralDraftStatus').textContent = code
+          ? window.AccountI18n.text('codePending')
+          : window.AccountI18n.text('codeOptional');
+      });
+      window.addEventListener('darrius:auth-changed', () => {
+        $('checkoutIdentity').hidden = !!window.__AUTH_USER_ID__;
+      });
+      document.addEventListener('darrius:language-changed', () => { renderPlans(currentPlans, 'backend'); });
       // ===== Wire UI events =====
       $('openPortalBtn').addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); openPortal(); });
 
@@ -986,7 +1062,7 @@ async function openPortal() {
       // ===== init =====
       (async function init(){
         setBackendState(true);
-        $('backendHint').textContent = "Backend: connected";
+        if ($('backendHint')) $('backendHint').textContent = "Backend: connected";
         $('buildText').textContent = new Date().toISOString();
         await loadPlans();
 
