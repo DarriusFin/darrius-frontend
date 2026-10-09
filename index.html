@@ -1276,6 +1276,7 @@
       background:rgba(255,255,255,.05);
     }
   </style>
+  <link rel="stylesheet" href="css/dashboard-responsive.css?v=20260927">
 </head>
 
 <body>
@@ -1351,6 +1352,9 @@
       >
         User Manual
       </a>
+
+      <button id="referralCenterBtn" class="pill" type="button"
+        data-i18n="referralCenter" style="cursor:pointer;color:inherit;flex-shrink:0;">Referral Center</button>
 
       <div id="statusBadge" class="pill">
         <span class="dot"></span>
@@ -1736,6 +1740,10 @@
               </div>
 
               <div id="accountLoginFields">
+              <div class="loginGuide">
+                <h3 data-i18n="loginHeading">Sign in to your account</h3>
+                <p data-i18n="loginGuidance">Enter your User ID. We will send a verification code to your registered email.</p>
+              </div>
 
               <div class="field">
                 <div class="label">
@@ -1770,7 +1778,7 @@
                     <input
                       id="verificationCode"
                       inputmode="numeric"
-                      maxlength="6"
+                      maxlength="16"
                       autocomplete="one-time-code"
                       placeholder="123456"
                     />
@@ -1790,47 +1798,21 @@
                   id="authStatusText"
                   class="toolViewFooter"
                   style="margin-top:10px;"
-                  data-i18n="notSignedIn"
+                  data-i18n="loginAwaitingCode"
                 >
                   Not signed in
                 </div>
 
               </div>
 
+              <div class="registrationGuide">
+                <span data-i18n="newAccountPrompt">New to DarriusAI?</span>
+                <a href="account.html#checkoutIdentity" data-i18n="createAccountLink">Create an account</a>
+              </div>
               </div>
 
-              <div class="field" id="accountEmailField">
-                <div class="label">
-                  <span data-i18n="email">Email</span>
-                  <span class="small" data-i18n="required">Required</span>
-                </div>
-                <input id="email" placeholder/>
-              </div>
-
-              <div class="field" id="accountPlanField">
-                <div class="label">
-                  <span data-i18n="plan">Plan</span>
-                </div>
-
-                <select id="planSelect">
-                  <option value="" data-i18n="loadingOption">Loading...</option>
-                </select>
-              </div>
-
-              <div
-                class="row2"
-                id="accountCheckoutActions"
-                style="margin-top:0; grid-template-columns:1fr;"
-              >
-                <button
-                  class="btn"
-                  id="subscribeBtn"
-                  disabled
-                  data-i18n="subscribe"
-                >
-                  Subscribe
-                </button>
-              </div>
+              <a class="btn" href="account.html" id="viewSubscriptionBtn"
+                style="display:block;text-align:center;text-decoration:none" data-i18n="viewSubscription">View Plans & Subscribe</a>
 
               <div
                 class="row2"
@@ -1876,33 +1858,6 @@
                   Trial access requires a valid payment method. Access is disabled
                   automatically if payment is not completed when the trial ends.
                 </div>
-              </div>
-
-            </div>
-
-            <!-- Affiliate -->
-            <div class="accountSection" id="affiliateCard">
-
-              <div class="accountSectionHeader">
-                <span
-                  class="accountSectionTitle"
-                  data-i18n="affiliateProgram"
-                >
-                  Affiliate Program
-                </span>
-                <span class="accountSectionMeta" data-i18n="partners">PARTNERS</span>
-              </div>
-
-              <button
-                class="btnGhost"
-                id="affiliateBtn"
-                data-i18n="openAffiliateProgram"
-              >
-                Open Affiliate Program
-              </button>
-
-              <div class="toolViewFooter" data-i18n="affiliateCommissionTerms">
-                Commission terms are available in the dashboard and affiliate agreement.
               </div>
 
             </div>
@@ -2062,11 +2017,14 @@
       window.location.hostname === "127.0.0.1" ||
       window.location.hostname === "localhost";
 
-    window.API_BASE = isLocal
-      ? "http://127.0.0.1:5000"
-      : "https://api.darrius.ai";
+    // UI preview uses the existing account API; referral/finance previews are isolated.
+    window.API_BASE = "https://api.darrius.ai";
 
     window.__API_BASE__ = window.API_BASE;
+    // Local UI previews may read public market data without starting billing/auth.
+    window.MARKET_API_BASE = isLocal
+      ? "https://api.darrius.ai"
+      : window.API_BASE;
 
     window.__DEFAULT_SYMBOL__ = "TSLA";
     window.__DEFAULT_TF__ = "1d";
@@ -2125,18 +2083,16 @@
   </script>
   <script src="js/upgrade.guard.js?v=20260825_entitlement_fix1"></script>
 
-  <script src="js/chart.core.js?v=20261003_browser_login"></script>
+  <script src="js/chart.core.js?v=20260820_export_png1"></script>
 
   <script src="js/market.pulse.js?v=20260926_remove_inflow"></script>
   <script src="js/darrius.mutant.js?v=20260212"></script>
 
-  <script src="js/subscription.js?v=20261003_browser_login"></script>
+  <script src="js/subscription.js?v=20260825_i18n_access1"></script>
   <script src="js/account.auth.js?v=20261003_browser_login"></script>
-  <script src="js/referral.client.js?v=20260129"></script>
-  <script src="js/referral.checkout.js?v=20260129"></script>
 
   <!-- ✅ boot MUST be last (只保留一次！) -->
-  <script src="js/boot.js?v=20261003_browser_login"></script>
+  <script src="js/boot.js?v=20261001_account_referral"></script>
 
   <!-- ✅ TF Sync (UI only, stable) -->
   <script>
@@ -2215,58 +2171,6 @@
         }
       }, 400);
     });
-  })();
-  </script>
-
-  <!-- ✅ Affiliate card click（只保留一份！） -->
-  <script>
-  (function(){
-    function ready(fn){
-      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
-      else fn();
-    }
-    ready(function(){
-      var card = document.getElementById('affiliateCard');
-      if (!card) return;
-      card.style.cursor = 'pointer';
-      if (card.__AFF_BOUND__) return;
-      card.__AFF_BOUND__ = true;
-    });
-  })();
-  </script>
-
-  <!-- ✅ Bind referral after bootstrap (safe, best-effort) -->
-  <script>
-  (async function darriusBindReferralAfterBootstrap(){
-    try {
-      const ref = localStorage.getItem('darrius_ref_code');
-      if (!ref) return;
-      if (localStorage.getItem('darrius_ref_bound') === '1') return;
-
-      const candidates = [
-        window.__USER_ID__,
-        window.__DARRIUS_USER_ID__,
-        window.currentUser && window.currentUser.id,
-        window.user && window.user.id,
-        (window.__DARRIUS_APP__ && window.__DARRIUS_APP__.user && window.__DARRIUS_APP__.user.id),
-      ];
-
-      const userId = candidates.find(v => typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v)));
-      if (!userId) return;
-
-      const base = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,'');
-      const res = await fetch(base + '/api/referral/bind', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-Id': String(userId),
-        },
-        body: JSON.stringify({ ref_code: ref, user_id: userId })
-      });
-
-      const j = await res.json().catch(() => ({}));
-      if (j && j.ok) localStorage.setItem('darrius_ref_bound', '1');
-    } catch (e) {}
   })();
   </script>
 

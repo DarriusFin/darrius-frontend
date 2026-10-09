@@ -92,7 +92,7 @@
 
     if (emailField) {
       emailField.style.display =
-        !signedIn && showCheckout ? "" : "none";
+        "none";
     }
 
     if (planField) {
@@ -180,7 +180,7 @@
 
       window.__AUTH_USER_ID__ = null;
       setStatus(
-        window.DARRIUS_T?.("notSignedIn") || "Not signed in"
+        window.DARRIUS_T?.("loginAwaitingCode") || "Sign in with a code sent to your registered email."
       );
       setAccountMeta(
         window.DARRIUS_T?.("guest") || "GUEST"

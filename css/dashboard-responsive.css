@@ -1,0 +1,56 @@
+/* Dashboard sizing: never compress the chart to fit stacked tool panels. */
+html { min-height:100%; }
+body { display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:auto; }
+#topbar { height:auto; min-height:78px; padding:10px 16px; flex:0 0 auto; flex-wrap:wrap; }
+#brand { flex:1 1 420px; }
+#brandLine1 { line-height:1.25; overflow-wrap:anywhere; }
+#brandLine2 { margin-top:0; }
+#topRight { flex:1 1 610px; min-width:0; flex-wrap:wrap; justify-content:flex-end; margin-left:auto; }
+#topRight > * { flex-shrink:0; }
+#topRight .pill { max-width:100%; overflow:visible; }
+#copyright { white-space:normal; text-align:right; }
+.updateAnnouncement { flex:0 0 auto; }
+#main { height:auto; flex:1 0 520px; min-height:520px; }
+#chartPanel .panelBody { height:auto; flex:1 1 0; overflow:hidden; }
+#chartTop { flex:0 0 auto; }
+#chartWrap { min-height:240px; }
+#priceLine { min-width:0; flex:0 0 auto; }
+#hintText { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+#tfQuick { min-width:0; }
+@media (max-width:1180px) {
+  body { height:auto; min-height:100vh; min-height:100dvh; }
+  #topRight { justify-content:flex-end; }
+  #main { flex:0 0 auto; height:auto; min-height:0; grid-template-columns:minmax(0,1fr); align-content:start; }
+  #chartPanel { height:clamp(580px,78vh,780px); min-height:580px; }
+  #chartWrap { height:auto; flex:1 1 0; min-height:240px; }
+  #chartPanel .panelBody { overflow:hidden; }
+  #toolDock { height:560px; min-height:0; }
+  #toolPanel { overflow:auto; }
+}
+@media (max-width:600px) {
+  #topbar { padding:12px; gap:12px; }
+  #brand { flex-basis:100%; gap:10px; }
+  #brandLine1 { font-size:19px; }
+  .logoBox { width:48px; height:48px; flex-basis:48px; }
+  #brandLine2 { gap:6px; }
+  .chip { padding:4px 7px; font-size:10px; }
+  #topRight { gap:8px; flex-basis:100%; }
+  #copyright { flex-basis:100%; text-align:right; }
+  #main { padding:10px; --tool-rail-width:48px; }
+  .toolRailBtn { width:48px; }
+  .updateAnnouncement { margin:10px 10px 0; padding:12px; gap:10px; }
+  .updateAnnouncementContent { padding-right:22px; }
+  #chartTop { padding:12px; gap:12px; }
+  #hintText { flex-basis:100%; }
+  #tfQuick { flex-basis:100%; justify-content:flex-start; gap:6px; }
+  #chartPanel { height:650px; min-height:650px; }
+  #mutantPanel { flex-basis:140px; }
+  #toolDock { height:540px; }
+}
+
+.loginGuide { margin-bottom:16px; }
+.loginGuide h3 { font-size:17px; margin:0 0 8px; }
+.loginGuide p { margin:0; font-size:13px; line-height:1.7; color:var(--muted); }
+.registrationGuide { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 18px; font-size:13px; }
+.registrationGuide a { font-weight:700; }
+#authStatusText { font-size:12px; line-height:1.7; }
