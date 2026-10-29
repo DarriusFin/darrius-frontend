@@ -1,11 +1,6 @@
-/* upgrade.guard.js (UNLOCK FIX) v2026.02.05
- * Purpose:
- *  - Gate symbol/timeframe/load for non-entitled users
- *  - MUST unlock for ACTIVE / TRIAL users (based on DOM status)
- *
- * Safety:
- *  - Never throws
- *  - UI-only; does not touch billing/subscription logic
+/* Stock controls follow the current account's subscription policy.
+ * Keep listening after login delays; displayed text is not access evidence.
+ * UI-only; does not change billing or server authorization.
  */
 (() => {
   'use strict';
@@ -14,43 +9,11 @@
 
   function $(id){ return document.getElementById(id); }
 
-  function txt(id){
-    const el = $(id);
-    return (el && el.textContent) ? String(el.textContent).toLowerCase() : '';
-  }
-
   function domSaysEntitled(){
     const policy = window.__ENTITLEMENT__;
-
-    // Primary source: actual entitlement state
-    if (
-      policy &&
-      typeof policy.has_access === 'boolean'
-    ) {
-      return policy.has_access;
-    }
-
-    // Backward-compatible fallback
-    const bucket = String(
-      policy?.bucket || ''
-    ).toUpperCase();
-
-    if (
-      ['ACTIVE', 'TRIAL', 'GRACE'].includes(bucket)
-    ) {
-      return true;
-    }
-
-    // Legacy DOM fallback only
-    const t =
-      txt('subStatusText') +
-      ' ' +
-      txt('planStatus');
-
-    return (
-      t.includes('active') ||
-      t.includes('trial')
-    );
+    return !!window.__AUTH_USER_ID__ &&
+      policy?.user_id === window.__AUTH_USER_ID__ &&
+      policy.has_access === true;
   }
 
   function setDisabled(id, disabled){
@@ -142,23 +105,16 @@
     }
   );
 
-  document.addEventListener(
+  window.addEventListener(
     "darrius:subscription-status",
     () => {
       evaluate();
     }
   );
 
+  window.addEventListener("darrius:auth-changed", () => safe(evaluate));
+
   // 立即执行一次（页面加载时先锁/先解锁）
   safe(evaluate);
-
-  // 复查（因为 subStatusText/planStatus 是异步填充）
-  let tries = 0;
-  const timer = setInterval(() => {
-    tries += 1;
-    const ok = safe(evaluate);
-    if (ok) clearInterval(timer);       // 一旦解锁成功就停，避免后续覆盖回锁
-    if (tries >= 120) clearInterval(timer); // 30s
-  }, 250);
 
 })();

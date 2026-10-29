@@ -79,6 +79,12 @@
   // -----------------------------
   let PLANS = []; // {key,label,price_id,trial_days}
   let _subStatusTimer = null;
+  let statusRequestVersion = 0;
+
+  function publishPolicy(policy) {
+    window.__ENTITLEMENT__ = policy;
+    window.dispatchEvent(new CustomEvent("darrius:subscription-status", {detail: policy}));
+  }
 
   // -----------------------------
   // API helpers
@@ -163,7 +169,10 @@
 
   function setPlanStatusText(t) {
     const el = $(IDS.planStatus);
-    if (el) el.textContent = t;
+    if (el) {
+      el.removeAttribute('data-i18n');
+      el.textContent = t;
+    }
   }
 
   function setSubStatusText(t) {
@@ -174,10 +183,8 @@
   function populatePlans(plans) {
     PLANS = (plans || []).slice();
     const sel = $(IDS.planSelect);
-    if (!sel) return;
-
-    sel.innerHTML = "";
-    for (const p of PLANS) {
+    if (sel) sel.innerHTML = "";
+    for (const p of (sel ? PLANS : [])) {
       const opt = document.createElement("option");
       opt.value = p.key;
       const planKey =
@@ -663,6 +670,8 @@
   }
 
   async function refreshSubscriptionStatus() {
+    const requestVersion = ++statusRequestVersion;
+    const authenticatedUser = window.__AUTH_USER_ID__;
     const user_id =
       (($(IDS.userId) && $(IDS.userId).value) || "").trim();
 
@@ -675,16 +684,20 @@
       let policy = null;
 
       // Signed-in users: subscription identity comes from server session.
-      if (window.__AUTH_USER_ID__) {
+      if (authenticatedUser) {
         setSubStatusText(
           window.DARRIUS_T?.("checking") ||
           "CHECKING..."
         );
 
         policy = await apiGet("/api/subscription/me");
+        if (requestVersion !== statusRequestVersion || window.__AUTH_USER_ID__ !== authenticatedUser) return;
+        if (policy?.user_id !== authenticatedUser || typeof policy?.has_access !== 'boolean') {
+          throw new Error('Subscription identity or access state mismatch');
+        }
       } else {
         // No authenticated session: never resolve access from form fields.
-        window.__ENTITLEMENT__ = null;
+        publishPolicy(null);
 
         setSubStatusText(
           window.DARRIUS_T?.(
@@ -712,14 +725,7 @@
         email
       );
 
-      try {
-        window.dispatchEvent(
-          new CustomEvent(
-            "darrius:subscription-status",
-            { detail: policy }
-          )
-        );
-      } catch (_) {}
+      publishPolicy(policy);
 
       if (isAdmin()) {
         log(
@@ -733,7 +739,8 @@
         );
       }
     } catch (e) {
-      window.__ENTITLEMENT__ = null;
+      if (requestVersion !== statusRequestVersion || window.__AUTH_USER_ID__ !== authenticatedUser) return;
+      publishPolicy(null);
 
       setSubStatusText(
         window.DARRIUS_T?.("unableLoadSubscriptionStatus") ||
@@ -826,6 +833,7 @@
     window.addEventListener(
       "darrius:auth-changed",
       () => {
+        publishPolicy(null);
         refreshSubscriptionStatus();
       }
     );

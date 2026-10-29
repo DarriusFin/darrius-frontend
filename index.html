@@ -2081,14 +2081,14 @@
   <script>
     window.__UPGRADE_URL__ = "account.html#plans";
   </script>
-  <script src="js/upgrade.guard.js?v=20260825_entitlement_fix1"></script>
+  <script src="js/upgrade.guard.js?v=20261029_access_events"></script>
 
   <script src="js/chart.core.js?v=20260820_export_png1"></script>
 
   <script src="js/market.pulse.js?v=20260926_remove_inflow"></script>
   <script src="js/darrius.mutant.js?v=20260212"></script>
 
-  <script src="js/subscription.js?v=20260825_i18n_access1"></script>
+  <script src="js/subscription.js?v=20261029_access_events"></script>
   <script src="js/account.auth.js?v=20261003_browser_login"></script>
 
   <!-- ✅ boot MUST be last (只保留一次！) -->
@@ -2246,64 +2246,6 @@
       const ob = new MutationObserver(() => safe(relocate));
       ob.observe(chartRoot, {childList:true, subtree:true});
     });
-  })();
-  </script>
-
-  <!-- ✅ HARD GATE ENFORCER (final safety net)
-       - 未订阅：锁 symbol/tf/loadBtn
-       - 已订阅/试用：解锁
-       依赖 window.__ENTITLEMENT__（upgrade.guard.js 会写）
-  -->
-  <script>
-  (function darriusGateEnforcer(){
-    'use strict';
-    function safe(fn){ try { return fn(); } catch(e){ return null; } }
-
-    function isEntitled(ent){
-      if (!ent) return false;
-      if (ent.entitled === true || ent.active === true || ent.ok === true) return true;
-      const s = String(ent.status || ent.sub_status || ent.subscription_status || '').toLowerCase();
-      if (s === 'active' || s === 'trialing' || s === 'trial') return true;
-      const a = String(ent.access || ent.access_status || '').toLowerCase();
-      if (a === 'active' || a === 'trial') return true;
-      return false;
-    }
-
-    function apply(lock){
-      const sym = document.getElementById('symbol');
-      const tf  = document.getElementById('tf');
-      const btn = document.getElementById('loadBtn');
-
-      // dataSource 永远锁为 third
-      const ds  = document.getElementById('dataSource');
-      if (ds){
-        ds.value = 'third';
-        ds.disabled = true;
-      }
-
-      if (sym) sym.disabled = !!lock;
-      if (tf)  tf.disabled  = !!lock;
-      if (btn) btn.disabled = !!lock;
-    }
-
-    // 初始：先按当前 entitlement 判定一次（未知就锁，避免漏锁）
-    safe(function(){
-      const ent = window.__ENTITLEMENT__;
-      apply(!isEntitled(ent));
-    });
-
-    // 轮询：等待 upgrade.guard / subscription 状态刷新后自动切换
-    let last = null;
-    setInterval(function(){
-      safe(function(){
-        const ent = window.__ENTITLEMENT__ || null;
-        const now = isEntitled(ent) ? 'UNLOCK' : 'LOCK';
-        if (now !== last){
-          last = now;
-          apply(now === 'LOCK');
-        }
-      });
-    }, 500);
   })();
   </script>
 
