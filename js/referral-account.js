@@ -13,7 +13,7 @@
  async function api(path,body,binary=false){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
   try{const response=await fetch(API+path,{credentials:'include',cache:'no-store',signal:controller.signal,...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});if(response.ok&&binary)return await response.blob();let data={};try{data=await response.json();}catch(_){}
-   if(!response.ok){const error=new Error(errors()[data.error]||(String(data.error||'').startsWith('invalid_intake')?T('请检查身份、邮箱和税务字段的格式及必填项目。','Check the identity, email and tax fields and required information.'):null)||(response.status===404?T('此功能尚未部署到正式后端。登录服务仍可使用。','This feature has not been deployed to the live API yet. Sign-in remains available.'):T('请求失败，请稍后重试。','Request failed. Please try again.')));error.status=response.status;throw error;}return data;
+   if(!response.ok){const error=new Error(errors()[data.error]||(String(data.error||'').startsWith('invalid_intake')?T('请检查身份、邮箱和税务字段的格式及必填项目。','Check the identity, email and tax fields and required information.'):null)||(response.status===404?T('此功能尚未部署到正式后端。登录服务仍可使用。','This feature has not been deployed to the live API yet. Sign-in remains available.'):T('请求失败，请稍后重试。','Request failed. Please try again.')));error.status=response.status;error.code=data.error;throw error;}return data;
   }catch(error){if(error.name==='AbortError'||error instanceof TypeError)throw new Error(T('无法连接账户服务，请检查网络后重试。','Unable to reach the account service. Check your connection and retry.'));throw error;}finally{clearTimeout(timer);}
  }
  function controls(){ $('send').disabled=busy||Date.now()<cooldown;$('verify').disabled=busy;$('logout').disabled=busy;$('send').textContent=Date.now()<cooldown?T('稍后重发','Resend in')+' '+Math.ceil((cooldown-Date.now())/1000)+'s':T('发送验证码','Send verification code'); }
@@ -101,10 +101,35 @@
 
  function preparedSigningForm(row){
   const old=$('preparedSignForm');if(old)old.remove();
+  const oldStatus=$('preparedSignStatus');if(oldStatus)oldStatus.remove();
   const form=document.createElement('form');form.id='preparedSignForm';
   form.innerHTML='<h3>'+T('签署已下载的协议','Sign the downloaded agreement')+'</h3><p>'+esc(row.number)+'</p><p>'+T('请先阅读完整 PDF，核对所有资料。此次签署将绑定该文件；公司会签和资格核验完成后才可启用邀请。','Read the complete PDF and verify all details. Your signature will bind to this file. Company countersignature and eligibility review are still required before invitations activate.')+'</p><label>'+T('输入资料草稿中的拟签署人姓名','Type the proposed signer name from your draft')+'<input name="signer_name" maxlength="200" required autocomplete="off"></label><label><input name="details" type="checkbox" required> '+T('我已核对下载文件中的全部资料，确认准确并具有签署权限。','I reviewed the downloaded file, confirm its details are accurate, and have authority to sign.')+'</label><label><input name="intent" type="checkbox" required> '+T('我已阅读并同意完整协议，愿意以电子方式签署并保存记录。','I have read and agree to the complete agreement and intend to sign electronically and retain the record.')+'</label><button type="submit">'+T('确认本人签署','Confirm my signature')+'</button>';
   const cancel=document.createElement('button');cancel.type='button';cancel.textContent=T('暂不签署','Not now');cancel.addEventListener('click',()=>{if(!busy){form.reset();form.remove();}});form.appendChild(cancel);$('agreementPanel').appendChild(form);
-  form.addEventListener('submit',e=>{e.preventDefault();run(async()=>{await api('/api/referral/account/agreement/prepared/'+Number(row.id)+'/sign',{pdf_sha256:row.pdf_sha256,signer_name:form.elements.signer_name.value,details_confirmed:form.elements.details.checked,intent_to_sign:form.elements.intent.checked});form.reset();form.remove();await loadReceipts();message(T('本人签署已保存，等待公司会签及资格核验。','Your signature is saved, pending company countersignature and eligibility review.'));});});
+  const hint=document.createElement('p');hint.className='muted';hint.textContent=T('姓名须与资料草稿中的拟签署人姓名完全一致，包括大小写和空格。','Match the proposed signer name in your draft exactly, including capitalization and spaces.');form.querySelector('input[name="signer_name"]').after(hint);
+  const status=document.createElement('p');status.id='preparedSignStatus';status.className='signing-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.tabIndex=-1;status.hidden=true;form.after(status);
+  const feedback=(text,state)=>{status.textContent=text;status.dataset.state=state;status.hidden=false;status.scrollIntoView({block:'nearest'});};
+  form.addEventListener('submit',e=>{
+   e.preventDefault();
+   if(busy){feedback(T('正在处理请求，请稍候再试。','Another request is in progress. Please wait and try again.'),'pending');return;}
+   const payload={pdf_sha256:row.pdf_sha256,signer_name:form.elements.signer_name.value,details_confirmed:form.elements.details.checked,intent_to_sign:form.elements.intent.checked};
+   const submit=form.querySelector('button[type="submit"]'),label=submit.textContent;
+   run(async()=>{
+    form.setAttribute('aria-busy','true');form.querySelectorAll('input,button').forEach(el=>el.disabled=true);
+    submit.textContent=T('正在提交签署…','Submitting signature…');feedback(T('正在提交签署，请稍候…','Submitting your signature. Please wait…'),'pending');
+    try{
+     await api('/api/referral/account/agreement/prepared/'+Number(row.id)+'/sign',payload);
+     form.reset();form.remove();
+     const saved=T('本人签署已保存，等待公司会签及资格核验。','Your signature is saved, pending company countersignature and eligibility review.');
+     feedback(saved,'success');message(saved);
+     try{await loadReceipts();}catch(_){feedback(saved+' '+T('签署记录暂时无法刷新，请稍后点击“协议签署记录与下载”查看。','Signing records could not refresh. Open “Agreement signing records and downloads” later.'),'success');}
+    }catch(error){
+     const text=error.code==='agreement_identity_required'?T('签署人姓名与已保存的资料草稿不一致。请核对大小写、空格和姓名顺序，修改后重新确认签署。','The signer name does not match your saved draft. Check capitalization, spaces and name order, then confirm again.'):error.message;
+     feedback(text,'error');
+     if(error.code==='agreement_identity_required'){form.elements.signer_name.setAttribute('aria-invalid','true');form.elements.signer_name.setAttribute('aria-describedby',status.id);form.elements.signer_name.focus();}
+    }finally{form.removeAttribute('aria-busy');form.querySelectorAll('input,button').forEach(el=>el.disabled=false);submit.textContent=label;}
+   });
+  });
+  form.elements.signer_name.addEventListener('input',()=>form.elements.signer_name.removeAttribute('aria-invalid'));
  }
  function packetReader(doc){return '<div class="agreement-heading"><div><p class="eyebrow">'+T('推荐人协议','REFERRAL AGREEMENT')+'</p><h3>'+T('阅读协议，完成签署','Review and sign your agreement')+'</h3></div><span class="agreement-version">'+esc(doc.version)+'</span></div><p class="agreement-description">'+T('请先阅读英文协议原文，再填写资料。管理员生成专属文件后，您可下载核对并签署。','Read the original English agreement, then complete your details. Once your document is prepared, download it, verify the details and sign.')+'</p><ol class="agreement-steps"><li><b>01</b>'+T('阅读协议','Read agreement')+'</li><li><b>02</b>'+T('填写资料','Prepare details')+'</li><li><b>03</b>'+T('核对并签署','Review and sign')+'</li></ol><div class="agreement-toolbar"><button id="downloadPacket">'+T('下载协议原文 PDF','Download original PDF')+'</button><button id="changePacket" class="quiet">'+T('更改税务身份','Change tax status')+'</button></div><details class="agreement-reader"><summary>'+T('展开协议正文','Read agreement text')+'<span>'+T('英文原文 · 辅助阅读','English original · reading aid')+'</span></summary><pre tabindex="0">'+esc(doc.text)+'</pre></details>';}
  function renderPacket(){const doc=agreementDocument;
