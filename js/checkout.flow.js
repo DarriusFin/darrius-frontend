@@ -10,12 +10,16 @@
   let plans = [], selectedKey = '', busy = false, authBusy = false, cooldownUntil = 0;
   let statusKey = '', statusKind = 'info', statusDetail = '', signedInUser = '';
   const messages = {
-    signIn: ['Sign in to continue', '登录并继续订阅'],
+    signIn: ['Already have an account? Sign in', '已有账号？登录继续付款'],
+    createPay: ['Create account & go to payment', '创建账号并前往付款'],
+    pay: ['Go to payment', '前往付款'],
+    backToCreate: ['Back to new account', '返回新用户注册'],
+    usernameTaken: ['This User ID is taken. Choose another User ID; your email and plan are unchanged.', '这个用户名已被使用。请更换用户名后重新点击付款按钮；邮箱和套餐无需重填。'],
     loginHelp: ['Already started checkout? Sign in with your original User ID. The code is sent only to the email registered to that account.', '曾经进入过付款页？请使用原用户 ID 登录。验证码只发送到该账号已登记的邮箱。'],
     user: ['Registered User ID', '已登记的用户 ID'], code: ['Email verification code', '邮箱验证码'],
     send: ['Send verification code', '发送验证码'], verify: ['Verify and sign in', '验证并登录'],
     continue: ['Continue with selected plan', '继续所选套餐付款'],
-    existing: ['This User ID or email is already registered, possibly from an unfinished checkout. Sign in below with the original User ID, then continue your selected plan. If the email belongs to another account, use that account’s User ID.', '该用户 ID 或邮箱已登记，可能是之前未完成付款时创建的。请在下方使用原用户 ID 登录，再继续所选套餐；如邮箱属于其他账号，请使用那个账号的用户 ID。'],
+    existing: ['An account already uses this email, possibly from an earlier checkout. Verify its registered User ID below, then continue to payment. No need to create another account.', '这个邮箱已有账号，可能是在刚才进入付款页时创建的。请用该账号的用户名接收验证码，登录后继续付款，无需重复注册。'],
     checking: ['Checking sign-in status…', '正在确认登录状态…'],
     creating: ['Opening secure checkout… Please do not click again.', '正在打开安全付款页，请勿重复点击。'],
     session: ['Unable to confirm sign-in status. Please retry when your connection is stable. No new checkout was requested.', '暂时无法确认登录状态，请待网络稳定后重试。本次未请求创建新的付款页面。'],
@@ -43,10 +47,15 @@
     if (el) { el.hidden = false; el.textContent = text(key) + (detail ? ' (' + detail + ')' : ''); el.dataset.kind = kind; }
   }
   function render() {
+    const loggingIn = !$('checkoutLogin')?.hidden;
+    if ($('plans')) $('plans').hidden = loggingIn;
+    if ($('referralEntry')) $('referralEntry').hidden = loggingIn;
     document.querySelectorAll('[data-checkout-text]').forEach(el => { el.textContent = text(el.dataset.checkoutText); });
     if (statusKey) status(statusKey, statusKind, statusDetail);
     const resume = $('checkoutResume');
     if (resume) { resume.hidden = !selectedKey || !signedInUser; resume.textContent = text('continue') + (selectedKey ? ' · ' + (window.AccountI18n?.plan(selectedKey, selectedKey) || selectedKey) : ''); }
+    document.querySelectorAll('[data-act="subscribe"]').forEach(el => { el.textContent = text(signedInUser ? 'pay' : 'createPay'); });
+    document.body?.classList.toggle('account-authenticated',!!signedInUser);
     lock();
   }
   function lock() {
@@ -70,9 +79,12 @@
     const panel = $('checkoutLogin');
     if (!panel) return;
     panel.hidden = false;
+    if ($('checkoutIdentity')) $('checkoutIdentity').hidden = true;
+    if ($('checkoutSignIn')) $('checkoutSignIn').hidden = true;
     if (userId) $('checkoutLoginUser').value = userId;
     if (key) status(key, 'warning');
     panel.scrollIntoView({behavior:'smooth',block:'center'});
+    render();
     $('checkoutLoginUser').focus();
   }
   async function request(path, payload) {
@@ -97,8 +109,8 @@
     signedInUser = user || '';
     if (window.__AUTH_USER_ID__ !== user) window.__ENTITLEMENT__ = null;
     window.__AUTH_USER_ID__ = user;
-    if ($('checkoutIdentity')) $('checkoutIdentity').hidden = !!user;
-    if ($('checkoutSignIn')) $('checkoutSignIn').hidden = !!user;
+    if ($('checkoutIdentity')) $('checkoutIdentity').hidden = !!user || !$('checkoutLogin').hidden;
+    if ($('checkoutSignIn')) $('checkoutSignIn').hidden = !!user || !$('checkoutLogin').hidden;
     if (user && $('checkoutLogin')) $('checkoutLogin').hidden = true;
     render();
   }
@@ -134,6 +146,15 @@
         return;
       }
       const error = data.error || 'checkout_failed';
+      if (error === 'user_id_unavailable') {
+        $('checkoutLogin').hidden = true;
+        $('checkoutIdentity').hidden = false;
+        $('checkoutSignIn').hidden = false;
+        status('usernameTaken','warning');
+        $('checkoutUserId').scrollIntoView({behavior:'smooth',block:'center'});
+        $('checkoutUserId').focus();
+        return;
+      }
       if (error === 'existing_account_requires_sign_in') { showLogin('existing',payload.user_id); return; }
       if (error === 'authentication_required') { publish(null); showLogin('expired'); return; }
       const mapped = {active_subscription_exists:'active',account_email_missing:'missingEmail',invalid_price_id:'planError',plan_price_mismatch:'planError'};
@@ -177,6 +198,10 @@
   function init() {
     restore();render();
     $('checkoutSignIn')?.addEventListener('click',()=>showLogin('', $('checkoutUserId')?.value.trim()));
+    $('checkoutNewAccount')?.addEventListener('click',()=>{
+      $('checkoutLogin').hidden=true; $('checkoutIdentity').hidden=false; $('checkoutSignIn').hidden=false;
+      statusKey=''; $('checkoutFlowStatus').hidden=true; render(); $('checkoutUserId').focus();
+    });
     $('checkoutLoginSend')?.addEventListener('click',sendCode);
     $('checkoutLoginVerify')?.addEventListener('click',verifyCode);
     $('checkoutResume')?.addEventListener('click',()=>start(plans.find(p=>p.key===selectedKey)));

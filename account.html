@@ -467,7 +467,7 @@
 #loginPill,#accessPill{display:none}.darr-plans-focus{outline:none!important;box-shadow:none!important}.darr-plans-pulse{animation:none!important}
 @media(max-width:850px){#grid{grid-template-columns:minmax(0,1fr)}#grid>.panel:first-child{grid-column:1;grid-row:2}#wrap{padding:14px}.topRight{min-width:0}#topbar{padding:14px}}
 @media(max-width:500px){.plansGrid,.identityGrid{grid-template-columns:1fr}.brandLine1{font-size:18px}.panelBody{padding:12px}}
-</style><script src="js/account.i18n.js?v=20261110_recovery1"></script><style>
+</style><script src="js/account.i18n.js?v=20261110_clarity1"></script><style>
 /* Match Dashboard's compact header controls. */
 .topRight .btnTop,.accountLanguageControl {
   display:inline-flex; align-items:center; gap:7px; min-height:32px;
@@ -491,6 +491,18 @@
 #checkoutFlowStatus{padding:12px;border-radius:9px;background:#112d37;border:1px solid #32616b;line-height:1.6;overflow-wrap:anywhere}
 #checkoutFlowStatus[data-kind="error"],#checkoutFlowStatus[data-kind="warning"]{background:#382b15;border-color:#8a6a30}
 #checkoutRecovery .btn{margin-top:8px}
+#checkoutSignIn{background:transparent;border:0;padding:4px 0;color:#8dd9f7;min-height:36px;text-decoration:underline;text-underline-offset:4px}
+#checkoutRecovery{background:transparent;border:0;padding:0 4px;box-shadow:none}
+#checkoutLogin{padding:18px;border:1px solid #344655;border-radius:12px;background:#101d2a;margin-top:12px}
+#checkoutNewAccount{margin-left:8px}
+body:not(.account-authenticated) #grid{grid-template-columns:minmax(0,1fr);max-width:900px;margin:auto}
+body:not(.account-authenticated) #grid>.panel:first-child{display:none}
+#referralEntry summary{cursor:pointer;color:var(--muted);font-size:14px}
+#referralEntry[open] summary{margin-bottom:14px}
+#checkoutIdentity[hidden],#checkoutReturnNotice[hidden]{display:none!important}
+#plans[hidden],#referralEntry[hidden]{display:none!important}
+.btn[hidden],.btnGhost[hidden]{display:none!important}
+.checkoutIntro{font-size:15px;line-height:1.7;color:var(--muted)}
 .btn:disabled,.btnGhost:disabled{opacity:.6;cursor:wait}
 </style></head>
 
@@ -520,6 +532,7 @@
     <section id="checkoutReturnNotice" class="card" hidden aria-label="Checkout / 付款返回">
       <p id="checkoutReturnMessage" role="status" aria-live="polite"></p>
       <div class="btnRow">
+        <button id="checkoutReturnContinue" class="btn" type="button" data-account-text="returnContinue" hidden>Continue subscription</button>
         <button id="checkoutReturnLogin" class="btn" type="button" data-account-text="returnLogin">Sign in on Dashboard</button>
         <button id="checkoutReturnRefresh" class="btn" type="button" data-account-text="returnRefresh">Refresh subscription status</button>
       </div>
@@ -573,7 +586,7 @@
           <!-- ✅ Step2: anchor target lives here -->
           <div class="card" id="checkoutIdentity">
             <div class="cardTitle"><b><span data-account-text="s12">01 · Account details</span></b></div>
-            <p class="note" data-account-text="identityHelp">Create your account with a User ID and email address. Already registered? Sign in from the Dashboard.</p>
+            <p class="checkoutIntro" data-account-text="identityHelp">New here? Enter a User ID and email, then choose a plan below. Your account is created when you go to payment. No sign-in needed first.</p>
             <div class="identityGrid">
               <label><span data-account-text="checkoutUserIdLabel">User ID</span><input id="checkoutUserId" autocomplete="username" maxlength="64" required></label>
               <label><span data-account-text="checkoutEmailLabel">Email</span><input id="checkoutEmail" type="email" autocomplete="email" required></label>
@@ -590,23 +603,25 @@
               <label for="checkoutLoginCode" data-checkout-text="code">Email verification code</label>
               <input id="checkoutLoginCode" maxlength="16" autocomplete="one-time-code" inputmode="numeric">
               <button class="btn" type="button" id="checkoutLoginVerify" data-checkout-text="verify">Verify and sign in</button>
+              <button class="btnGhost" type="button" id="checkoutNewAccount" data-checkout-text="backToCreate">Back to new account</button>
             </div>
             <button class="btn" type="button" id="checkoutResume" hidden data-checkout-text="continue">Continue with selected plan</button>
           </div>
-          <div class="card" id="referralEntry">
-            <div class="cardTitle"><b><span data-account-text="s13">02 · Referral code</span></b><span class="note"><span data-account-text="s15">Optional</span></span></div>
+          <details class="card" id="referralEntry">
+            <summary data-account-text="s13">Have a referral code? (optional)</summary>
             <label for="checkoutReferral"><span data-account-text="s16">Verified referrer's code</span></label>
             <input id="checkoutReferral" maxlength="64" placeholder="Enter referral code" autocomplete="off">
             <p class="note" data-account-text="rewardHelp">Use a verified referral code to receive 1 bonus subscription day after your first successful payment. Available once per eligible new account.</p>
             <p id="referralDraftStatus" class="note" role="status">Optional. Leave blank if you do not have a code.</p>
-          </div>
+          </details>
           <div class="card darr-plans-anchor" id="plans">
             <div class="cardTitle">
               <b><span data-account-text="s14">03 · Choose a plan</span></b>
-              <span class="note" id="plansSource">plans: —</span>
+              <span class="note" id="plansSource" hidden>plans: —</span>
             </div>
 
             <div class="plansGrid" id="plansGrid"></div>
+            <p class="note" data-account-text="paymentHelp">Review the price, trial and renewal terms on Stripe before confirming. Clicking here only opens the payment page.</p>
           </div>
 
           <div class="card">
@@ -721,7 +736,7 @@
     })();
   </script>
 
-  <script src="js/checkout.flow.js?v=20261110_recovery1"></script>
+  <script src="js/checkout.flow.js?v=20261110_clarity1"></script>
   <!-- Subscription plans and billing -->
   <script>
     (function(){
@@ -977,6 +992,6 @@ async function openPortal() {
   </script>
 
   <!-- ✅ 状态打通专用：只读 /billing/status，不碰订阅支付 -->
-  <script src="js/account.manage.fix.js?v=20261110_recovery1"></script>
+  <script src="js/account.manage.fix.js?v=20261110_clarity1"></script>
 </body>
 </html>

@@ -44,7 +44,7 @@ function setup(fetcher, stored = null) {
   });
   b.el('checkoutReferral').value='CODE12345678';await b.api.start(plan);
   assert.equal(b.el('checkoutLogin').hidden,false);assert.equal(b.el('checkoutLoginUser').value,'CheckoutQA');
-  assert(b.el('checkoutFlowStatus').textContent.includes('已登记'));assert(!b.buttons[0].disabled);
+  assert(b.el('checkoutFlowStatus').textContent.includes('已有账号'));assert(!b.buttons[0].disabled);
   await b.api.sendCode();await b.api.sendCode();assert.equal(b.requests.filter(r=>r.url.endsWith('/request')).length,1);
   b.el('checkoutLoginCode').value='１２３ ４５６';await b.api.verifyCode();
   assert.equal(b.w.__AUTH_USER_ID__,'CheckoutQA');assert.equal(b.el('checkoutResume').hidden,false);assert.equal(b.el('checkoutLoginCode').value,'');
@@ -72,5 +72,15 @@ function setup(fetcher, stored = null) {
   await f.api.start({key:'monthly'});assert.equal(f.requests.length,1);
   const g=setup(async()=>authenticated(),{plan:'monthly',user_id:'CheckoutQA',at:Date.now()});
   assert.equal(g.el('checkoutResume').hidden,true);g.api.syncSession('CheckoutQA');assert.equal(g.el('checkoutResume').hidden,false);
-  console.log('PASS checkout recovery: fresh checkout, duplicate guard, existing-account login, OTP normalization/cooldown, cookie verification, resume plan/referral, authenticated payload, outages/expiry, unsafe redirect, validation, draft restore');
+  const taken=setup(async url=>url.endsWith('/session')?guest():response(409,{error:'user_id_unavailable'}));
+  await taken.api.start(plan);
+  assert(taken.el('checkoutFlowStatus').textContent.includes('更换用户名'));
+  assert(taken.el('checkoutLogin').hidden);assert(!taken.el('checkoutIdentity').hidden);
+  assert.equal(taken.el('checkoutEmail').value,'qa@example.com');
+  assert(taken.buttons.every(el=>el.textContent.includes('创建账号')));
+  taken.api.showLogin();assert(taken.el('checkoutIdentity').hidden);
+  taken.api.syncSession(null);assert(taken.el('checkoutIdentity').hidden,'late signed-out refresh must preserve selected login mode');
+  taken.el('checkoutNewAccount').listeners.click();assert(taken.el('checkoutLogin').hidden);assert(!taken.el('checkoutIdentity').hidden);
+  assert(g.buttons.every(el=>el.textContent==='前往付款'));
+  console.log('PASS checkout recovery and clear new-account flow, username collision, login mode stability, action labels');
 })().catch(error=>{console.error(error);process.exitCode=1;});
