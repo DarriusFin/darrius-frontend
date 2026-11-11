@@ -14,7 +14,9 @@
     const key = checkoutReturn === 'success'
       ? (signedIn ? 'returnSignedIn' : 'returnPending') : 'returnCanceled';
     $('checkoutReturnMessage').textContent = window.AccountI18n.text(key);
-    $('checkoutReturnLogin').hidden = signedIn;
+    const canceled = ['cancel','canceled'].includes(checkoutReturn);
+    $('checkoutReturnLogin').hidden = signedIn || canceled;
+    if ($('checkoutReturnContinue')) $('checkoutReturnContinue').hidden = !canceled;
   }
 
   const API_BASE = (
@@ -121,7 +123,7 @@
     window.DarriusCheckout?.syncSession(null);
     window.__AUTH_USER_ID__ = null;
     window.__ENTITLEMENT__ = null;
-    const identity = $('checkoutIdentity'); if (identity) identity.hidden = false;
+    const identity = $('checkoutIdentity'); if (identity) identity.hidden = !$('checkoutLogin')?.hidden;
     setText('kvUser', '—');
     setText('kvPlan', '—');
     setText('kvSubStatus', 'Not signed in');
@@ -245,6 +247,10 @@
   $('checkoutReturnRefresh')?.addEventListener('click', refreshStatus);
   $('checkoutReturnLogin')?.addEventListener('click', () => {
     window.DarriusCheckout.showLogin();
+  });
+  $('checkoutReturnContinue')?.addEventListener('click', () => {
+    if (!window.__AUTH_USER_ID__) window.DarriusCheckout.showLogin();
+    else document.getElementById('plans')?.scrollIntoView({behavior:'smooth',block:'start'});
   });
 
   if (document.readyState === 'loading') {
