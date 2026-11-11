@@ -462,12 +462,12 @@
 .panelHeader{padding:18px}.panelBody{padding:18px}.card{padding:18px;margin-bottom:16px}.plansGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .planCard{padding:18px;min-width:0}.planTop{flex-wrap:wrap;gap:12px}.planPrice{font-size:24px}.planActions{display:block}.planActions .btn{width:100%}
 .identityGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:block;font-size:13px;color:var(--muted)}
-#checkoutIdentity input,#checkoutReferral{display:block;width:100%;margin:8px 0 12px;padding:12px;border:1px solid #344655;border-radius:9px;background:#0b1520;color:var(--text);font:inherit}
+#checkoutIdentity input,#checkoutReferral,#checkoutRecovery input{display:block;width:100%;margin:8px 0 12px;padding:12px;border:1px solid #344655;border-radius:9px;background:#0b1520;color:var(--text);font:inherit}
 #rightPanel .panelBody>.card:has(#openDashBtn),#rightPanel .panelBody>.card:has(#buildText){display:none}
 #loginPill,#accessPill{display:none}.darr-plans-focus{outline:none!important;box-shadow:none!important}.darr-plans-pulse{animation:none!important}
 @media(max-width:850px){#grid{grid-template-columns:minmax(0,1fr)}#grid>.panel:first-child{grid-column:1;grid-row:2}#wrap{padding:14px}.topRight{min-width:0}#topbar{padding:14px}}
 @media(max-width:500px){.plansGrid,.identityGrid{grid-template-columns:1fr}.brandLine1{font-size:18px}.panelBody{padding:12px}}
-</style><script src="js/account.i18n.js?v=20260927"></script><style>
+</style><script src="js/account.i18n.js?v=20261110_recovery1"></script><style>
 /* Match Dashboard's compact header controls. */
 .topRight .btnTop,.accountLanguageControl {
   display:inline-flex; align-items:center; gap:7px; min-height:32px;
@@ -485,6 +485,13 @@
   padding:6px 27px 6px 32px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
 #accountLanguage option { background:#121a28; color:#eaf0f7; }
 #accountLanguage:focus-visible,.topRight .btnTop:focus-visible { outline:2px solid #4cc2ff; outline-offset:3px; }
+</style><style>
+#checkoutRecovery [hidden]{display:none!important}
+#checkoutRecovery label{display:block;margin-top:14px}
+#checkoutFlowStatus{padding:12px;border-radius:9px;background:#112d37;border:1px solid #32616b;line-height:1.6;overflow-wrap:anywhere}
+#checkoutFlowStatus[data-kind="error"],#checkoutFlowStatus[data-kind="warning"]{background:#382b15;border-color:#8a6a30}
+#checkoutRecovery .btn{margin-top:8px}
+.btn:disabled,.btnGhost:disabled{opacity:.6;cursor:wait}
 </style></head>
 
 <body>
@@ -571,6 +578,20 @@
               <label><span data-account-text="checkoutUserIdLabel">User ID</span><input id="checkoutUserId" autocomplete="username" maxlength="64" required></label>
               <label><span data-account-text="checkoutEmailLabel">Email</span><input id="checkoutEmail" type="email" autocomplete="email" required></label>
             </div>
+          </div>
+          <div class="card" id="checkoutRecovery">
+            <button class="btnGhost" type="button" id="checkoutSignIn" data-checkout-text="signIn">Sign in to continue</button>
+            <p id="checkoutFlowStatus" role="status" aria-live="polite" hidden></p>
+            <div id="checkoutLogin" hidden>
+              <p class="note" data-checkout-text="loginHelp"></p>
+              <label for="checkoutLoginUser" data-checkout-text="user">Registered User ID</label>
+              <input id="checkoutLoginUser" maxlength="64" autocomplete="username" autocapitalize="none" spellcheck="false">
+              <button class="btn" type="button" id="checkoutLoginSend" data-checkout-text="send">Send verification code</button>
+              <label for="checkoutLoginCode" data-checkout-text="code">Email verification code</label>
+              <input id="checkoutLoginCode" maxlength="16" autocomplete="one-time-code" inputmode="numeric">
+              <button class="btn" type="button" id="checkoutLoginVerify" data-checkout-text="verify">Verify and sign in</button>
+            </div>
+            <button class="btn" type="button" id="checkoutResume" hidden data-checkout-text="continue">Continue with selected plan</button>
           </div>
           <div class="card" id="referralEntry">
             <div class="cardTitle"><b><span data-account-text="s13">02 · Referral code</span></b><span class="note"><span data-account-text="s15">Optional</span></span></div>
@@ -700,7 +721,8 @@
     })();
   </script>
 
-  <!-- ✅ 订阅/支付/套餐渲染：保持你的原逻辑不变 -->
+  <script src="js/checkout.flow.js?v=20261110_recovery1"></script>
+  <!-- Subscription plans and billing -->
   <script>
     (function(){
       'use strict';
@@ -799,6 +821,7 @@
 
           grid.appendChild(card);
         });
+        window.DarriusCheckout.setPlans(plans);
       }
 
       async function loadPlans(){
@@ -835,134 +858,16 @@
         }
       }
 
-      async function postCheckout(endpoint, payload){
-        const url = base + endpoint;
-        const resp = await fetchJSON(url, { method:'POST', body: JSON.stringify(payload) });
-        const checkoutUrl = resp.url || resp.checkout_url || (resp.data && resp.data.url);
-        return { resp, checkoutUrl, url };
-      }
-
       async function startCheckout(plan) {
-        const signedIn = !!window.__AUTH_USER_ID__;
-
-        const guestUser = $('checkoutUserId');
-        const guestEmail = $('checkoutEmail');
-        if (!signedIn && (!guestUser.reportValidity() || !guestEmail.reportValidity())) {
-          $('checkoutIdentity').scrollIntoView({behavior:'smooth',block:'center'});
-          return;
-        }
-
-        if (window.__ENTITLEMENT__?.has_access === true) {
-          alert(
-            "This account already has an active subscription."
-          );
-          return;
-        }
-
-        const planKey =
-          plan && plan.key
-            ? String(plan.key).trim()
-            : "";
-
-        const priceId =
-          plan && plan.price_id
-            ? String(plan.price_id).trim()
-            : (
-                planKey &&
-                PRICE_ID_BY_KEY[planKey]
-                  ? PRICE_ID_BY_KEY[planKey]
-                  : ""
-              );
-
-        if (!priceId) {
-          alert(
-            "Missing price_id for this plan."
-          );
-          return;
-        }
-
-        const payload = {
-          price_id: priceId,
-          plan: planKey,
-        };
-
-        if (!signedIn) {
-          payload.user_id = guestUser.value.trim();
-          payload.email = guestEmail.value.trim();
-        }
-        const referral = $('checkoutReferral').value.trim();
-        if (referral) payload.dref_code = referral;
-        try {
-          const result = await postCheckout(
-            "/api/billing/checkout",
-            payload
-          );
-
-          if (result.checkoutUrl) {
-            window.location.href = result.checkoutUrl;
-            return;
-          }
-
-          const resp = result.resp || {};
-          const error =
-            resp.error ||
-            resp.detail ||
-            resp.raw ||
-            "checkout_failed";
-
-          if (error === "active_subscription_exists") {
-            alert(
-              "This account already has an active subscription."
-            );
-            return;
-          }
-
-          if (error === "authentication_required") {
-            alert(
-              "Your session has expired. Please sign in again."
-            );
-            return;
-          }
-
-          if (error === "account_email_missing") {
-            alert(
-              "Your account does not have a billing email. Please contact support."
-            );
-            return;
-          }
-
-          alert(
-            "Unable to start checkout.\n\n" +
-            "Error: " +
-            String(error)
-          );
-        } catch (error) {
-          alert(
-            "Unable to start checkout.\n\n" +
-            "Error: " +
-            String(
-              error && error.message
-                ? error.message
-                : error
-            )
-          );
-        }
+        return window.DarriusCheckout.start(plan);
       }
 
 async function openPortal() {
   if (!window.__AUTH_USER_ID__) {
-    alert(
-      "Please sign in before opening Billing Portal."
-    );
+    window.DarriusCheckout.showLogin('expired');
     return;
   }
 
-  if (window.__ENTITLEMENT__?.has_access !== true) {
-    alert(
-      "No active subscription is available to manage."
-    );
-    return;
-  }
 
   const url =
     base + "/api/billing/portal";
@@ -1072,6 +977,6 @@ async function openPortal() {
   </script>
 
   <!-- ✅ 状态打通专用：只读 /billing/status，不碰订阅支付 -->
-  <script src="js/account.manage.fix.js"></script>
+  <script src="js/account.manage.fix.js?v=20261110_recovery1"></script>
 </body>
 </html>

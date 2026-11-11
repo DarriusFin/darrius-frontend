@@ -3,6 +3,7 @@
   'use strict';
 
   const $ = (id) => document.getElementById(id);
+  let refreshVersion = 0;
   const checkoutReturn = new URLSearchParams(location.search).get('checkout');
   function renderCheckoutReturn(signedIn = false) {
     const notice = $('checkoutReturnNotice');
@@ -89,6 +90,7 @@
       {
         method: 'GET',
         credentials: 'include',
+        cache: 'no-store',
         headers: {
           'Accept': 'application/json',
         },
@@ -116,6 +118,7 @@
 
   function renderSignedOut() {
     renderCheckoutReturn(false);
+    window.DarriusCheckout?.syncSession(null);
     window.__AUTH_USER_ID__ = null;
     window.__ENTITLEMENT__ = null;
     const identity = $('checkoutIdentity'); if (identity) identity.hidden = false;
@@ -132,6 +135,7 @@
 
   function renderSubscription(policy, userId) {
     renderCheckoutReturn(true);
+    window.DarriusCheckout?.syncSession(userId);
     window.__AUTH_USER_ID__ = userId;
     window.__ENTITLEMENT__ = policy;
     const identity = $("checkoutIdentity"); if (identity) identity.hidden = true;
@@ -165,6 +169,7 @@
   }
 
   async function refreshStatus() {
+    const version = ++refreshVersion;
     renderCheckoutReturn(!!window.__AUTH_USER_ID__);
     const refreshButton = $('checkoutReturnRefresh');
     if (refreshButton) refreshButton.disabled = true;
@@ -173,6 +178,8 @@
         '/api/auth/session'
       );
 
+      if (version !== refreshVersion) return;
+      if (sessionResult.response.status !== 401 && (!sessionResult.response.ok || sessionResult.data?.authenticated !== true || !sessionResult.data?.user_id)) throw new Error('session_unavailable');
       if (
         !sessionResult.response.ok ||
         sessionResult.data?.authenticated !== true ||
@@ -187,11 +194,13 @@
       ).trim();
 
       window.__AUTH_USER_ID__ = userId;
+      window.DarriusCheckout?.syncSession(userId);
       const identity = $('checkoutIdentity'); if (identity) identity.hidden = true;
       const subscriptionResult = await fetchJSON(
         '/api/subscription/me'
       );
 
+      if (version !== refreshVersion) return;
       if (!subscriptionResult.response.ok) {
         setText('kvUser', userId);
         setText('kvPlan', '—');
@@ -214,6 +223,7 @@
         userId
       );
     } catch (error) {
+      if (version !== refreshVersion) return;
       console.error(
         '[Account] status refresh failed',
         error
@@ -222,15 +232,19 @@
       setBadge('error');
       setUpdated();
     } finally {
-      if (refreshButton) refreshButton.disabled = false;
+      if (version === refreshVersion && refreshButton) refreshButton.disabled = false;
     }
   }
 
   window.DARRIUS_ACCOUNT_REFRESH_STATUS =
     refreshStatus;
+  window.DARRIUS_ACCOUNT_INVALIDATE_STATUS = () => {
+    ++refreshVersion;
+    if ($('checkoutReturnRefresh')) $('checkoutReturnRefresh').disabled = false;
+  };
   $('checkoutReturnRefresh')?.addEventListener('click', refreshStatus);
   $('checkoutReturnLogin')?.addEventListener('click', () => {
-    window.location.href = '/index.html?lang=' + (document.documentElement.lang.startsWith('zh') ? 'zh' : 'en');
+    window.DarriusCheckout.showLogin();
   });
 
   if (document.readyState === 'loading') {
