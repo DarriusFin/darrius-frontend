@@ -539,7 +539,7 @@ setTimeframe(["1h", "1d", "1w"].includes(initialTimeframe) ? initialTimeframe : 
           : "https://api.darrius.ai";
 
         const response = await fetch(
-          `${apiBase}/api/ranking/top?limit=10&timeframe=${encodeURIComponent(requestedTimeframe)}`,
+          `${apiBase}/api/ranking/top?limit=30&timeframe=${encodeURIComponent(requestedTimeframe)}`,
           {
             credentials: "include",
           }
