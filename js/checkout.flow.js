@@ -38,7 +38,10 @@
     planError: ['This plan is unavailable. Refresh the page and choose it again.', '该套餐暂不可用，请刷新页面重新选择。'],
     network: ['Checkout was not confirmed. Check your connection and retry. If you are asked to sign in, use the User ID entered here; an earlier request may have created your account.', '付款页面未能确认打开。请检查网络后重试。如提示登录，请使用刚才填写的用户 ID；之前的请求可能已创建账号。'],
     server: ['Unable to open checkout. Please retry or contact support@darrius.ai with the error code below. No payment was submitted on this page.', '暂时无法打开付款页，请重试或把下方错误代码告知 support@darrius.ai。本页面未提交任何付款。'],
-    referral: ['The referral code could not be applied. Check the code, or clear this optional field and try again.', '邀请码未能使用，请核对邀请码，或清空这个选填项后重试。']
+    referral: ['The referral code could not be applied. Check the code, or clear this optional field and try again.', '邀请码未能使用，请核对邀请码，或清空这个选填项后重试。'],
+    discountUnavailable: ['Your referral discount could not be confirmed. No full-price checkout was opened. Retry shortly; if asked to sign in, use the User ID you just entered.', '暂时无法确认推荐八折优惠，本次未打开原价付款页。请稍后重试；如提示登录，请使用刚才填写的用户 ID。'],
+    paymentPending: ['A subscription or payment is already being processed. Refresh your subscription status or open Billing Portal; do not start another subscription.', '已有订阅或付款正在处理中。请刷新订阅状态，或打开账单管理查看，请勿重复订阅。'],
+    discountReview: ['Your previous checkout needs verification. Contact support@darrius.ai with your User ID before paying again.', '上一笔付款页面需要核对，请提供用户 ID 联系 support@darrius.ai，核对前请勿重复付款。']
   };
   const text = key => messages[key]?.[document.documentElement.lang.startsWith('zh') ? 1 : 0] || key;
   function status(key, kind = 'info', detail = '') {
@@ -157,7 +160,7 @@
       }
       if (error === 'existing_account_requires_sign_in') { showLogin('existing',payload.user_id); return; }
       if (error === 'authentication_required') { publish(null); showLogin('expired'); return; }
-      const mapped = {active_subscription_exists:'active',account_email_missing:'missingEmail',invalid_price_id:'planError',plan_price_mismatch:'planError'};
+      const mapped = {active_subscription_exists:'active',account_email_missing:'missingEmail',invalid_price_id:'planError',plan_price_mismatch:'planError',referral_discount_unavailable:'discountUnavailable',referral_checkout_changed:'discountUnavailable',subscription_payment_pending:'paymentPending',referral_checkout_requires_review:'discountReview',referral_checkout_identity_mismatch:'discountReview'};
       if (mapped[error]) status(mapped[error],'warning');
       else if (code && /referral|code|existing_paying|bound|self_referral/.test(error)) status('referral','warning');
       else status('server','error',String(error).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80));

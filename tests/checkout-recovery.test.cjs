@@ -82,5 +82,12 @@ function setup(fetcher, stored = null) {
   taken.api.syncSession(null);assert(taken.el('checkoutIdentity').hidden,'late signed-out refresh must preserve selected login mode');
   taken.el('checkoutNewAccount').listeners.click();assert(taken.el('checkoutLogin').hidden);assert(!taken.el('checkoutIdentity').hidden);
   assert(g.buttons.every(el=>el.textContent==='前往付款'));
+  for (const [error, expected] of [['referral_discount_unavailable','未打开原价付款页'],
+      ['subscription_payment_pending','请勿重复订阅'],['referral_checkout_requires_review','需要核对']]) {
+    const x=setup(async url=>url.endsWith('/session')?guest():response(409,{error}));
+    x.el('checkoutReferral').value='VALIDCODE';await x.api.start(plan);
+    assert(x.el('checkoutFlowStatus').textContent.includes(expected));
+    assert.equal(x.w.location.href,'');assert(!x.buttons[0].disabled);
+  }
   console.log('PASS checkout recovery and clear new-account flow, username collision, login mode stability, action labels');
 })().catch(error=>{console.error(error);process.exitCode=1;});
