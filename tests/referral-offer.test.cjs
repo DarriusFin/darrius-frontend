@@ -1,0 +1,20 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
+const root=process.argv[2]||path.resolve(__dirname,'..');
+const code={value:''},help={textContent:''},price={dataset:{referralPrice:'yearly'},textContent:'',hidden:true};
+const document={documentElement:{lang:'zh-CN'},addEventListener(){},
+  getElementById:()=>code,querySelector:()=>help,querySelectorAll:()=>[price]};
+const window={};
+vm.runInNewContext(fs.readFileSync(root+'/js/referral-offer.js','utf8'),{window,document});
+const offer=window.DarriusReferralOffer;
+offer.setPlans([{key:'yearly',currency:'usd',unit_amount:18900}]);
+offer.setTerms({discount_percent:20,bonus_days:0});
+assert(help.textContent.includes('八折'));assert(help.textContent.includes('套餐自带赠送天数保留'));
+assert(price.hidden);
+code.value='VALIDCODE';offer.render();assert(!price.hidden);assert(price.textContent.includes('$151.20'));
+assert(price.textContent.includes('续费原价'));
+document.documentElement.lang='en';offer.render();assert(help.textContent.includes('20% off'));
+assert(price.textContent.includes('$151.20'));assert(price.textContent.includes('before tax'));
+offer.setPlans([{key:'yearly',currency:'cny',unit_amount:18900}]);assert(!price.textContent.includes('$'));
+offer.setTerms({bonus_days:1});assert(price.hidden);assert(help.textContent.includes('previous one-day'));
+offer.setTerms(null);assert(price.hidden);
+console.log('Referral offer: activation, eligibility hint, annual amount, currency and bilingual terms passed');

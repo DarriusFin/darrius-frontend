@@ -29,6 +29,9 @@
   if(!ledger)return h+'<p>'+T('推荐账本尚未开放或暂时无法读取，请稍后刷新。','The referral ledger is not available yet. Please refresh later.')+'</p></section>';
   const states={PENDING:T('等待发放','Pending'),APPLYING:T('正在处理','Processing'),GRANTED:T('已发放','Granted'),REVIEW:T('待人工核对','Under review'),AVAILABLE:T('可结算','Available'),PAID:T('已结清','Settled')};
   if(ledger.binding)h+='<p>'+T('已绑定推荐关系：','Referral linked: ')+esc(ledger.binding.referral_id)+'</p>';
+  if(ledger.binding&&ledger.referral_offer?.discount_percent===20)h+='<p>'+(
+    ledger.binding.first_paid_at?T('已有首次付款记录，不再享受首次付款八折。','A first payment is already recorded; the first-payment discount is no longer available.'):
+    T('首付八折：继续订阅时自动核验并应用，请在付款页核对优惠金额。','First payment: 20% off, subject to verification when you continue checkout. Check the discount on the payment page.'))+'</p>';
   if(ledger.reward)h+='<p>'+T('额外订阅天数：','Bonus subscription days: ')+ledger.reward.days+' · '+esc(states[ledger.reward.state]||ledger.reward.state)+'</p>';
   h+='<h3>'+T('佣金明细','Commission details')+'</h3>';
   if(!ledger.commissions.length)h+='<p>'+T('暂无已入账佣金。','No recorded commissions yet.')+'</p>';
@@ -41,7 +44,8 @@
   const names={NOT_APPLIED:T('尚未申请','Not applied'),PENDING:T('等待审核','Pending review'),APPROVED:T('已通过','Approved'),SUSPENDED:T('资格暂停','Suspended'),REJECTED:T('申请未通过','Not approved'),LEGACY_REVIEW_REQUIRED:T('需要重新审核','Re-review required')};
   $('account').hidden=false;$('login').hidden=true;$('logout').hidden=false;
   let html=`<section class="card"><div class="summary"><div><span>${T('当前登录账户','Signed-in account')}</span><strong>${esc(user)}</strong></div><div><span>${T('推荐人资格','Affiliate status')}</span><strong>${account?esc(names[account.affiliate_status]||account.affiliate_status):T('待加载','Awaiting details')}</strong></div></div></section>`;
-  if(account){html+=`<section class="card"><h2>${T('推荐计划','Referral program')}</h2><p>${T('佣金比例 30%，佣金期从首次付款起计算 4 个自然月；每月结算一次，无最低金额。符合条件的新用户首次付款获赠 1 天订阅。','Earn 30% commission for 4 calendar months from the first payment. Settlements are monthly with no minimum. Eligible new customers receive 1 bonus subscription day after their first payment.')}</p>`;
+  if(account){html+=`<section class="card"><h2>${T('推荐计划','Referral program')}</h2><p>${T('佣金比例 30%，佣金期从首次付款起计算 4 个自然月；每月结算一次，无最低金额。佣金按实付金额扣除税费计算。','Earn 30% commission for 4 calendar months from the first payment. Settlements are monthly with no minimum. Commission is based on actual receipts after discounts, excluding tax.')}</p>`;
+   html+='<p>'+((account.terms?.discount_percent===20)?T('绑定有效推荐码后，所有套餐首次实际付款享八折；不再因推荐码赠送天数，套餐自带赠送天数保留。已绑定但从未付款的用户也适用。','Valid referral codes give 20% off the first actual payment on all plans. No extra referral days are awarded; plan trial days remain unchanged. Already-linked customers who have never paid are also eligible.'):T('推荐优惠以付款页展示和账户记录为准。','See checkout and your account record for applicable referral benefits.'))+'</p>';
    if(account.affiliate_status==='NOT_APPLIED'||account.affiliate_status==='REJECTED')html+=`<p>${T('提交申请后等待资格审核。申请不会自动批准，也不会代您签署协议。','Submit an application for review. Applying does not grant approval or sign an agreement on your behalf.')}</p><button id="apply" class="primary">${account.affiliate_status==='REJECTED'?T('重新提交申请','Resubmit application'):T('提交推荐人申请','Apply to become an affiliate')}</button>`;
    else if(account.affiliate_status==='PENDING')html+=`<p>${T('申请已登记，请等待资格审核与正式协议流程。','Your application is recorded. Await eligibility review and the formal agreement process.')}</p>`;
    if(account.affiliate_status==='LEGACY_REVIEW_REQUIRED')html+='<p>'+T('历史推荐人资料已保留。完成重新审核及正式协议验证后，才能启用邀请功能。','Your historical affiliate record is preserved. Invitations require a new review and a verified agreement.')+'</p>';

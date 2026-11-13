@@ -467,7 +467,7 @@
 #loginPill,#accessPill{display:none}.darr-plans-focus{outline:none!important;box-shadow:none!important}.darr-plans-pulse{animation:none!important}
 @media(max-width:850px){#grid{grid-template-columns:minmax(0,1fr)}#grid>.panel:first-child{grid-column:1;grid-row:2}#wrap{padding:14px}.topRight{min-width:0}#topbar{padding:14px}}
 @media(max-width:500px){.plansGrid,.identityGrid{grid-template-columns:1fr}.brandLine1{font-size:18px}.panelBody{padding:12px}}
-</style><script src="js/account.i18n.js?v=20261110_clarity1"></script><style>
+</style><script src="js/account.i18n.js?v=20261113_referral20"></script><style>
 /* Match Dashboard's compact header controls. */
 .topRight .btnTop,.accountLanguageControl {
   display:inline-flex; align-items:center; gap:7px; min-height:32px;
@@ -611,7 +611,7 @@ body:not(.account-authenticated) #grid>.panel:first-child{display:none}
             <summary data-account-text="s13">Have a referral code? (optional)</summary>
             <label for="checkoutReferral"><span data-account-text="s16">Verified referrer's code</span></label>
             <input id="checkoutReferral" maxlength="64" placeholder="Enter referral code" autocomplete="off">
-            <p class="note" data-account-text="rewardHelp">Use a verified referral code to receive 1 bonus subscription day after your first successful payment. Available once per eligible new account.</p>
+            <p class="note" data-account-text="rewardHelp">Referral benefits are verified when you continue to payment. Review the final price on Stripe.</p>
             <p id="referralDraftStatus" class="note" role="status">Optional. Leave blank if you do not have a code.</p>
           </details>
           <div class="card darr-plans-anchor" id="plans">
@@ -736,7 +736,8 @@ body:not(.account-authenticated) #grid>.panel:first-child{display:none}
     })();
   </script>
 
-  <script src="js/checkout.flow.js?v=20261110_clarity1"></script>
+  <script src="js/checkout.flow.js?v=20261113_referral20"></script>
+  <script src="js/referral-offer.js?v=20261113_referral20"></script>
   <!-- Subscription plans and billing -->
   <script>
     (function(){
@@ -822,6 +823,7 @@ body:not(.account-authenticated) #grid>.panel:first-child{display:none}
                 <div class="planPrice">${escapeHtml(p.price || "")}</div>
               </div>
             </div>
+            <p class="note" data-referral-price="${escapeHtml(p.key)}" hidden></p>
             <div class="planActions">
               <button class="btn" data-act="subscribe">${window.AccountI18n.text("subscribe")}</button>
 
@@ -837,6 +839,7 @@ body:not(.account-authenticated) #grid>.panel:first-child{display:none}
           grid.appendChild(card);
         });
         window.DarriusCheckout.setPlans(plans);
+        window.DarriusReferralOffer?.setPlans(plans);
       }
 
       async function loadPlans(){
@@ -848,6 +851,7 @@ body:not(.account-authenticated) #grid>.panel:first-child{display:none}
           try{ j = JSON.parse(text); } catch { j = { ok:false, raw:text }; }
 
           if (!res.ok) throw new Error("HTTP " + res.status);
+          window.DarriusReferralOffer?.setTerms(j.referral_offer);
 
           const arr = Array.isArray(j) ? j : (Array.isArray(j.prices) ? j.prices : []);
           if (!arr.length) throw new Error("empty prices");
@@ -858,6 +862,7 @@ body:not(.account-authenticated) #grid>.panel:first-child{display:none}
             price: x.unit_amount_display || x.price_display || x.display || (x.unit_amount ? ("$"+(x.unit_amount/100).toFixed(2)) : ""),
             desc: x.description || "",
             trial: x.trial || "",
+            unit_amount: x.unit_amount, currency: x.currency,
             price_id: x.id || x.price_id || ""
           }));
 
