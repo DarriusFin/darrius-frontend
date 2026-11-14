@@ -6,6 +6,10 @@
   function render() {
     const help = document.querySelector('[data-account-text="rewardHelp"]');
     const discount = terms?.discount_percent === 20;
+    const entry = document.querySelector('#referralEntry summary');
+    if (entry) entry.textContent = discount
+      ? (zh() ? '绑定推荐码，首次付款享八折（选填）' : 'Add a referral code — 20% off your first payment (optional)')
+      : (zh() ? '有邀请码？（选填）' : 'Have a referral code? (optional)');
     if (help && discount) help.textContent = zh()
       ? '绑定有效推荐码，首次实际付款自动享八折，所有套餐适用，每个账户限一次。套餐自带赠送天数保留；推荐码不再赠送天数。试用零元账单不消耗优惠，后续按正常价格续费，不与其他优惠券叠加。'
       : 'Link a valid referral code for 20% off your first actual payment, once per account on any plan. Plan trial days are unchanged; referral codes no longer add days. A zero-value trial invoice does not use the offer. Renewals are at the regular price; other coupons cannot be combined.';
